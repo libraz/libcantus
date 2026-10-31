@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "js/math.h"
 
@@ -46,8 +47,8 @@ double hi_hat_step(HiHatLevel level) {
   return level == HiHatLevel::kEighth ? 0.5 : 1;
 }
 
-HiHatLevel get_hi_hat_level(SectionType section, DrumStyle style, double rhythmic, double bpm,
-                            const Draw& draw, std::optional<double> difficulty, double bar) {
+HiHatBar get_hi_hat_bar(SectionType section, DrumStyle style, double rhythmic, double bpm,
+                        const Draw& draw, std::optional<double> difficulty, double bar) {
   bool allow16th = bpm < HH_16TH_BPM_THRESHOLD;
   HiHatLevel base = HiHatLevel::kEighth;
   bool dialed = true;
@@ -96,23 +97,47 @@ HiHatLevel get_hi_hat_level(SectionType section, DrumStyle style, double rhythmi
     }
   }
 
-  HiHatLevel level = base;
-  if (dialed) {
-    // The middle of the dial is the style's own level: the lower half thins, the upper fills.
-    if (draw.at({"hhThin", bar}) >= 2 * rhythmic) {
+  // The tempo and the ceiling bound every level the dial can reach alike.
+  auto playable = [allow16th, bpm, difficulty](HiHatLevel proposed) {
+    HiHatLevel level =
+        !allow16th && proposed == HiHatLevel::kSixteenth ? HiHatLevel::kEighth : proposed;
+    while (level != HiHatLevel::kQuarter &&
+           !sustains_strokes(hi_hat_step(level), bpm, difficulty)) {
       level = sparser(level);
     }
-    if (draw.at({"hhFill", bar}) < 2 * rhythmic - 1) {
+    return level;
+  };
+
+  HiHatLevel level = base;
+  double thinned_up_to = -std::numeric_limits<double>::infinity();
+  double filled_above = std::numeric_limits<double>::infinity();
+  if (dialed) {
+    // The middle of the dial is the style's own level: the lower half thins, the upper fills.
+    double thin = draw.at({"hhThin", bar});
+    if (thin >= 2 * rhythmic) {
+      level = sparser(level);
+    }
+    double fill = draw.at({"hhFill", bar});
+    if (fill < 2 * rhythmic - 1) {
       level = denser(level);
     }
+    thinned_up_to = thin / 2;
+    filled_above = (fill + 1) / 2;
   }
-  if (!allow16th && level == HiHatLevel::kSixteenth) {
-    level = HiHatLevel::kEighth;
-  }
-  while (level != HiHatLevel::kQuarter && !sustains_strokes(hi_hat_step(level), bpm, difficulty)) {
-    level = sparser(level);
-  }
-  return level;
+
+  auto rank = [](HiHatLevel candidate) { return static_cast<int>(candidate); };
+  int sparsest = rank(playable(dialed ? sparser(base) : base));
+  int middle = rank(playable(base));
+  int densest = rank(playable(dialed ? denser(base) : base));
+  auto entry_of = [&](HiHatLevel grid) {
+    return sparsest >= rank(grid)  ? -std::numeric_limits<double>::infinity()
+           : middle >= rank(grid)  ? thinned_up_to
+           : densest >= rank(grid) ? filled_above
+                                   : std::numeric_limits<double>::infinity();
+  };
+  return HiHatBar{playable(level),
+                  {entry_of(HiHatLevel::kQuarter), entry_of(HiHatLevel::kEighth),
+                   entry_of(HiHatLevel::kSixteenth)}};
 }
 
 double hi_hat_velocity_multiplier(int sixteenth, double jitter) {

@@ -72,7 +72,7 @@ describe('analyzeVoice', () => {
     expect(dLabels).toContainEqual({ kind: 'tension', degree: 9 });
   });
 
-  it('does not label a suspension when no other voice is dissonant against it', () => {
+  it('judges a solo line against the chord it is heard over', () => {
     const voice: VoiceNote[] = [
       { id: 1, pitch: 65, startBeat: 0, durationBeat: 1 }, // F over F major (preparation)
       { id: 2, pitch: 65, startBeat: 1, durationBeat: 1 }, // F over C major
@@ -80,6 +80,22 @@ describe('analyzeVoice', () => {
     ];
     const chordAt = (beat: number): Chord => (beat < 1 ? fMaj : cMaj);
     const analyzed = analyzeVoice(voice, chordAt, cMajor, noOtherVoices);
+    expect(analyzed[1]?.labels.find((l) => l.kind === 'suspension')).toEqual({
+      kind: 'suspension',
+      type: 'sus4-3',
+      resolveTo: 64,
+    });
+  });
+
+  it('does not label a suspension when the voices given are consonant against it', () => {
+    const voice: VoiceNote[] = [
+      { id: 1, pitch: 65, startBeat: 0, durationBeat: 1 }, // F over F major (preparation)
+      { id: 2, pitch: 65, startBeat: 1, durationBeat: 1 }, // F over C major
+      { id: 3, pitch: 64, startBeat: 2, durationBeat: 1 }, // E (resolution)
+    ];
+    const chordAt = (beat: number): Chord => (beat < 1 ? fMaj : cMaj);
+    const aAbove = () => [{ pitch: 69 }];
+    const analyzed = analyzeVoice(voice, chordAt, cMajor, aAbove);
     const suspension = analyzed[1]?.labels.find((l) => l.kind === 'suspension');
     expect(suspension).toBeUndefined();
   });
@@ -89,6 +105,23 @@ describe('analyzeVoice', () => {
     const voice: VoiceNote[] = [{ id: 1, pitch: 61, startBeat: 0, durationBeat: 1 }]; // Db over C
     const analyzed = analyzeVoice(voice, () => c7b9, cMajor, noOtherVoices);
     expect(analyzed[0]?.labels).toContainEqual({ kind: 'tension', degree: 9 });
+  });
+
+  it('gives a note no melodic labels from a zero-length note at its onset', () => {
+    const cToD = (beat: number): Chord =>
+      beat < 1 ? cMaj : { rootPc: 2, quality: 'min', intervals: [0, 3, 7] };
+    const voice: VoiceNote[] = [
+      { pitch: 60, startBeat: 0, durationBeat: 0 },
+      { pitch: 62, startBeat: 0, durationBeat: 1 },
+      { pitch: 64, startBeat: 1, durationBeat: 1 },
+    ];
+    const analyzed = analyzeVoice(voice, cToD, cMajor, noOtherVoices);
+    expect(analyzed[1]?.labels.some((l) => l.kind === 'passing')).toBe(false);
+    // The zero-length note is no one's neighbour, so the line reads as it would without it.
+    const without = analyzeVoice(voice.slice(1), cToD, cMajor, noOtherVoices);
+    expect(analyzed.slice(1).map((note) => note.labels)).toEqual(
+      without.map((note) => note.labels),
+    );
   });
 
   it('labels a stepwise connector between chord tones as passing', () => {

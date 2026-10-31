@@ -41,7 +41,8 @@ double tempo_at(double beat, const TempoMap& map);
 
 /**
  * Ticks of a beat at a resolution of `ppq` ticks per quarter note (`beatsToTicks`).
- * @throws InvalidInputError if `beat` is not finite or `ppq` is not positive.
+ * @throws InvalidInputError if `beat` is not finite, `ppq` is not positive, or the tick count is
+ *   past the safe integers.
  */
 double beats_to_ticks(double beat, int ppq);
 

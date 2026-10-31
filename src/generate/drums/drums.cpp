@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <map>
 #include <set>
 #include <string>
@@ -30,29 +31,50 @@ namespace cantus {
 namespace {
 
 /**
- * Drop the strokes a player at this ceiling could not reach in time (`underCeiling`): the
- * earlier of two strokes too close together is kept, and exempt onsets are left alone.
+ * Drop the strokes a player at this ceiling could not reach in time (`underCeiling`). Strokes are
+ * settled in the order the rhythmic dial brings them in, then in time, and one too close to a
+ * stroke already kept is dropped, so raising the dial only adds strokes. Exempt onsets stay.
  */
 std::vector<DrumHit> under_ceiling(const std::vector<DrumHit>& hits, double bpm,
                                    std::optional<double> difficulty,
-                                   const std::set<std::string>& exempt) {
+                                   const std::set<std::string>& exempt,
+                                   const HitList<DrumHit>& track) {
   if (!difficulty) {
     return hits;
   }
-  std::map<int, double> last_onset;
-  std::vector<DrumHit> kept;
-  for (const DrumHit& hit : hits) {
-    auto previous = last_onset.find(hit.pitch);
-    bool reachable = previous == last_onset.end() ||
-                     exempt.count(onset_key(hit.pitch, hit.startBeat)) > 0 ||
-                     sustains_strokes(hit.startBeat - previous->second, bpm, difficulty);
+  std::vector<double> entries;
+  std::vector<std::size_t> order;
+  for (std::size_t index = 0; index < hits.size(); ++index) {
+    entries.push_back(track.entry_of(hits[index].pitch, hits[index].startBeat));
+    order.push_back(index);
+  }
+  std::stable_sort(order.begin(), order.end(),
+                   [&entries](std::size_t a, std::size_t b) { return entries[a] < entries[b]; });
+  // The kept onsets of each pitch, in time order.
+  std::map<int, std::set<double>> kept_beats;
+  std::vector<bool> kept(hits.size(), false);
+  for (std::size_t index : order) {
+    const DrumHit& hit = hits[index];
+    std::set<double>& beats = kept_beats[hit.pitch];
+    auto next = beats.upper_bound(hit.startBeat);
+    bool reachable =
+        exempt.count(onset_key(hit.pitch, hit.startBeat)) > 0 ||
+        ((next == beats.begin() ||
+          sustains_strokes(hit.startBeat - *std::prev(next), bpm, difficulty)) &&
+         (next == beats.end() || sustains_strokes(*next - hit.startBeat, bpm, difficulty)));
     if (!reachable) {
       continue;
     }
-    kept.push_back(hit);
-    last_onset[hit.pitch] = hit.startBeat;
+    kept[index] = true;
+    beats.insert(hit.startBeat);
   }
-  return kept;
+  std::vector<DrumHit> out;
+  for (std::size_t index = 0; index < hits.size(); ++index) {
+    if (kept[index]) {
+      out.push_back(hits[index]);
+    }
+  }
+  return out;
 }
 
 }  // namespace
@@ -83,6 +105,7 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
                  density_mult,
                  rhythmic,
                  ornament_dial,
+                 !resolved.ornament.has_value(),
                  difficulty,
                  mapping.ghostBoost,
                  should_use_ride_for_section(section, style),
@@ -131,7 +154,7 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
 
   bool reuse_section_kick = (section == SectionType::kB || section == SectionType::kChorus) &&
                             style != DrumStyle::kSparse;
-  std::optional<KickPattern> section_kick;
+  std::optional<KickEntries> section_kick;
 
   // Onsets written from a pattern the caller named, which the ceiling spares.
   std::set<std::string> exempt_onsets;
@@ -140,7 +163,7 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
     double bar = bar_index;
     double bar_start = bar * bar_beats;
     bool is_last_bar = bar_index == request.bars - 1;
-    HiHatLevel hh_level = get_hi_hat_level(section, style, rhythmic, bpm, draw, difficulty, bar);
+    HiHatBar hi_hat = get_hi_hat_bar(section, style, rhythmic, bpm, draw, difficulty, bar);
 
     if (bar_index == 0 && section == SectionType::kChorus) {
       track.add(kGm.CRASH, bar_start, 0.5, 100 * density_mult);
@@ -153,14 +176,14 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
       bar_has_open_hh = !track.has_crash_near(bar_start + open_hh_beat_index);
     }
 
-    std::optional<KickPattern> kick;
+    std::optional<KickEntries> kick;
     if (!euclid_kick && reuse_section_kick) {
       if (!section_kick) {
-        section_kick = get_kick_pattern(section, style, 0, draw, rhythmic);
+        section_kick = get_kick_entries(section, style, 0, draw, rhythmic);
       }
       kick = section_kick;
     } else if (!euclid_kick) {
-      kick = get_kick_pattern(section, style, bar, draw, rhythmic);
+      kick = get_kick_entries(section, style, bar, draw, rhythmic);
     }
 
     // The lift is a build into a chorus, so what follows decides it.
@@ -214,7 +237,8 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
                   swing_amount,
                   bar_has_open_hh,
                   open_hh_beat_index,
-                  hh_level,
+                  hi_hat.level,
+                  hi_hat.entries,
                   draw};
 
       if (play_main_voices) {
@@ -274,7 +298,7 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
   std::stable_sort(written.begin(), written.end(), [](const DrumHit& a, const DrumHit& b) {
     return a.startBeat != b.startBeat ? a.startBeat < b.startBeat : a.pitch < b.pitch;
   });
-  return under_ceiling(written, bpm, difficulty, exempt_onsets);
+  return under_ceiling(written, bpm, difficulty, exempt_onsets, track);
 }
 
 std::vector<DrumHit> generate_drums(const DrumsOptions& opts) {

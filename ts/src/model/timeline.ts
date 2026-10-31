@@ -277,11 +277,26 @@ export class Timeline {
    * @throws If `beatsEach` is not a positive finite number of beats.
    */
   static fromProgression(progression: Progression, beatsEach: number): Timeline {
+    // Read structurally, so a progression from a second copy of the module is accepted.
+    const read = progression as Partial<Progression> | null | undefined;
+    if (typeof read !== 'object' || read === null || !Array.isArray(read.chords)) {
+      throw new InvalidInputError(
+        `timeline progression must be a Progression; received ${describeRejected(progression)}`,
+      );
+    }
     assertRange(beatsEach, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'timeline beatsEach');
-    const chords = progression.chords;
-    const spans = chords.map((chord, index) => spanFromChord(chord.data, index * beatsEach));
+    const chords = read.chords;
+    const spans = chords.map((chord, index) => {
+      const data = (chord as Partial<Chord> | null | undefined)?.data;
+      if (typeof data !== 'object' || data === null) {
+        throw new InvalidInputError(
+          `timeline progression chords[${index}] must be a Chord; received ${describeRejected(chord)}`,
+        );
+      }
+      return spanFromChord(data, index * beatsEach);
+    });
     const totalBeats = chords.length * beatsEach;
-    const key = progression.key;
+    const key = read.key;
     return key === undefined
       ? Timeline.fromChords(spans, totalBeats)
       : Timeline.fromChords(spans, totalBeats, key);

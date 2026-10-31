@@ -6,8 +6,9 @@
  * A position is strong (the downbeat or a bar's secondary accent), weak (any
  * other main pulse) or off the pulses. A strong note fits when
  * {@link analyzeVoice}, reading the plan's own chords and keys, gives it a
- * chord-tone or ornamental label; a weak note fits on such a label or by being
- * a scale tone; a note off the pulses always fits. The labels depend on the
+ * chord-tone or ornamental label; a weak note, or a strong one where the plan
+ * names no chord, fits on such a label or by being a scale tone; a note off the
+ * pulses always fits. The labels depend on the
  * neighbouring notes, so the reading is taken over a whole phrase line.
  */
 
@@ -133,7 +134,8 @@ export function planHarmonyMisfits(
       if (kinds.some((kind) => HARMONY_OK_KINDS.has(kind))) {
         return null;
       }
-      return position === 'weak' && isScaleTone(note.pitch, scaleAt(note.startBeat)) ? null : kinds;
+      const lenient = position === 'weak' || timeline.at(note.startBeat) === null;
+      return lenient && isScaleTone(note.pitch, scaleAt(note.startBeat)) ? null : kinds;
     });
   };
 }

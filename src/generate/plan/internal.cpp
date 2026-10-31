@@ -1,8 +1,10 @@
-// The position classes of ts/src/generate/plan/internal.ts.
+// The position classes and the final downbeat of ts/src/generate/plan/internal.ts.
 
 #include "generate/plan/internal.h"
 
+#include "cantus/core/limits.h"
 #include "generate/plan/limits.gen.h"
+#include "js/math.h"
 
 namespace cantus {
 
@@ -23,6 +25,14 @@ PositionClass position_class(double beat, const MeterMap& meters) {
   return weight >= PLAN_STRONG_WEIGHT ? PositionClass::kStrong
          : weight > 0                 ? PositionClass::kWeak
                                       : PositionClass::kOff;
+}
+
+double final_downbeat(const PlannedPhrase& phrase, const MeterMap& meters) {
+  double downbeat = bar_start_beat(phrase.startBeat, meters);
+  while (downbeat + beats_per_bar_at(downbeat, meters) < phrase.endBeat - BEAT_EPS) {
+    downbeat += beats_per_bar_at(downbeat, meters);
+  }
+  return js::max(downbeat, phrase.startBeat);
 }
 
 }  // namespace cantus

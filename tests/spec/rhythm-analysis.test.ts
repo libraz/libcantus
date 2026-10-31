@@ -298,18 +298,33 @@ describe('analyzeRhythm option rejection', () => {
   });
 });
 
-describe('analyzeRhythm reads the options an empty span never reaches only when it has notes', () => {
-  it('answers a span with nothing sounding without looking at totalBeats', () => {
-    const silent = analyzeRhythm([], { totalBeats: 'x' as never });
-    expect(silent.onsets).toBe(0);
-    expect(
+describe('analyzeRhythm checks totalBeats before holding it to the span start', () => {
+  it('checks it even where nothing sounds', () => {
+    const refusal = new InvalidInputError('rhythm totalBeats must be finite; received x');
+    expect(() => analyzeRhythm([], { totalBeats: 'x' as never })).toThrow(refusal);
+    expect(() =>
       analyzeRhythm([{ pitch: 60, startBeat: 0, durationBeat: 0 }], { totalBeats: 'x' as never }),
-    ).toEqual(silent);
+    ).toThrow(refusal);
+    expect(analyzeRhythm([], { totalBeats: 8 }).onsets).toBe(0);
   });
 
-  it('refuses a bigint end of span as the number conversion does', () => {
-    expect(() => analyzeRhythm(quarters(4), { totalBeats: 10n as never })).toThrow(
-      new TypeError('Cannot convert a BigInt value to a number'),
+  it('refuses a value that is no number rather than converting it', () => {
+    for (const [given, received] of [
+      ['12', '12'],
+      [true, 'true'],
+      [10n, '10'],
+    ] as const) {
+      expect(() => analyzeRhythm(quarters(4), { totalBeats: given as never })).toThrow(
+        new InvalidInputError(`rhythm totalBeats must be finite; received ${received}`),
+      );
+    }
+  });
+
+  it('refuses a value below the span instead of raising it to the start', () => {
+    expect(() => analyzeRhythm(quarters(4), { totalBeats: -100 })).toThrow(
+      new InvalidInputError(
+        `rhythm totalBeats must be in [0, ${Number.MAX_SAFE_INTEGER}]; received -100`,
+      ),
     );
   });
 });

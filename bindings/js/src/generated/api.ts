@@ -463,8 +463,8 @@ export const DRUM_NOTES: typeof Pure.DRUM_NOTES = constant('DRUM_NOTES');
 export const DRUM_PATTERNS: typeof Pure.DRUM_PATTERNS = constant('DRUM_PATTERNS');
 
 export class Duration {
-  constructor(...args: unknown[]) {
-    runtime.construct(this, 'Duration.constructor', args);
+  constructor() {
+    throw new TypeError('Duration has no public constructor; use Duration.of');
   }
 
   static of(...args: unknown[]): unknown {
@@ -538,8 +538,8 @@ export const HARMONIC_FUNCTIONS: typeof Pure.HARMONIC_FUNCTIONS = constant('HARM
 export const HARMONIC_MINOR_MASK: typeof Pure.HARMONIC_MINOR_MASK = constant('HARMONIC_MINOR_MASK');
 
 export class Instrument {
-  constructor(...args: unknown[]) {
-    runtime.construct(this, 'Instrument.constructor', args);
+  constructor() {
+    throw new TypeError('Instrument has no public constructor; use Instrument.of');
   }
 
   static of(...args: unknown[]): unknown {
@@ -643,8 +643,8 @@ runtime.registerClass('Instrument', Instrument, {
 });
 
 export class Interval {
-  constructor(...args: unknown[]) {
-    runtime.construct(this, 'Interval.constructor', args);
+  constructor() {
+    throw new TypeError('Interval has no public constructor; use Interval.of');
   }
 
   static between(...args: unknown[]): unknown {
@@ -1032,8 +1032,8 @@ export const MOTIF_RELATION_KINDS: typeof Pure.MOTIF_RELATION_KINDS =
   constant('MOTIF_RELATION_KINDS');
 
 export class Meter {
-  constructor(...args: unknown[]) {
-    runtime.construct(this, 'Meter.constructor', args);
+  constructor() {
+    throw new TypeError('Meter has no public constructor; use Meter.of');
   }
 
   static of(...args: unknown[]): unknown {
@@ -1887,8 +1887,8 @@ export const TRANSPOSING_INSTRUMENTS: typeof Pure.TRANSPOSING_INSTRUMENTS =
 export const TWELVE_TET: typeof Pure.TWELVE_TET = constant('TWELVE_TET');
 
 export class Tempo {
-  constructor(...args: unknown[]) {
-    runtime.construct(this, 'Tempo.constructor', args);
+  constructor() {
+    throw new TypeError('Tempo has no public constructor; use Tempo.of');
   }
 
   static of(...args: unknown[]): unknown {
@@ -2082,8 +2082,8 @@ runtime.registerClass('Timeline', Timeline, {
 });
 
 export class Tuning {
-  constructor(...args: unknown[]) {
-    runtime.construct(this, 'Tuning.constructor', args);
+  constructor() {
+    throw new TypeError('Tuning has no public constructor; use Tuning.of');
   }
 
   static of(...args: unknown[]): unknown {

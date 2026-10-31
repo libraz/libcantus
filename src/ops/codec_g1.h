@@ -30,6 +30,7 @@
 #include "cantus/generate/context.h"
 #include "cantus/generate/drums.h"
 #include "cantus/generate/vocabulary.h"
+#include "generate/vocabulary/transform.h"
 #include "json/json.h"
 #include "ops/args.h"
 #include "ops/codec.h"
@@ -141,8 +142,8 @@ struct WireSampler {
   const WireDraw& draw;
   json::Array path;
 
-  /** `draw.prob(p, ...path, tag, step)`, read for its truth. */
-  bool prob(double p, std::string_view tag, double step) const;
+  /** `draw.prob(p, ...path, ...key)`, read for its truth. */
+  bool prob(double p, const SeedPath& key) const;
 };
 
 //--------------------------------------------------------------------------------------------
@@ -199,6 +200,27 @@ struct WireGridModel {
   static bool same_stream(const json::Value* a, const json::Value* b);
   static json::Value placed(const json::Value& e, double at);
   static json::Value placed(const json::Value& e, double at, const json::Value& v);
+};
+
+/** A transform's onsets as a wire list. */
+json::Value events_json(std::vector<json::Value> events);
+
+/** `assertFunction(value, name)`, where a hybrid standing for a method is a function too. */
+const json::Value& assert_callable(const json::Value& value, std::string_view name);
+
+/** `assertOneOf(opts.rate ?? 'straight', FIGURE_RATES, 'rate')`. */
+FigureRate read_figure_rate(const json::Value& opts);
+
+/** The options of deform, read when TS reads them. */
+struct WireDeformPlan {
+  const Args& a;
+  const json::Value& asked;
+  const json::Value* ts;
+
+  FigureRate rate() const;
+  std::optional<double> rhythmic() const;
+  TimeSignature signature() const;
+  std::optional<OrnamentRequest<WireGridModel>> ornament() const;
 };
 
 /**

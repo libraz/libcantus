@@ -8,14 +8,17 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "analyze/detect/profiles.h"
 #include "analyze/form/hypermeter.h"
 #include "analyze/form/phrase.h"
 #include "analyze/grid.h"
+#include "analyze/keys/keys.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
 #include "core/validation/validation.h"
@@ -24,6 +27,7 @@
 #include "js/number.h"
 #include "js/value.h"
 #include "ops/accessors.h"
+#include "ops/codec_a1b.h"
 #include "ops/codec_a1c.h"
 #include "ops/codec_a2.h"
 #include "ops/codec_a3.h"
@@ -76,11 +80,9 @@ void register_rhythm() {
     RhythmAnalysisOptions typed;
     typed.meters = MeterArg(meters);
     typed.budget = budget_of(opts);
-    // The span's end is read once something sounds.
-    if (!sounding_of(notes).empty()) {
-      if (const json::Value* total = opt_null_default(opts, "totalBeats")) {
-        typed.totalBeats = js::to_math_number(*total);
-      }
+    // The span's end is checked whether or not anything sounds.
+    if (const json::Value* total = opt_null_default(opts, "totalBeats")) {
+      typed.totalBeats = assert_finite_number(*total, "rhythm totalBeats");
     }
     return to_json(analyze_rhythm(notes, typed));
   });
@@ -137,21 +139,20 @@ void register_sections() {
     MeterMap meters = resolve_wire_meters(opts, "section meters");
     std::vector<NoteEvent> notes =
         assert_note_events(a[0], "section notes", line_options(get(opts, "budget")));
-    std::vector<NoteEvent> sounding = sounding_of(notes);
-    if (sounding.empty()) {
-      return json::Value(json::Array());
-    }
     FormSectionOptions typed;
     typed.meters = MeterArg(meters);
     typed.budget = budget_of(opts);
-    double first_onset = bar_grid_start(first_sounding_beat(sounding), MeterArg(meters));
-    double last_end = latest_sounding_end(sounding);
-    // `Math.max(firstOnset, opts.totalBeats ?? lastEnd)`.
-    const json::Value* total = opt_null_default(opts, "totalBeats");
-    double span_end =
-        js::max(first_onset, total != nullptr ? js::to_math_number(*total) : last_end);
-    typed.totalBeats = assert_range(json::Value(span_end), js::min(0, first_onset), kMaxSafeInteger,
-                                    "section totalBeats");
+    std::vector<NoteEvent> sounding = sounding_of(notes);
+    if (const json::Value* total = opt_null_default(opts, "totalBeats")) {
+      // `resolveSpanEnd`'s range check, ahead of every other option as TS makes it.
+      double first_onset = bar_grid_start(first_sounding_beat(sounding), MeterArg(meters));
+      typed.totalBeats =
+          assert_range(*total, js::min(0, first_onset), kMaxSafeInteger, "section totalBeats");
+    }
+    if (sounding.empty()) {
+      // The analysis checks the span's end, then finds nothing to hear a form in.
+      return to_json(sections_from_notes(notes, typed));
+    }
     typed.threshold = assert_range_option(opts, "threshold", SECTION_DEFAULT_THRESHOLD, 0, 1,
                                           "section threshold");
     // Without `unitBars` the grouping is inferred first, and the typed analysis checks the result.
@@ -190,9 +191,12 @@ void register_phrases() {
     PhraseSource source;
     source.segments = wire.spans();
     source.chords = wire.reads();
-    source.total_beats = [&opts](double notes_end) {
+    source.total_beats = [&opts]() -> std::optional<double> {
       const json::Value* total = opt_null_default(opts, "totalBeats");
-      return total != nullptr ? js::to_math_number(*total) : notes_end;
+      if (total == nullptr) {
+        return std::nullopt;
+      }
+      return assert_finite_number(*total, "phrase totalBeats");
     };
     auto beats = [&opts](std::string_view key, std::string_view name) -> BeatsOption {
       return [&opts, key, name](double fallback) {
@@ -206,6 +210,18 @@ void register_phrases() {
     if (const json::Value* key = field(opts, "key")) {
       source.key = [&a, key] { return read_key_context(a, *key); };
     }
+    // `detectModulations(timeline.segments, ...)` over the chords the timeline check already read.
+    std::vector<std::unique_ptr<Chord>> modulation_chords;
+    source.modulations = [&wire, &segments,
+                          &modulation_chords](const KeyTimelineOptions& key_options) {
+      std::vector<SegmentBeats> beats;
+      for (const SegmentSpan& span : wire.spans()) {
+        beats.push_back(
+            SegmentBeats{span.startBeat, span.endBeat, span.endBeat > span.startBeat, {}});
+      }
+      return detect_modulations_over(beats, modulation_chord_source(segments, modulation_chords),
+                                     key_options, typed_profile_source(std::nullopt));
+    };
     if (given != nullptr) {
       source.given_downbeats = [given] {
         const json::Value& downbeats = get(*given, "downbeats");

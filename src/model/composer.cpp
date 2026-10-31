@@ -184,14 +184,12 @@ ResolvedKey Composer::require_key(const char* part) const {
   return *settings_.key;
 }
 
-TimeSignature Composer::opening_meter() const { return meter_at(0, MeterArg(settings_.meters)); }
-
 TimeSignature Composer::unchanging_meter(const char* part) const {
   if (settings_.meters.size() > 1) {
     throw InvalidInputError(std::string("composer ") + part +
                             " needs one meter for the whole part; the composer changes meter");
   }
-  return opening_meter();
+  return meter_at(0, MeterArg(settings_.meters));
 }
 
 ScoreOptions Composer::score_options(const std::optional<ResolvedKey>& key) const {
@@ -253,7 +251,7 @@ Score Composer::bass(const BassSource& source, const BassLineSettings& opts) con
         InstrumentProfileArg(to_stringed_profile(*opts.instrument, "bass instrument"));
   }
   options.budget = opts.budget;
-  options.ts = MeterArg(opening_meter());
+  options.ts = MeterArg(settings_.meters);
   options.ctx = GenerationContextInput(context());
   return Score::of(generate_bass_line(options), score_options(key));
 }
@@ -270,7 +268,7 @@ Score Composer::counter_melody(const Score& melody, const CounterMelodySettings&
   options.weights = opts.weights;
   options.pitchLow = opts.pitchLow;
   options.pitchHigh = opts.pitchHigh;
-  options.ts = MeterArg(opening_meter());
+  options.ts = MeterArg(settings_.meters);
   options.ctx = GenerationContextInput(context());
   return Score::of(generate_counter_melody(options), score_options(key));
 }
@@ -286,12 +284,13 @@ HarmonizedMelody Composer::harmonize(const Score& melody,
   if (settings_.key) {
     options.key = KeyArg(*settings_.key);
   }
-  options.ts = MeterArg(opening_meter());
+  options.ts = MeterArg(settings_.meters);
   options.ctx = GenerationContextInput(context());
   HarmonizeResult result = harmonize_melody(options);
   Score moved = melody.transpose(result.transposeSemitones);
-  double total =
-      harmonized_span(moved.total_beats(), result.chords, beats_per_bar(MeterArg(opening_meter())));
+  double last = result.chords.empty() ? 0 : result.chords.back().startBeat;
+  double total = harmonized_span(moved.total_beats(), result.chords,
+                                 beats_per_bar_at(last, MeterArg(settings_.meters)));
   return HarmonizedMelody{Timeline::from_chords(result.chords, total, KeyArg(result.key)),
                           Score::of(moved.notes(), score_options(result.key)),
                           result.transposeSemitones};

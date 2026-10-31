@@ -4,6 +4,8 @@
 #include <map>
 #include <utility>
 
+#include "analyze/form/hypermeter.h"
+#include "analyze/form/phrase.h"
 #include "analyze/keys/keys.h"
 #include "analyze/reference/profile.h"
 #include "analyze/timeline/timeline.h"
@@ -282,7 +284,7 @@ Score Score::quantize(double grid) const {
 Score Score::humanize(const HumanizeOptions& opts) const {
   HumanizeOptions asked = opts;
   if (!asked.ts) {
-    asked.ts = MeterArg(meter_at(0));
+    asked.ts = MeterArg(data_.meters);
   }
   return with_notes(cantus::humanize(data_.notes, asked));
 }
@@ -290,17 +292,17 @@ Score Score::humanize(const HumanizeOptions& opts) const {
 Score Score::ornament(const OrnamentOptions& opts) const {
   OrnamentOptions asked = opts;
   if (!asked.ts) {
-    asked.ts = MeterArg(meter_at(0));
+    asked.ts = MeterArg(data_.meters);
   }
   return with_notes(cantus::ornament(data_.notes, asked));
 }
 
 Score Score::groove(const GrooveTemplate& groove_template) const {
-  return with_notes(apply_groove_template(data_.notes, groove_template, MeterArg(meter_at(0))));
+  return with_notes(apply_groove_template(data_.notes, groove_template, MeterArg(data_.meters)));
 }
 
 GrooveTemplate Score::groove_template(std::optional<int> subdivision) const {
-  return extract_groove_template(data_.notes, MeterArg(meter_at(0)), subdivision);
+  return extract_groove_template(data_.notes, MeterArg(data_.meters), subdivision);
 }
 
 ChordTimelineOptions Score::analysis_options(const ChordTimelineOptions& opts) const {
@@ -417,22 +419,22 @@ KeyContext Score::key_context(const std::optional<KeyArg>& key) const {
   }));
 }
 
-std::vector<double> Score::cadence_beats() const {
-  std::vector<double> out;
-  for (const CadenceHit& hit :
-       detect_cadences(chord_analysis().timeline, key_context(std::nullopt))) {
-    out.push_back(hit.atBeat);
-  }
-  return out;
-}
-
 Hypermeter Score::hypermeter(const HypermeterOptions& opts) const {
-  HypermeterOptions asked = opts;
-  std::vector<double> beats = cadence_beats();
-  if (!asked.cadenceBeats) {
-    asked.cadenceBeats = std::move(beats);
+  if (opts.cadenceBeats) {
+    return cantus::hypermeter(data_.notes, MeterArg(data_.meters), opts);
   }
-  return cantus::hypermeter(data_.notes, MeterArg(data_.meters), asked);
+  // The score's own cadences, as the spans their arrival chords sound through, read in the key
+  // phrases() reads them in: the carried key, or the keys the chords modulate through.
+  return hypermeter_over(data_.notes, MeterArg(data_.meters), opts, [&] {
+    ChordTimeline timeline = chord_analysis().timeline;
+    KeyContext key = key_ ? KeyContext(KeyArg(key_identity(*key_))) : [&] {
+      KeyTimelineOptions key_options;
+      key_options.meters = MeterArg(data_.meters);
+      key_options.budget = opts.budget;
+      return KeyContext(modulation_key_at(detect_modulations(timeline.segments, key_options)));
+    }();
+    return boundary_cadences(timeline, key).spans;
+  });
 }
 
 std::vector<MotifData> Score::motifs(const ExtractMotifsOptions& opts) const {

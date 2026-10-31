@@ -11,7 +11,7 @@
 import type { MeterLike } from '../../core/meter/index.js';
 import { barIndexAt, barPositionToBeat, beatsPerBarAt } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import { assertGenerationBudget } from '../../core/validation/index.js';
+import { assertGenerationBudget, assertRange } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { windowWeights } from '../histogram.js';
 
@@ -73,6 +73,36 @@ export function firstSoundingBeat(notes: readonly NoteEvent[], fallback = 0): nu
     first = Math.min(first, note.startBeat);
   }
   return Number.isFinite(first) ? first : fallback;
+}
+
+/**
+ * Where an analysed span ends: the caller's `totalBeats`, or where the music
+ * stops sounding.
+ *
+ * A given end is checked before it is held to the span's start, so a value that
+ * is no number, or one below the range, is refused rather than raised to the
+ * start and read as an empty span.
+ *
+ * @param totalBeats The end the caller gave; absent or null reads `soundingEnd`.
+ * @param startBeat First beat of the span.
+ * @param soundingEnd Where the music stops sounding.
+ * @param name The option's name in an error message.
+ * @returns The span's end, never before its start.
+ * @throws InvalidInputError if a given end is not a finite number in
+ *   [min(0, startBeat), MAX_SAFE_INTEGER].
+ */
+export function resolveSpanEnd(
+  totalBeats: number | undefined,
+  startBeat: number,
+  soundingEnd: number,
+  name: string,
+): number {
+  const given = totalBeats ?? null;
+  if (given === null) {
+    return Math.max(startBeat, soundingEnd);
+  }
+  assertRange(given, Math.min(0, startBeat), Number.MAX_SAFE_INTEGER, name);
+  return Math.max(startBeat, given);
 }
 
 /**

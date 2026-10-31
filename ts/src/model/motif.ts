@@ -3,6 +3,7 @@ import { melodicSimilarity, motifFromNotes, relateMotifs } from '../analyze/melo
 import type { ChordTimeline } from '../analyze/timeline/index.js';
 import type { MeterLike } from '../core/meter/index.js';
 import type { NoteEvent } from '../core/types.js';
+import { assertArray, assertRecord } from '../core/validation/index.js';
 import type {
   GenerationContextInput,
   MotifCell,
@@ -161,6 +162,7 @@ export class Motif {
    * ```
    */
   static generate(opts: MotifGenerateOptions): Motif {
+    assertRecord<MotifGenerateOptions>(opts, 'motif options');
     return new Motif(generateMotif({ ...opts, chord: chordFrom(opts.chord) }));
   }
 
@@ -176,7 +178,7 @@ export class Motif {
    * @throws If a note carries a value the transforms cannot hold.
    */
   static fromNotes(notes: readonly NoteEvent[]): Motif {
-    return new Motif({ notes: [...notes] });
+    return new Motif({ notes: [...assertArray<NoteEvent>(notes, 'motif notes')] });
   }
 
   /** Rebuild a motif from the plain data {@link Motif.data} hands out. */

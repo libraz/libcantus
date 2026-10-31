@@ -12,7 +12,7 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import { diatonicLetterOf, naturalPitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertOptions } from '../../core/validation/index.js';
+import { assertOptions, describeRejected } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, PitchSpelling } from '../../theory/chord/index.js';
 import { chordToneSpellings, makeSpelledChord } from '../../theory/chord/index.js';
 import { QUALITY_INTERVALS } from '../../theory/chord/spec.js';
@@ -444,6 +444,8 @@ function chordFromParsed(parsed: ParsedRoman): Chord {
  * @param text The Roman numeral.
  * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
  * @returns The chord.
+ * @throws If `key` names no key, `text` is not a string, or it is no numeral
+ *   this reads.
  * @example
  * ```ts
  * import { romanToChord, majorKey } from '@libraz/libcantus';
@@ -457,6 +459,11 @@ export function romanToChord(text: string, key: SpelledKeyLike): Chord {
   // spelled from its tonic, and a key reduced here would spell them from
   // whichever side of the circle its pitch classes read best as.
   const resolved = resolveKey(key);
+  if (typeof text !== 'string') {
+    throw new InvalidInputError(
+      `Roman numeral must be a string; received ${describeRejected(text)}`,
+    );
+  }
   // Accept the conventional slashes in figured bass (`V6/4`, `V6/5`) while
   // retaining `/` as the separator for applied dominants (`V7/V`).
   const trimmed = text.trim().replace(/(\d)\/(?=\d)/g, '$1');
@@ -825,19 +832,21 @@ function writtenRoot(chord: Chord): PitchSpelling | undefined {
  * The numeral a written root denotes: the degree on its letter, with the
  * alteration it stands at above that degree of the key.
  *
- * Undefined when the chord writes no root, or writes one more than a semitone
- * from its degree, which a single accidental cannot name.
+ * Undefined when the chord writes no root, when the root is a degree of the
+ * key (which takes its own numeral however the symbol spells it: Abm in E major
+ * is `iii`), or when the letter is more than a semitone from its degree, which a
+ * single accidental cannot name.
  */
 function writtenSpelling(
   rootPc: number,
   written: PitchSpelling | undefined,
   resolved: ResolvedKey,
 ): { degreeNumber: number; accidental: string } | undefined {
-  if (written === undefined) {
+  const tones = scaleTonesInDegreeOrder(romanReference(resolved.scale));
+  if (written === undefined || tones.includes(mod12(rootPc))) {
     return undefined;
   }
   const degreeNumber = diatonicLetterOf(written.letter - resolved.tonic.letter) + 1;
-  const tones = scaleTonesInDegreeOrder(romanReference(resolved.scale));
   const degreePc = tones[degreeNumber - 1];
   if (degreePc === undefined) {
     return undefined;

@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 #include "js/math.h"
@@ -90,15 +91,17 @@ void generate_aux_percussion_for_bar(HitList<DrumHit>& track, double bar_start,
       const std::vector<double>& vel_curve = shaker_sixteenth_curve();
       for (double beat = 0; beat < bar_beats; beat += 1) {
         for (double sub = 0; sub < 4; sub += 1) {
-          // The on-beat and mid-beat shakes carry the pattern; the two between are the dial's.
-          if (std::fmod(sub, 2) == 1 &&
-              !draw.prob(sec.rhythmic, {"shaker16", bar_start, beat, sub})) {
+          // The on-beat and mid-beat shakes carry the pattern; the two between are the dial's to
+          // add, from the setting their draw names.
+          double entry = std::fmod(sub, 2) == 1 ? draw.at({"shaker16", bar_start, beat, sub})
+                                                : -std::numeric_limits<double>::infinity();
+          if (!(entry < sec.rhythmic)) {
             continue;
           }
           double raw = 80 * curve_at(vel_curve, sub, 0.5) * density_mult *
                        draw.float_(0.9, 1.1, {"shaker", bar_start, beat, sub});
           track.add(kGm.SHAKER, swing16(bar_start + beat + sub * DRUM_SIXTEENTH, sec, swing_amount),
-                    DRUM_SIXTEENTH, js::max(25, js::min(85, raw)));
+                    DRUM_SIXTEENTH, js::max(25, js::min(85, raw)), {}, entry);
         }
       }
     } else {

@@ -106,6 +106,28 @@ std::vector<int> read_pitches(const json::Value& pitches, std::string_view name,
   return out;
 }
 
+ChordSource modulation_chord_source(const json::Array& segments,
+                                    std::vector<std::unique_ptr<Chord>>& cache) {
+  cache.clear();
+  cache.resize(segments.size());
+  return [&segments, &cache](std::size_t index) -> const Chord& {
+    if (!cache[index]) {
+      const json::Value& wire = get(segments[index], "chord");
+      // `assertChord`, then the guards of the tones, then `soundsDominantSeventh`'s scans of the
+      // intervals, which the candidate a fifth below the root asks for.
+      assert_record(wire, "chord");
+      assert_finite_number(get(wire, "rootPc"), "chord.rootPc");
+      ChordQuality quality = assert_chord_quality(wire);
+      assert_mask_inputs(wire);
+      if (reads_interval(wire, 4)) {
+        reads_interval(wire, 10);
+      }
+      cache[index] = std::make_unique<Chord>(read_chord_fields(wire, quality));
+    }
+    return *cache[index];
+  };
+}
+
 ProfileSource wire_profile_source(const json::Value* profile) {
   std::optional<json::Value> held;
   if (profile != nullptr) {

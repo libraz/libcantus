@@ -112,11 +112,13 @@ std::vector<IdentifiedVoiceNote> to_voice_notes(const std::vector<NoteEvent>& ev
 /**
  * Label every note of a voice with its theory roles (`analyzeVoice`). Each note is classified
  * against the chord sounding at its beat; leading-tone resolutions are noted against the key in
- * force at the beat the resolution lands on.
+ * force at the beat the resolution lands on. A note of zero length gets no melodic labels and is no
+ * other note's neighbour.
  * @param voice The monophonic voice, in time order.
  * @param chord_at_beat Chord sounding at a given beat, or null.
  * @param key The key of the whole voice, or the key in force at a given beat.
- * @param other_voices_at_beat Other sounding voices at a given beat; none when empty.
+ * @param other_voices_at_beat Other sounding voices at a given beat; none when empty, and a
+ *   suspension's dissonance is then judged against the chord.
  * @throws InvalidInputError if the voice is not valid note events.
  */
 std::vector<AnalyzedNote> analyze_voice(

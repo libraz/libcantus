@@ -29,8 +29,14 @@ import {
   assertOptions,
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
-import { isScaleTone, resolveKey, type SpelledKeyLike } from '../../theory/scale/index.js';
+import {
+  isScaleTone,
+  MELODIC_MINOR_MASK,
+  resolveKey,
+  type SpelledKeyLike,
+} from '../../theory/scale/index.js';
 import { assertTonicOf, spellChord, spellPitchClass } from '../../theory/spelling/index.js';
+import { cadencesThroughRaisedSeventh } from '../../theory/tendency/index.js';
 import type { ChordTimeline } from '../timeline/index.js';
 
 /**
@@ -45,9 +51,11 @@ import type { ChordTimeline } from '../timeline/index.js';
  *    Db7 the seventh has to read Cb even in C major, where B is a scale tone,
  *    because a dominant seventh spelled as a sixth is not the chord that was
  *    played.
- * 2. **The key's scale.** Anything else the key itself spells — a scale tone,
- *    and the tonic — keeps that spelling, exactly as the note-by-note path
- *    keeps it. No amount of melodic pressure moves it.
+ * 2. **The key's own tones.** Anything else the key itself spells — a scale
+ *    tone, the tonic, and in a minor key the raised sixth and seventh it
+ *    cadences through — keeps that spelling, and an interval between two of
+ *    them is written as the key writes it, so the augmented second of the
+ *    harmonic minor is no shape error. No amount of melodic pressure moves it.
  * 3. **The shape of the line, then its direction.** A chromatic note is spelled
  *    so the letters of the intervals around it match the intervals actually
  *    sounding, and a stepwise line then prefers sharps rising and flats
@@ -63,7 +71,7 @@ import type { ChordTimeline } from '../timeline/index.js';
 /** Emission cost for a spelling the chord sounding under the note does not name. */
 export const CHORD_MISMATCH = 64;
 
-/** Emission cost for respelling a tone the key's own scale already names. */
+/** Emission cost for respelling a tone the key already names. */
 export const SCALE_TONE_MISMATCH = 32;
 
 /** Transition cost per diatonic step an interval's letters miss its written size by. */
@@ -213,11 +221,29 @@ function chordSpellingOf(pc: number, chord: Chord, tonic: Note, key: KeyScale): 
     : spellPitchClass(pc, tonic, key);
 }
 
+/**
+ * The key's spelling of a pitch class it counts as its own, or undefined for a
+ * chromatic one.
+ *
+ * Its own tones are the scale's, and in a minor key also the raised sixth and
+ * seventh of its melodic and harmonic forms: the leading tone of A minor is the
+ * G# on the seventh letter, never an Ab, whichever way the line moves around it.
+ */
+function keyToneSpelling(pc: number, tonic: Note, key: KeyScale): Note | undefined {
+  const own =
+    isScaleTone(pc, key) ||
+    (cadencesThroughRaisedSeventh(key) &&
+      isScaleTone(pc, { rootPc: key.rootPc, modeMask12: MELODIC_MINOR_MASK }));
+  return own ? spellPitchClass(pc, tonic, key) : undefined;
+}
+
 /** One note of the line, with the spellings open to it and what each costs. */
 type LineState = {
   pitch: number;
   /** True when the key does not already spell this pitch, so direction may decide. */
   chromatic: boolean;
+  /** The key's spelling of the pitch when it is one of the key's own tones. */
+  keyTone: Note | undefined;
   candidates: Note[];
   emissions: number[];
   /** The spelling the note-by-note path would have chosen, used as the fallback. */
@@ -235,14 +261,19 @@ type LineState = {
 function stateFor(pitch: number, chord: Chord | null, tonic: Note, key: KeyScale): LineState {
   const pc = mod12(pitch);
   const fromChord = chord === null ? undefined : chordSpellingOf(pc, chord, tonic, key);
-  const scaleTone = isScaleTone(pc, key);
-  const reference = fromChord ?? spellPitchClass(pc, tonic, key);
+  const keyTone = keyToneSpelling(pc, tonic, key);
+  const reference = fromChord ?? keyTone ?? spellPitchClass(pc, tonic, key);
   const mismatch =
-    fromChord !== undefined ? CHORD_MISMATCH : scaleTone ? SCALE_TONE_MISMATCH : KEY_MISMATCH;
+    fromChord !== undefined
+      ? CHORD_MISMATCH
+      : keyTone !== undefined
+        ? SCALE_TONE_MISMATCH
+        : KEY_MISMATCH;
   const candidates = candidatesFor(pitch, reference);
   return {
     pitch,
-    chromatic: !scaleTone,
+    chromatic: keyTone === undefined,
+    keyTone,
     candidates,
     emissions: candidates.map(
       (candidate) =>
@@ -302,12 +333,19 @@ function directionCost(note: Note, chromatic: boolean, semitones: number): numbe
  *
  * Direction is charged to both notes: a chromatic note is judged by the step it
  * arrives on and by the step it leaves on, so a note inside a run collects the
- * rule twice and a note at the end of one collects it once.
+ * rule twice and a note at the end of one collects it once. Two of the key's own
+ * tones spelled as the key spells them are written as the key writes them, so
+ * their letters cost nothing.
  */
 function transitionCost(from: LineState, source: Note, to: LineState, target: Note): number {
   const semitones = to.pitch - from.pitch;
+  const keyInterval =
+    from.keyTone !== undefined &&
+    to.keyTone !== undefined &&
+    sameSpelling(source, from.keyTone) &&
+    sameSpelling(target, to.keyTone);
   return (
-    letterStepCost(source, target, semitones) +
+    (keyInterval ? 0 : letterStepCost(source, target, semitones)) +
     directionCost(target, to.chromatic, semitones) +
     directionCost(source, from.chromatic, semitones)
   );
@@ -328,8 +366,9 @@ function transitionCost(from: LineState, source: Note, to: LineState, target: No
  * 1. A note the sounding chord names takes that chord's spelling of it, even
  *    when the key spells the pitch otherwise — the seventh of a Db7 reads Cb in
  *    C major, not B.
- * 2. Anything else the key's scale spells keeps its key spelling, exactly as
- *    the note-by-note path keeps it.
+ * 2. Anything else the key spells as its own — a scale tone, or the raised
+ *    sixth and seventh of a minor key — keeps its key spelling, so the leading
+ *    tone of A minor reads G# even where the line falls through it.
  * 3. A chromatic note is spelled so the written intervals around it match the
  *    sounding ones, and then so a rising step carries a sharp and a falling
  *    step a flat.

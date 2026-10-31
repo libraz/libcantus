@@ -644,7 +644,8 @@ Key read_key_value(const json::Value& value) {
       return read_key_data(data);
     }
   }
-  throw InvalidInputError("key must be a key name or a key/scale; received " + js::type_of(value));
+  throw InvalidInputError("key must be a key name or a key/scale; received " +
+                          describe_rejected(value));
 }
 
 std::optional<Key> read_key_argument(const json::Value& value, std::string_view name) {
@@ -708,10 +709,12 @@ Progression read_progression_value(const json::Value& chords, const json::Value&
   const json::Array& given = assert_data_objects(chords, "progression chords");
   // `new Chord(chord.toJSON(), key ?? chord.key)`: each member rebuilt from its own data.
   std::vector<ChordValue> members;
-  for (const json::Value& chord : given) {
+  for (std::size_t i = 0; i < given.size(); ++i) {
+    const json::Value& chord = given[i];
     if (!answers_to_json(chord)) {
       property_of(chord, "toJSON");
-      throw js::TypeError("chord.toJSON is not a function");
+      throw InvalidInputError("progression chords[" + index_text(i) +
+                              "] must be a Chord; received " + describe_rejected(chord));
     }
     json::Value data = class_to_json(chord);
     if (resolved) {

@@ -76,6 +76,9 @@ TuningTable read_tuning(const json::Value& value);
  */
 SeedPath read_seed_path(const Args& args, std::size_t from);
 
+/** A seed read as `assertInteger(seed, name, 0, 0xffffffff)` reads it. */
+std::uint32_t read_seed(const json::Value& value, std::string_view name);
+
 /** The wire form of a PositionalRng: `{"$hy": "PositionalRng", "seed"}`. */
 json::Value positional_rng_hybrid(std::uint32_t seed);
 

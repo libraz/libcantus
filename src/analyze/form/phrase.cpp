@@ -12,6 +12,7 @@
 #include <string>
 
 #include "analyze/adjacency.h"
+#include "analyze/form/hypermeter.h"
 #include "analyze/form/internal.h"
 #include "analyze/grid.h"
 #include "analyze/keys/keys.h"
@@ -118,9 +119,13 @@ void add_signal(Boundaries& boundaries, double beat, PhraseSignal signal, double
   }
 }
 
-/** A boundary's total strength, and its signals strongest first (`readBoundary`). */
+/** What a boundary is worth, with and without the cadence it carries (`BoundaryReading`). */
 struct BoundaryReading {
+  /** Total strength of every signal. */
   double strength = 0;
+  /** Total strength of the signals other than the cadence. */
+  double uncredited = 0;
+  /** The signals, strongest first. */
   std::vector<PhraseSignal> signals;
 };
 
@@ -137,12 +142,22 @@ BoundaryReading read_boundary(const Boundary& boundary) {
   });
   BoundaryReading out;
   std::vector<double> strengths;
+  std::vector<double> uncredited;
   for (const auto& [signal, strength] : signals) {
     strengths.push_back(strength);
+    if (signal != PhraseSignal::kCadence) {
+      uncredited.push_back(strength);
+    }
     out.signals.push_back(signal);
   }
   out.strength = combine_evidence(strengths);
+  out.uncredited = combine_evidence(uncredited);
   return out;
+}
+
+/** Whether a cadence arriving at `at_beat` closes the phrase [start, end) (`closesPhrase`). */
+bool closes_phrase(double at_beat, double start_beat, double end_beat) {
+  return at_beat >= start_beat - BEAT_EPS && at_beat < end_beat - BEAT_EPS;
 }
 
 /** How well a length matches what a phrase is expected to run (`lengthFit`). */
@@ -151,6 +166,25 @@ double length_fit(double length, double expected) {
     return 0;
   }
   return js::max(-1, 1 - std::fabs(length - expected) / expected);
+}
+
+/**
+ * Boundaries argued for by a cadence's arrival chord held across bar lines
+ * (`heldCadenceBoundaries`): every bar line the chord sounds across closes its phrase.
+ */
+void held_cadence_boundaries(Boundaries& boundaries, const CadenceHit& hit,
+                             std::optional<std::size_t> arrival, const CadenceSpan& span,
+                             const MeterArg& meters, double span_end) {
+  // Bar lines past the end of the span bound no phrase.
+  double first_line = bar_index_at(span.atBeat, meters) + 1;
+  double last_line = bar_index_at(js::min(span.endBeat, span_end), meters);
+  // The lines lie inside the span, whose bar count the form bars check has bounded.
+  for (double bar = first_line; bar <= last_line; bar += 1) {
+    double line = bar_position_to_beat(BarPosition{bar, 0}, meters);
+    if (line < span.endBeat - BEAT_EPS) {
+      add_signal(boundaries, line, PhraseSignal::kCadence, span.strength, &hit, arrival);
+    }
+  }
 }
 
 /** Boundaries argued for by silence in the melody (`restBoundaries`). */
@@ -281,7 +315,8 @@ std::string describe_cadence_text(const std::string& type,
 
 std::vector<std::size_t> choose_phrase_path(const std::vector<double>& beats,
                                             const std::vector<double>& strengths,
-                                            double min_phrase_beats, double expected) {
+                                            double min_phrase_beats, double expected,
+                                            const HeldCadences* held) {
   std::vector<double> value(beats.size(), -std::numeric_limits<double>::infinity());
   std::vector<std::ptrdiff_t> came_from(beats.size(), -1);
   if (!beats.empty()) {
@@ -297,8 +332,12 @@ std::vector<std::size_t> choose_phrase_path(const std::vector<double>& beats,
       if (length < min_phrase_beats - BEAT_EPS) {
         continue;
       }
-      double gain = value[i] + (j < strengths.size() ? strengths[j] : 0) +
-                    length_fit(length, expected) - PHRASE_CUT_COST;
+      bool credited =
+          held == nullptr || closes_phrase(j < held->arrivals.size() ? held->arrivals[j] : end_beat,
+                                           beats[i], end_beat);
+      double strength = credited ? (j < strengths.size() ? strengths[j] : 0)
+                                 : (j < held->uncredited.size() ? held->uncredited[j] : 0);
+      double gain = value[i] + strength + length_fit(length, expected) - PHRASE_CUT_COST;
       if (gain > value[j]) {
         value[j] = gain;
         came_from[j] = static_cast<std::ptrdiff_t>(i);
@@ -320,6 +359,44 @@ std::vector<std::size_t> choose_phrase_path(const std::vector<double>& beats,
     path.push_back(last);
   }
   return path;
+}
+
+KeyAtBeat modulation_key_at(std::vector<KeyRegion> regions) {
+  auto held = std::make_shared<std::vector<KeyRegion>>(std::move(regions));
+  Nullable<ResolvedKey> prevailing = prevailing_key_of(*held);
+  auto lookup_key =
+      std::make_shared<KeyLookup>(*held, prevailing ? *prevailing : resolve_key(major_key(0)));
+  // The pitch classes alone: a phrase boundary is argued from cadences and scale membership.
+  return [held, lookup_key](double beat) { return scale_of((*lookup_key)(beat)); };
+}
+
+BoundaryCadences boundary_cadences(const std::vector<CadenceHit>& found,
+                                   const std::vector<std::size_t>& found_arrivals,
+                                   const std::vector<SegmentSpan>& segments) {
+  BoundaryCadences out;
+  std::vector<CadenceArrival> arrivals;
+  for (std::size_t n = 0; n < found.size(); ++n) {
+    if (!found[n].cadence.type) {
+      continue;
+    }
+    arrivals.push_back(CadenceArrival{
+        found[n].atBeat, lookup(kCadenceBoundaryStrength, std::size(kCadenceBoundaryStrength),
+                                to_string(*found[n].cadence.type))});
+    out.hits.push_back(found[n]);
+    if (n < found_arrivals.size()) {
+      out.arrivals.push_back(found_arrivals[n]);
+    }
+  }
+  out.spans = cadence_spans(arrivals, segments);
+  return out;
+}
+
+BoundaryCadences boundary_cadences(const ChordTimeline& timeline, const KeyContext& key) {
+  std::vector<SegmentSpan> segments;
+  for (const ChordSegment& segment : timeline.segments) {
+    segments.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
+  }
+  return boundary_cadences(detect_cadences(timeline, key), {}, segments);
 }
 
 PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEvent>& notes,
@@ -345,18 +422,19 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
     }
   }
   const std::vector<SegmentSpan>& segments = source.segments;
-  double first_onset = segments.empty() ? 0 : segments.front().startBeat;
-  for (const NoteEvent& note : sounding) {
-    first_onset = js::min(first_onset, note.startBeat);
-  }
+  // Whichever starts first, the notes or the chords; with neither, beat 0.
+  constexpr double kInfinity = std::numeric_limits<double>::infinity();
+  double earliest = js::min(first_sounding_beat(sounding, kInfinity),
+                            segments.empty() ? kInfinity : segments.front().startBeat);
+  double first_onset = std::isfinite(earliest) ? earliest : 0;
   // The pickup rule the whole analysis shares.
   double span_start = bar_grid_start(first_onset, meters);
   double latest_end =
       js::max(segments.empty() ? -std::numeric_limits<double>::infinity() : segments.back().endBeat,
               latest_sounding_end(sounding, -std::numeric_limits<double>::infinity()));
   double notes_end = std::isfinite(latest_end) ? latest_end : 0;
-  double span_end = js::max(span_start, source.total_beats(notes_end));
-  assert_range(span_end, js::min(0, span_start), kMaxSafeInteger, "phrase totalBeats");
+  double span_end =
+      resolve_span_end(source.total_beats(), span_start, notes_end, "phrase totalBeats");
   PhraseReading reading;
   if (span_end <= span_start + BEAT_EPS) {
     // Nothing sounds, so there is no material to hear a phrase in.
@@ -376,34 +454,31 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
   if (source.key) {
     key_at = source.key();
   } else {
+    // Read from the chords the cadences are formed of, as the timeline's own modulations are
+    // (`keyContextFor`).
     KeyTimelineOptions key_options;
     key_options.meters = meters_map;
     key_options.totalBeats = span_end;
     key_options.budget = opts.budget;
-    auto regions =
-        std::make_shared<std::vector<KeyRegion>>(key_timeline_from_notes(sounding, key_options));
-    Nullable<ResolvedKey> prevailing = prevailing_key_of(*regions);
-    auto lookup_key =
-        std::make_shared<KeyLookup>(*regions, prevailing ? *prevailing : resolve_key(major_key(0)));
-    // The pitch classes alone: a phrase boundary is argued from cadences and scale membership.
-    key_at = [regions, lookup_key](double beat) { return scale_of((*lookup_key)(beat)); };
+    key_at = modulation_key_at(source.modulations(key_options));
   }
-  std::vector<std::size_t> hit_arrivals;
-  std::vector<CadenceHit> cadences =
-      detect_cadences_over(segments, source.chords, key_at, &hit_arrivals);
+  // Each cadence that marks a boundary once, as the span its arrival chord sounds through: the
+  // phrase boundaries and the hyperbar ends are both read from these.
+  std::vector<std::size_t> found_arrivals;
+  std::vector<CadenceHit> found =
+      detect_cadences_over(segments, source.chords, key_at, &found_arrivals);
+  BoundaryCadences marking = boundary_cadences(found, found_arrivals, segments);
+  const std::vector<CadenceHit>& cadences = marking.hits;
+  const std::vector<std::size_t>& hit_arrivals = marking.arrivals;
+  const std::vector<CadenceSpan>& spans = marking.spans;
   Hypermeter grouping;
   if (opts.hypermeter) {
     grouping = *opts.hypermeter;
   } else {
     HypermeterOptions grouping_options;
     grouping_options.totalBeats = span_end;
-    std::vector<double> cadence_beats;
-    for (const CadenceHit& hit : cadences) {
-      cadence_beats.push_back(hit.atBeat);
-    }
-    grouping_options.cadenceBeats = std::move(cadence_beats);
     grouping_options.budget = opts.budget;
-    grouping = hypermeter(sounding, meters, grouping_options);
+    grouping = hypermeter_over(sounding, meters, grouping_options, [&] { return spans; });
   }
   auto downbeats = [&]() -> std::vector<double> {
     return opts.hypermeter ? source.given_downbeats() : grouping.downbeats;
@@ -419,21 +494,10 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
   Boundaries boundaries;
   for (std::size_t n = 0; n < cadences.size(); ++n) {
     const CadenceHit& hit = cadences[n];
-    if (!hit.cadence.type) {
-      continue;
-    }
-    double strength = lookup(kCadenceBoundaryStrength, std::size(kCadenceBoundaryStrength),
-                             to_string(*hit.cadence.type));
-    const SegmentSpan* arriving = segment_span_starting_at(segments, hit.atBeat);
-    double chord_end = arriving != nullptr ? arriving->endBeat : hit.atBeat;
-    add_signal(boundaries, chord_end, PhraseSignal::kCadence, strength, &hit, hit_arrivals[n]);
-    // A chord held past the bar line closes its phrase at that line as well as where it stops
-    // sounding.
-    double bar_end =
-        bar_position_to_beat(BarPosition{bar_index_at(hit.atBeat, meters) + 1, 0}, meters);
-    if (chord_end > bar_end + BEAT_EPS) {
-      add_signal(boundaries, bar_end, PhraseSignal::kCadence, strength, &hit, hit_arrivals[n]);
-    }
+    const CadenceSpan& span = spans[n];
+    add_signal(boundaries, span.endBeat, PhraseSignal::kCadence, span.strength, &hit,
+               hit_arrivals[n]);
+    held_cadence_boundaries(boundaries, hit, hit_arrivals[n], span, meters, span_end);
   }
   rest_boundaries(boundaries, sounding, meters, rest_beats);
   for (const NoteEvent& note : sounding) {
@@ -477,13 +541,16 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
   std::vector<BoundaryReading> readings;
   std::vector<double> stop_beats;
   std::vector<double> stop_strengths;
+  HeldCadences held;
   for (const Boundary* stop : stops) {
     readings.push_back(read_boundary(*stop));
     stop_beats.push_back(stop->beat);
     stop_strengths.push_back(readings.back().strength);
+    held.arrivals.push_back(stop->cadence ? stop->cadence->atBeat : stop->beat);
+    held.uncredited.push_back(readings.back().uncredited);
   }
   std::vector<std::size_t> path =
-      choose_phrase_path(stop_beats, stop_strengths, min_phrase_beats, expected);
+      choose_phrase_path(stop_beats, stop_strengths, min_phrase_beats, expected, &held);
 
   std::set<double, KeyLess> downbeat_keys;
   for (double downbeat : downbeats()) {
@@ -497,17 +564,18 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
     double end_beat = stop.beat;
     const BoundaryReading& stop_reading = readings[to];
     double length = end_beat - start_beat;
-    double confidence = clamp01(CLOSING_SHARE * stop_reading.strength +
-                                (1 - CLOSING_SHARE) * js::max(0, length_fit(length, expected)));
     bool is_last = n == path.size() - 1;
     // A cadence that arrived before this phrase began cannot be the one closing it.
     Nullable<CadenceHit> cadence;
     std::optional<std::size_t> arrival;
-    if (stop.cadence && stop.cadence->atBeat >= start_beat - BEAT_EPS &&
-        stop.cadence->atBeat < end_beat - BEAT_EPS) {
+    if (stop.cadence && closes_phrase(stop.cadence->atBeat, start_beat, end_beat)) {
       cadence = stop.cadence;
       arrival = stop.arrival;
     }
+    // Read from the signals the phrase reports, so a dropped cadence adds nothing.
+    double closing_strength = cadence ? stop_reading.strength : stop_reading.uncredited;
+    double confidence = clamp01(CLOSING_SHARE * closing_strength +
+                                (1 - CLOSING_SHARE) * js::max(0, length_fit(length, expected)));
     double structural_weight = structural_weight_of(
         cadence, confidence, downbeat_keys.count(js::round(end_beat / BEAT_EPS)) > 0, is_last);
     // The signals say what the boundary was read from, so a cadence dropped as belonging to an
@@ -552,7 +620,7 @@ std::vector<Phrase> phrases_from_timeline(const ChordTimeline& timeline,
     return timeline.segments[index].chord;
   };
   source.chords = ChordReads{chord_at, chord_at, {}, {}, {}, {}};
-  source.total_beats = [&](double notes_end) { return opts.totalBeats.value_or(notes_end); };
+  source.total_beats = [&] { return opts.totalBeats; };
   source.rest_beats = [&](double fallback) { return opts.restBeats.value_or(fallback); };
   source.long_note_beats = [&](double fallback) { return opts.longNoteBeats.value_or(fallback); };
   source.min_phrase_beats = [&](double fallback) { return opts.minPhraseBeats.value_or(fallback); };
@@ -562,6 +630,9 @@ std::vector<Phrase> phrases_from_timeline(const ChordTimeline& timeline,
   if (opts.key) {
     source.key = [&] { return key_scale_at(*opts.key); };
   }
+  source.modulations = [&](const KeyTimelineOptions& key_options) {
+    return detect_modulations(timeline.segments, key_options);
+  };
   if (opts.hypermeter) {
     source.given_downbeats = [&] { return opts.hypermeter->downbeats; };
   }

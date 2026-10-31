@@ -475,10 +475,10 @@ describe('Score note transformation', () => {
 });
 
 describe('Score performance shaping', () => {
-  it('humanizes as the groove module does, reading the opening signature', () => {
+  it('humanizes as the groove module does, reading the whole meter map', () => {
     const score = Score.of(TUNE, { meters: METERS });
     expect(score.humanize({ ctx: { seed: 7 } }).notes).toEqual(
-      humanize(score.notes, { ts: parseTimeSignature('4/4'), ctx: { seed: 7 } }),
+      humanize(score.notes, { ts: METERS, ctx: { seed: 7 } }),
     );
     expect(score.humanize({ ctx: { seed: 7 }, ts: parseTimeSignature('3/4') }).notes).toEqual(
       humanize(score.notes, { ts: parseTimeSignature('3/4'), ctx: { seed: 7 } }),

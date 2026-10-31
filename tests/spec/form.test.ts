@@ -969,15 +969,21 @@ describe('form analyses that read their options late', () => {
     const empty = chordTimelineFromChords([], 0);
     expect(phrasesFromTimeline(empty, [], { restBeats: 'x' as never })).toEqual([]);
     expect(phrasesFromTimeline(empty, [], { key: 'not a key' as never })).toEqual([]);
-    expect(sectionsFromNotes([], { totalBeats: 'x' as never })).toEqual([]);
+  });
+
+  it('checks the end of span even where nothing sounds', () => {
+    expect(() => sectionsFromNotes([], { totalBeats: 'x' as never })).toThrow(
+      new InvalidInputError('section totalBeats must be finite; received x'),
+    );
   });
 
   it('refuses a bigint end of span in sections and phrases', () => {
     const timeline = chordTimelineFromNotes(notes).timeline;
-    const refusal = new TypeError('Cannot convert a BigInt value to a number');
-    expect(() => sectionsFromNotes(notes, { totalBeats: 10n as never })).toThrow(refusal);
+    expect(() => sectionsFromNotes(notes, { totalBeats: 10n as never })).toThrow(
+      new InvalidInputError('section totalBeats must be finite; received 10'),
+    );
     expect(() => phrasesFromTimeline(timeline, notes, { totalBeats: 10n as never })).toThrow(
-      refusal,
+      new InvalidInputError('phrase totalBeats must be finite; received 10'),
     );
   });
 
@@ -1028,5 +1034,251 @@ describe('form analyses over material that ends before beat 0', () => {
 
   it('accepts a hypermeter totalBeats at or above the first note', () => {
     expect(() => hypermeter(notes, '4/4', { totalBeats: -8 })).not.toThrow();
+  });
+});
+
+describe('a cadence read over the span its arrival chord sounds through', () => {
+  const tonic = [48, 60, 64, 67];
+  const subdominant = [53, 57, 60, 65];
+  const dominant = [55, 59, 62, 67];
+  /** One block chord per bar, from `bar` on. */
+  const perBar = (chords: number[][], bar = 0): NoteEvent[] =>
+    chords.flatMap((pitches, i) => blockChord(pitches, (bar + i) * 4, 4));
+
+  it('keeps a held dominant from moving the hyperbars of a period', () => {
+    // I - IV - V - V | I - IV - V - I after a one-beat pickup: the half cadence
+    // arrives in bar 3 and its dominant holds through bar 4.
+    const notes = [
+      { pitch: 67, startBeat: -1, durationBeat: 1 },
+      ...perBar([tonic, subdominant, dominant, dominant, tonic, subdominant, dominant, tonic]),
+    ];
+    const { timeline } = chordTimelineFromNotes(notes, { key: majorKey(0) });
+    const phrases = phrasesFromTimeline(timeline, notes, { key: majorKey(0) });
+    expect(phrases.map((phrase) => [phrase.startBeat, phrase.endBeat])).toEqual([
+      [-1, 16],
+      [16, 32],
+    ]);
+    expect(phrases[0]?.cadence?.cadence.type).toBe('half');
+    expect(phrases[0]?.signals).toContain('hypermeter');
+  });
+
+  it('closes a phrase on the cadence its tonic is still holding, bars after the arrival', () => {
+    // C C F F G G C C, twice: the tonic arrives in bar 7 and runs on into the
+    // repeat, so the seam at beat 32 is two bars after the arrival.
+    const phrase = [tonic, tonic, subdominant, subdominant, dominant, dominant, tonic, tonic];
+    const notes = [...perBar(phrase), ...perBar(phrase, 8)];
+    const { timeline } = chordTimelineFromNotes(notes, { key: majorKey(0) });
+    const phrases = phrasesFromTimeline(timeline, notes, {
+      key: majorKey(0),
+      expectedPhraseBeats: 32,
+    });
+    expect(phrases.map((entry) => [entry.startBeat, entry.endBeat])).toEqual([
+      [0, 32],
+      [32, 64],
+    ]);
+    expect(phrases[0]?.cadence?.atBeat).toBe(24);
+    const ranked = structuralCadences(phrases);
+    expect(
+      ranked.map((entry) => [entry.atBeat - entry.phraseIndex * 32, entry.cadence.type]),
+    ).toEqual([
+      [24, 'authentic'],
+      [24, 'authentic'],
+    ]);
+  });
+
+  it('reads the phase from the cadences that end phrases, whatever the melody', () => {
+    // I - IV - I - V | I - IV - V - I twice, under a melody of whole notes: the
+    // passing plagal close must not tie the half cadence that ends the antecedent.
+    const harmony = perBar(
+      Array.from(
+        { length: 16 },
+        (_, bar) =>
+          [tonic, subdominant, tonic, dominant, tonic, subdominant, dominant, tonic][bar % 8] ?? [],
+      ),
+    );
+    const tune = [72, 72, 72, 71, 72, 72, 71, 72];
+    const melody = Array.from({ length: 16 }, (_, bar) => ({
+      pitch: tune[bar % 8] ?? 72,
+      startBeat: bar * 4,
+      durationBeat: 4,
+    }));
+    const notes = [...harmony, ...melody];
+    const { timeline } = chordTimelineFromNotes(notes, { key: majorKey(0) });
+    const phrases = phrasesFromTimeline(timeline, notes, { key: majorKey(0) });
+    expect(phrases.map((phrase) => phrase.endBeat)).toEqual([16, 32, 48, 64]);
+    for (const phrase of phrases.slice(0, -1)) {
+      expect(phrase.signals).toContain('hypermeter');
+    }
+  });
+
+  it('counts nothing for a closing cadence that belongs to the phrase before', () => {
+    const melody: NoteEvent[] = [
+      ...quarters([72, 74, 76, 77], 0),
+      ...quarters([79, 77, 76, 74], 4),
+      ...quarters([72, 74, 76, 79], 8),
+      { pitch: 72, startBeat: 12, durationBeat: 4 },
+      ...quarters([72, 76, 79, 76], 16),
+      ...quarters([72, 76, 79, 76], 20),
+      ...quarters([72, 76, 79, 76], 24),
+      { pitch: 72, startBeat: 28, durationBeat: 4 },
+    ];
+    const chords = [span(0, 'maj', 0), span(5, 'maj', 4), span(7, 'maj', 8), span(0, 'maj', 12)];
+    // The same tonic, held from beat 12 to the end or struck again at 16.
+    const held = chordTimelineFromChords(chords, 32);
+    const restruck = chordTimelineFromChords([...chords, span(0, 'maj', 16)], 32);
+    const lastOf = (timeline: typeof held) =>
+      phrasesFromTimeline(timeline, melody, { key: majorKey(0) }).find(
+        (phrase) => phrase.startBeat === 16,
+      );
+    expect(lastOf(held)?.cadence).toBeNull();
+    expect(lastOf(held)?.confidence).toBe(lastOf(restruck)?.confidence);
+  });
+});
+
+describe('the first beat when only a melody sounds', () => {
+  it('starts the phrases where the melody does, as sections do', () => {
+    const melody = Array.from({ length: 32 }, (_, i) => ({
+      pitch: 60,
+      startBeat: 32 + i,
+      durationBeat: 1,
+    }));
+    const empty = chordTimelineFromChords([], 0);
+    const phrases = phrasesFromTimeline(empty, melody);
+    expect(phrases[0]?.startBeat).toBe(32);
+    expect(sectionsFromNotes(melody)[0]?.startBeat).toBe(32);
+  });
+});
+
+describe('a section opening on a note a hair before the downbeat', () => {
+  it('keeps the note in the opening section', () => {
+    const sections = sectionsFromNotes([{ pitch: 60, startBeat: -0.03, durationBeat: 16 }]);
+    expect(sections).toHaveLength(1);
+    expect(sections[0]?.label).toBe('A');
+  });
+});
+
+describe('hypermeter over silence', () => {
+  it('reports no downbeat, as phrases and sections report nothing', () => {
+    expect(hypermeter([]).downbeats).toEqual([]);
+    expect(hypermeter([], '4/4', { totalBeats: 16 }).downbeats).toEqual([]);
+    expect(sectionsFromNotes([])).toEqual([]);
+  });
+});
+
+describe('an end of span checked before it is held to the start', () => {
+  const notes = quarters([60, 62, 64, 65, 67, 69, 71, 72], 0);
+  const timeline = chordTimelineFromNotes(notes).timeline;
+  const cases = [
+    ['12', '12'],
+    [true, 'true'],
+    [10n, '10'],
+  ] as const;
+
+  it('refuses a value that is no number', () => {
+    for (const [given, received] of cases) {
+      expect(() => sectionsFromNotes(notes, { totalBeats: given as never })).toThrow(
+        new InvalidInputError(`section totalBeats must be finite; received ${received}`),
+      );
+      expect(() => phrasesFromTimeline(timeline, notes, { totalBeats: given as never })).toThrow(
+        new InvalidInputError(`phrase totalBeats must be finite; received ${received}`),
+      );
+    }
+  });
+
+  it('refuses a value below the span instead of reading an empty one', () => {
+    const range = `[0, ${Number.MAX_SAFE_INTEGER}]; received -100`;
+    expect(() => sectionsFromNotes(notes, { totalBeats: -100 })).toThrow(
+      new InvalidInputError(`section totalBeats must be in ${range}`),
+    );
+    expect(() => phrasesFromTimeline(timeline, notes, { totalBeats: -100 })).toThrow(
+      new InvalidInputError(`phrase totalBeats must be in ${range}`),
+    );
+  });
+});
+
+describe('a diatonic tune read with no key given', () => {
+  /** A triad on `root` above C3, held for a bar. */
+  const triad = (root: number, at: number) => blockChord([48 + root, 52 + root, 55 + root], at, 4);
+  /** Eight bars: a melody of quarter notes over one chord per bar. */
+  const section = (melody: number[], roots: number[], at: number): NoteEvent[] => [
+    ...quarters(melody, at),
+    ...roots.flatMap((root, bar) => triad(root, at + bar * 4)),
+  ];
+  const a = [
+    72, 74, 76, 77, 79, 77, 76, 74, 72, 76, 79, 84, 79, 76, 74, 72, 72, 74, 76, 77, 79, 77, 76, 74,
+    74, 71, 67, 71, 72, 72, 72, 72,
+  ];
+  const b = [
+    81, 81, 79, 77, 76, 77, 79, 81, 77, 77, 76, 74, 72, 74, 76, 77, 81, 81, 79, 77, 76, 77, 79, 81,
+    79, 79, 77, 76, 74, 74, 74, 74,
+  ];
+  const aChords = [0, 0, 5, 5, 7, 7, 0, 0];
+  const bChords = [5, 5, 0, 0, 2, 2, 7, 7];
+  const notes = [
+    ...section(a, aChords, 0),
+    ...section(a, aChords, 32),
+    ...section(b, bChords, 64),
+    ...section(a, aChords, 96),
+  ];
+
+  it('keeps the final authentic cadence in the tonic', () => {
+    const phrases = Score.of(notes).phrases();
+    const last = phrases[phrases.length - 1];
+    expect(last?.endBeat).toBe(128);
+    expect(last?.cadence?.cadence.type).toBe('authentic');
+    expect(last?.cadence?.atBeat).toBe(120);
+  });
+
+  it('reads no dominant region into it', () => {
+    const types = Score.of(notes)
+      .phrases()
+      .map((phrase) => phrase.cadence?.cadence.type);
+    expect(types).not.toContain('modal');
+  });
+});
+
+describe('the hyperbars a score reads from its own harmony', () => {
+  const tonic = [48, 60, 64, 67];
+  const subdominant = [53, 57, 60, 65];
+  const dominant = [55, 59, 62, 67];
+  /** One block chord per bar from beat 0, under a melody of one note per bar. */
+  const period = (chords: number[][], tune: number[]): NoteEvent[] => [
+    ...chords.flatMap((pitches, bar) => blockChord(pitches, bar * 4, 4)),
+    ...tune.map((pitch, bar) => ({ pitch, startBeat: bar * 4, durationBeat: 4 })),
+  ];
+
+  it('keeps a held dominant from putting the downbeats on the cadence bars', () => {
+    // I - IV - V - V | I - IV - V - I after a one-beat pickup.
+    const notes = [
+      { pitch: 67, startBeat: -1, durationBeat: 1 },
+      ...period(
+        [tonic, subdominant, dominant, dominant, tonic, subdominant, dominant, tonic],
+        [76, 77, 74, 74, 76, 77, 74, 72],
+      ),
+    ];
+    const grouping = Score.of(notes, { key: 'C major' }).hypermeter();
+    expect(grouping.groupBars).toBe(4);
+    expect(grouping.downbeats).toEqual([0, 16]);
+  });
+
+  it('phases a plain period on its half and authentic cadences, with a melody over it', () => {
+    // I - IV - I - V | I - IV - V - I, twice.
+    const bars = [tonic, subdominant, tonic, dominant, tonic, subdominant, dominant, tonic];
+    const tune = [72, 72, 72, 71, 72, 72, 71, 72];
+    const notes = period([...bars, ...bars], [...tune, ...tune]);
+    const score = Score.of(notes, { key: 'C major' });
+    expect(score.hypermeter().downbeats).toEqual([0, 16, 32, 48]);
+    expect(score.phrases().map((phrase) => phrase.endBeat)).toEqual([16, 32, 48, 64]);
+  });
+
+  it('reads the beats the caller gives as the plain function does', () => {
+    const notes = period(
+      Array.from({ length: 8 }, () => tonic),
+      Array.from({ length: 8 }, () => 72),
+    );
+    const score = Score.of(notes, { key: 'C major' });
+    expect(score.hypermeter({ cadenceBeats: [12, 28] })).toEqual(
+      hypermeter(notes, undefined, { cadenceBeats: [12, 28] }),
+    );
   });
 });

@@ -6,6 +6,7 @@
 #ifndef CANTUS_SRC_GENERATE_DRUMS_HIHAT_H_
 #define CANTUS_SRC_GENERATE_DRUMS_HIHAT_H_
 
+#include <array>
 #include <cstdint>
 #include <optional>
 
@@ -16,6 +17,22 @@ namespace cantus {
 
 /** Hi-hat subdivision level (`HiHatLevel`). */
 enum class HiHatLevel : std::uint8_t { kQuarter, kEighth, kSixteenth };
+
+/**
+ * A bar's hi-hat subdivision, and the dial setting each subdivision enters at (`HiHatBar`).
+ */
+struct HiHatBar {
+  /** The subdivision the bar is played at. */
+  HiHatLevel level;
+  /**
+   * For each subdivision, by HiHatLevel, the rhythmic-dial setting above which the bar is at least
+   * that dense: minus infinity where it always is, plus infinity where it never is.
+   */
+  std::array<double, 3> entries;
+
+  /** The entry of one subdivision. */
+  double entry(HiHatLevel grid) const { return entries[static_cast<std::size_t>(grid)]; }
+};
 
 /** Hi-hat articulation type (`HiHatType`). */
 enum class HiHatType : std::uint8_t { kClosed, kPedal, kOpen, kHalfOpen, kRide };
@@ -29,9 +46,12 @@ int role_hi_hat_instrument(DrumRole role, bool use_ride);
 /** Beats between consecutive strokes at a subdivision (`hiHatStep`). */
 double hi_hat_step(HiHatLevel level);
 
-/** The hi-hat subdivision for a section, style, dial and tempo (`getHiHatLevel`). */
-HiHatLevel get_hi_hat_level(SectionType section, DrumStyle style, double rhythmic, double bpm,
-                            const Draw& draw, std::optional<double> difficulty, double bar);
+/**
+ * The hi-hat subdivision for a section, style, dial and tempo, with the dial setting each
+ * subdivision enters at (`getHiHatBar`).
+ */
+HiHatBar get_hi_hat_bar(SectionType section, DrumStyle style, double rhythmic, double bpm,
+                        const Draw& draw, std::optional<double> difficulty, double bar);
 
 /** Metric velocity multiplier for a sixteenth within a beat (`hiHatVelocityMultiplier`). */
 double hi_hat_velocity_multiplier(int sixteenth, double jitter);

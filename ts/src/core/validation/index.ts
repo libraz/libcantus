@@ -60,6 +60,15 @@ export function describeRejected(value: unknown): string {
     : `${JSON.stringify(value.slice(0, MAX_ECHOED_LENGTH))} (truncated from ${value.length} characters)`;
 }
 
+/** A rejected number as written; a value with no string form (null-prototype, symbol) by type. */
+function receivedText(value: unknown): string {
+  try {
+    return `${value}`;
+  } catch {
+    return describeRejected(value);
+  }
+}
+
 /**
  * Require a finite JavaScript number and return it unchanged.
  *
@@ -67,7 +76,7 @@ export function describeRejected(value: unknown): string {
  */
 export function assertFiniteNumber(value: number, name: string): number {
   if (!Number.isFinite(value)) {
-    throw new InvalidInputError(`${name} must be finite; received ${value}`);
+    throw new InvalidInputError(`${name} must be finite; received ${receivedText(value)}`);
   }
   return value;
 }

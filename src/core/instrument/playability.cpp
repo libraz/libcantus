@@ -13,6 +13,7 @@
 
 #include "cantus/core/instrument.h"
 #include "cantus/core/validation.h"
+#include "core/event_index/order.h"
 #include "core/instrument/limits.gen.h"
 #include "core/instrument/profile.h"
 #include "core/meter/limits.gen.h"
@@ -75,86 +76,138 @@ void check_existence(Analysis& state, const std::string& name,
   }
 }
 
-/** Whether an onset falls inside the simultaneity window opened by an earlier one. */
-bool is_simultaneous(double anchor_beat, double start_beat) {
-  return start_beat - anchor_beat <= SIMULTANEITY_BEATS + BEAT_EPS;
+/** One sounding note as every layer-2 and layer-3 check reads it (`TimedNote`). */
+struct TimedNote {
+  std::size_t index = 0;
+  double startBeat = 0;
+  double endBeat = 0;
+  /** Onset of the attack the note is struck in. */
+  double attackBeat = 0;
+};
+
+/** The sounding notes struck together, and the earlier ones still held under them (`Attack`). */
+struct Attack {
+  double startBeat = 0;
+  /** The notes struck, by pitch and then by index. */
+  std::vector<TimedNote> members;
+  /** Notes of earlier attacks not yet released when this one lands. */
+  std::vector<TimedNote> held;
+};
+
+/** Whether a note ending at `end_beat` has let go by `beat`; a legato overlap releases it. */
+bool is_released(double end_beat, double beat) {
+  return end_beat <= beat + LEGATO_OVERLAP_BEATS + BEAT_EPS;
 }
 
-/** Note indices sounding at each distinct onset, in onset order. */
-std::vector<Group> sounding_groups(const Analysis& state) {
-  std::vector<Group> groups;
-  std::vector<std::size_t> active;
-  std::size_t cursor = 0;
-  std::optional<double> anchor;
+/** The passage as a timeline of attacks, built once for every check (`timelineOf`). */
+std::vector<Attack> timeline_of(const Analysis& state) {
+  std::vector<std::size_t> sounding_list = sounding_indices(state.notes);
+  std::set<std::size_t> sounding(sounding_list.begin(), sounding_list.end());
+  std::vector<Attack> attacks;
+  std::vector<TimedNote> active;
   for (std::size_t index : state.order) {
-    const NoteEvent& note = state.notes[index];
-    if (anchor && is_simultaneous(*anchor, note.startBeat)) {
+    if (sounding.count(index) == 0) {
       continue;
     }
-    double at = note.startBeat;
-    anchor = at;
-    std::vector<std::size_t> held;
-    for (std::size_t member : active) {
-      const NoteEvent& m = state.notes[member];
-      if (m.startBeat + m.durationBeat > at + BEAT_EPS) {
-        held.push_back(member);
+    const NoteEvent& note = state.notes[index];
+    if (attacks.empty() ||
+        note.startBeat - attacks.back().startBeat > SIMULTANEITY_BEATS + BEAT_EPS) {
+      double at = note.startBeat;
+      std::vector<TimedNote> still_held;
+      for (const TimedNote& held : active) {
+        if (!is_released(held.endBeat, at)) {
+          still_held.push_back(held);
+        }
       }
+      active = std::move(still_held);
+      attacks.push_back(Attack{at, {}, active});
     }
-    active = std::move(held);
-    while (cursor < state.order.size()) {
-      std::size_t candidate_index = state.order[cursor];
-      const NoteEvent& candidate = state.notes[candidate_index];
-      if (!is_simultaneous(at, candidate.startBeat)) {
-        break;
-      }
-      if (candidate.startBeat + candidate.durationBeat > at + BEAT_EPS) {
-        active.push_back(candidate_index);
-      }
-      cursor += 1;
-    }
-    groups.push_back(Group{at, active});
+    TimedNote timed{index, note.startBeat, note.startBeat + note.durationBeat,
+                    attacks.back().startBeat};
+    attacks.back().members.push_back(timed);
+    active.push_back(timed);
   }
-  return groups;
+  for (Attack& attack : attacks) {
+    std::stable_sort(attack.members.begin(), attack.members.end(),
+                     [&](const TimedNote& a, const TimedNote& b) {
+                       int left = state.notes[a.index].pitch;
+                       int right = state.notes[b.index].pitch;
+                       return left != right ? left < right : a.index < b.index;
+                     });
+  }
+  return attacks;
+}
+
+/** Every note sounding once an attack has landed: the held ones, then the struck ones. */
+std::vector<std::size_t> sounding_at(const Attack& attack) {
+  std::vector<std::size_t> out;
+  for (const TimedNote& held : attack.held) {
+    out.push_back(held.index);
+  }
+  for (const TimedNote& member : attack.members) {
+    out.push_back(member.index);
+  }
+  return out;
+}
+
+/**
+ * Where the hands are before a note (`Origin`): the string last played, and the fret the
+ * fretting hand last stopped. An open string moves the picking hand only.
+ */
+struct Origin {
+  std::optional<std::size_t> string;
+  std::optional<int> fret;
+};
+
+/** The origin after playing `chosen` (`movedTo`). */
+Origin moved_to(const Origin& origin, const StringFingering& chosen) {
+  return Origin{chosen.string, chosen.fret > 0 ? std::optional<int>(chosen.fret) : origin.fret};
 }
 
 /** Cost of taking a position, counting a string crossing as several frets. */
-double fingering_cost(const StringFingering& candidate,
-                      const std::optional<StringFingering>& previous) {
+double fingering_cost(const StringFingering& candidate, const Origin& origin) {
+  // With no fret stopped yet, the low frets are the resting position; an open string asks
+  // nothing of the fretting hand.
+  double stopped = candidate.fret == 0 ? 0
+                   : !origin.fret      ? static_cast<double>(candidate.fret)
+                                  : std::fabs(static_cast<double>(candidate.fret - *origin.fret));
   double string = static_cast<double>(candidate.string);
-  if (!previous) {
-    // With nothing to move from, the low frets are the resting position.
-    return candidate.fret + string / 100;
-  }
-  return std::fabs(static_cast<double>(candidate.fret - previous->fret)) +
-         STRING_CROSSING_COST * std::fabs(string - static_cast<double>(previous->string)) +
-         string / 100;
+  double crossing = !origin.string ? 0
+                                   : STRING_CROSSING_COST *
+                                         std::fabs(string - static_cast<double>(*origin.string));
+  return stopped + crossing + string / 100;
 }
 
-/** Layer 3: the fretting hand cannot travel that far in the time available. */
-void check_shift_speed(Analysis& state, const std::string& name,
-                       std::optional<std::size_t> from_index, std::size_t to_index,
-                       const StringFingering& from, const StringFingering& to) {
-  if (!state.secondsPerBeat || !from_index) {
+/** Where the fretting hand stands: the last note stopped at a fret (`HandPosition`). */
+struct HandPosition {
+  TimedNote note;
+  StringFingering fingering;
+};
+
+/** Layer 3: the fretting hand cannot travel that far between two attacks. */
+void check_shift_speed(Analysis& state, const std::string& name, const HandPosition& from,
+                       const HandPosition& to) {
+  if (!state.secondsPerBeat) {
     return;
   }
-  const NoteEvent& previous_note = state.notes[*from_index];
-  const NoteEvent& note = state.notes[to_index];
-  double seconds = (note.startBeat - previous_note.startBeat) * *state.secondsPerBeat;
-  double shift = std::fabs(static_cast<double>(to.fret - from.fret));
+  double seconds = (to.note.attackBeat - from.note.attackBeat) * *state.secondsPerBeat;
+  double shift = std::fabs(static_cast<double>(to.fingering.fret - from.fingering.fret));
   if (seconds <= BEAT_EPS || shift == 0) {
     return;
   }
   if (shift / seconds > MAX_FRET_SHIFT_PER_SECOND) {
     state.issues.push_back(PlayabilityIssue{
-        PlayabilityIssueType::kTooFast, 3, sorted({*from_index, to_index}), note.startBeat, false,
+        PlayabilityIssueType::kTooFast, 3, sorted({from.note.index, to.note.index}),
+        to.note.startBeat, false,
         "a " + num(shift) + "-fret shift in " + js::to_fixed(seconds, 3) + "s is beyond " + name});
   }
 }
 
 /** Layer 2: one hand cannot span that many frets at once. */
-void check_stretch(Analysis& state, const StringedProfile& profile, const Group& group) {
+void check_stretch(Analysis& state, const StringedProfile& profile, const Attack& attack) {
+  std::vector<std::size_t> sounding = sounding_at(attack);
   std::vector<double> frets;
-  for (std::size_t member : group.members) {
+  for (std::size_t member : sounding) {
     const std::optional<StringFingering>& fingering = state.placements[member].fingering;
     if (fingering && fingering->fret > 0) {
       frets.push_back(fingering->fret);
@@ -165,10 +218,11 @@ void check_stretch(Analysis& state, const StringedProfile& profile, const Group&
   }
   double span = js::max(frets) - js::min(frets);
   if (span > profile.maxStretch) {
-    state.issues.push_back(PlayabilityIssue{
-        PlayabilityIssueType::kStretchTooWide, 2, sorted(group.members), group.startBeat, true,
-        "a " + num(span) + "-fret stretch exceeds the " + num(profile.maxStretch) +
-            " frets one hand spans on " + profile.name});
+    state.issues.push_back(PlayabilityIssue{PlayabilityIssueType::kStretchTooWide, 2,
+                                            sorted(std::move(sounding)), attack.startBeat, true,
+                                            "a " + num(span) + "-fret stretch exceeds the " +
+                                                num(profile.maxStretch) +
+                                                " frets one hand spans on " + profile.name});
   }
 }
 
@@ -189,12 +243,7 @@ constexpr std::size_t kMaxJointPlacementNotes = 12;
 constexpr std::size_t kMaxPlacementSearchNodes = 20000;
 
 /** One note of an attack waiting for a string. */
-struct NeckMember {
-  std::size_t index = 0;
-  double startBeat = 0;
-  double endBeat = 0;
-  /** Whether the note is still sounding once the attack has landed. */
-  bool sounding = false;
+struct NeckMember : TimedNote {
   std::vector<StringFingering> candidates;
 };
 
@@ -224,20 +273,22 @@ bool fits_hand(const std::vector<int>& frets, double max_stretch) {
   return count < 2 || static_cast<double>(high - low) <= max_stretch;
 }
 
-/** Each member takes the cheapest free string in turn; members with no free one are reported. */
-AttackPlacement place_greedily(const std::vector<NeckMember>& members,
-                               const std::optional<StringFingering>& previous,
+/**
+ * Each member takes the cheapest free string in turn; members with no free one are reported.
+ * `free_at` is the beat each string is released at; a string taken inside the attack stays taken.
+ */
+AttackPlacement place_greedily(const std::vector<NeckMember>& members, const Origin& previous,
                                const std::vector<double>& free_at,
                                const std::vector<std::optional<std::size_t>>& held_by) {
   std::vector<double> free = free_at;
   std::vector<std::optional<std::size_t>> held = held_by;
   AttackPlacement out;
-  std::optional<StringFingering> from = previous;
+  Origin from = previous;
   for (std::size_t m = 0; m < members.size(); ++m) {
     const NeckMember& member = members[m];
     std::vector<StringFingering> open;
     for (const StringFingering& candidate : member.candidates) {
-      if (free[candidate.string] <= member.startBeat + BEAT_EPS) {
+      if (is_released(free[candidate.string], member.attackBeat)) {
         open.push_back(candidate);
       }
     }
@@ -258,9 +309,9 @@ AttackPlacement place_greedily(const std::vector<NeckMember>& members,
       }
     }
     out.picks.push_back(chosen);
-    free[chosen.string] = member.endBeat;
+    free[chosen.string] = std::numeric_limits<double>::infinity();
     held[chosen.string] = member.index;
-    from = chosen;
+    from = moved_to(from, chosen);
   }
   return out;
 }
@@ -277,7 +328,7 @@ struct PlacementSearch {
   double best_cost = std::numeric_limits<double>::infinity();
   std::size_t nodes = 0;
 
-  void visit(std::size_t depth, const std::optional<StringFingering>& from, double cost) {
+  void visit(std::size_t depth, const Origin& from, double cost) {
     if (cost >= best_cost || nodes >= kMaxPlacementSearchNodes) {
       return;
     }
@@ -288,25 +339,24 @@ struct PlacementSearch {
     }
     const NeckMember& member = members[depth];
     for (const StringFingering& candidate : member.candidates) {
-      if (free[candidate.string] > member.startBeat + BEAT_EPS) {
+      double previous_free = free[candidate.string];
+      if (!is_released(previous_free, member.attackBeat)) {
         continue;
       }
       nodes += 1;
-      bool fretted = frets.has_value() && member.sounding;
-      if (fretted) {
+      if (frets) {
         frets->push_back(candidate.fret);
         if (!fits_hand(*frets, max_stretch)) {
           frets->pop_back();
           continue;
         }
       }
-      double previous_free = free[candidate.string];
-      free[candidate.string] = member.endBeat;
+      free[candidate.string] = std::numeric_limits<double>::infinity();
       picks.push_back(candidate);
-      visit(depth + 1, candidate, cost + fingering_cost(candidate, from));
+      visit(depth + 1, moved_to(from, candidate), cost + fingering_cost(candidate, from));
       picks.pop_back();
       free[candidate.string] = previous_free;
-      if (fretted) {
+      if (frets) {
         frets->pop_back();
       }
     }
@@ -319,7 +369,7 @@ struct PlacementSearch {
  * notes included, must fit `max_stretch`.
  */
 std::optional<std::vector<StringFingering>> search_placement(
-    const std::vector<NeckMember>& members, const std::optional<StringFingering>& previous,
+    const std::vector<NeckMember>& members, const Origin& previous,
     const std::vector<double>& free_at, const std::optional<std::vector<int>>& held_frets,
     double max_stretch) {
   PlacementSearch search{members, free_at, held_frets, max_stretch, {}, std::nullopt};
@@ -332,17 +382,14 @@ std::optional<std::vector<StringFingering>> search_placement(
  * hand; otherwise the notes are placed jointly, and the greedy picks and their issues remain only
  * when no assignment exists.
  */
-AttackPlacement place_attack(const std::vector<NeckMember>& members,
-                             const std::optional<StringFingering>& previous,
+AttackPlacement place_attack(const std::vector<NeckMember>& members, const Origin& previous,
                              const std::vector<double>& free_at,
                              const std::vector<std::optional<std::size_t>>& held_by,
                              const std::vector<int>& held_frets, double max_stretch) {
   AttackPlacement greedy = place_greedily(members, previous, free_at, held_by);
   std::vector<int> frets = held_frets;
-  for (std::size_t k = 0; k < greedy.picks.size(); ++k) {
-    if (members[k].sounding) {
-      frets.push_back(greedy.picks[k].fret);
-    }
+  for (const StringFingering& pick : greedy.picks) {
+    frets.push_back(pick.fret);
   }
   if (greedy.conflicts.empty() && fits_hand(frets, max_stretch)) {
     return greedy;
@@ -365,56 +412,46 @@ AttackPlacement place_attack(const std::vector<NeckMember>& members,
   return greedy;
 }
 
-/** Layers 2 and 3 for a string instrument, and the fingering that goes with them. */
-void place_on_neck(Analysis& state, const StringedProfile& profile) {
+/**
+ * Layers 2 and 3 for a string instrument, and the fingering that goes with them. The fretting hand
+ * moves once per attack, between stopped notes.
+ */
+void place_on_neck(Analysis& state, const StringedProfile& profile,
+                   const std::vector<Attack>& attacks) {
   std::vector<double> string_free_at(profile.tuning.size(),
                                      -std::numeric_limits<double>::infinity());
   std::vector<std::optional<std::size_t>> string_held_by(profile.tuning.size());
-  std::optional<StringFingering> previous;
-  std::optional<std::size_t> previous_index;
-  // Placed notes still sounding at the current attack.
-  std::vector<std::size_t> held;
+  Origin origin;
+  std::optional<HandPosition> hand;
 
-  std::size_t cursor = 0;
-  while (cursor < state.order.size()) {
-    double anchor = state.notes[state.order[cursor]].startBeat;
+  for (const Attack& attack : attacks) {
     std::vector<NeckMember> members;
-    while (cursor < state.order.size()) {
-      std::size_t index = state.order[cursor];
-      const NoteEvent& note = state.notes[index];
-      if (!is_simultaneous(anchor, note.startBeat)) {
-        break;
-      }
-      cursor += 1;
-      std::vector<StringFingering> candidates = fingerings_in(profile, note.pitch);
+    for (const TimedNote& timed : attack.members) {
+      std::vector<StringFingering> candidates =
+          fingerings_in(profile, state.notes[timed.index].pitch);
       if (!candidates.empty()) {
-        double end_beat = note.startBeat + note.durationBeat;
-        members.push_back(NeckMember{index, note.startBeat, end_beat, end_beat > anchor + BEAT_EPS,
-                                     std::move(candidates)});
+        NeckMember member;
+        static_cast<TimedNote&>(member) = timed;
+        member.candidates = std::move(candidates);
+        members.push_back(std::move(member));
       }
     }
-    std::vector<std::size_t> still_held;
-    for (std::size_t member : held) {
-      const NoteEvent& note = state.notes[member];
-      if (note.startBeat + note.durationBeat > anchor + BEAT_EPS) {
-        still_held.push_back(member);
-      }
-    }
-    held = std::move(still_held);
     std::vector<int> held_frets;
-    for (std::size_t member : held) {
-      const std::optional<StringFingering>& fingering = state.placements[member].fingering;
+    for (const TimedNote& held : attack.held) {
+      const std::optional<StringFingering>& fingering = state.placements[held.index].fingering;
       if (fingering) {
         held_frets.push_back(fingering->fret);
       }
     }
-    AttackPlacement attack = place_attack(members, previous, string_free_at, string_held_by,
+    AttackPlacement placed = place_attack(members, origin, string_free_at, string_held_by,
                                           held_frets, profile.maxStretch);
+    std::optional<HandPosition> shifted = hand;
+    bool moved = false;
     for (std::size_t m = 0; m < members.size(); ++m) {
       const NeckMember& member = members[m];
       const NoteEvent& note = state.notes[member.index];
-      const StringFingering& chosen = attack.picks[m];
-      for (const NeckConflict& conflict : attack.conflicts) {
+      const StringFingering& chosen = placed.picks[m];
+      for (const NeckConflict& conflict : placed.conflicts) {
         if (conflict.member != m) {
           continue;
         }
@@ -430,39 +467,44 @@ void place_on_neck(Analysis& state, const StringedProfile& profile) {
           involved.push_back(member.index);
         }
         state.issues.push_back(PlayabilityIssue{
-            PlayabilityIssueType::kStringConflict, 2, sorted(std::move(involved)), note.startBeat,
+            PlayabilityIssueType::kStringConflict, 2, sorted(std::move(involved)), member.startBeat,
             true,
             "MIDI " + num(note.pitch) + " needs a string already sounding on " + profile.name});
       }
       state.placements[member.index].fingering = chosen;
       string_free_at[chosen.string] = member.endBeat;
       string_held_by[chosen.string] = member.index;
-      if (member.sounding) {
-        held.push_back(member.index);
-      }
 
       state.movement += 1;
-      if (previous) {
+      if (origin.string) {
         state.movement +=
-            std::fabs(static_cast<double>(chosen.fret - previous->fret)) +
-            std::fabs(static_cast<double>(chosen.string) - static_cast<double>(previous->string));
-        check_shift_speed(state, profile.name, previous_index, member.index, *previous, chosen);
+            std::fabs(static_cast<double>(chosen.string) - static_cast<double>(*origin.string));
       }
-      previous = chosen;
-      previous_index = member.index;
+      origin = moved_to(origin, chosen);
+      if (chosen.fret > 0) {
+        shifted = HandPosition{member, chosen};
+        moved = true;
+      }
     }
+    if (hand && moved) {
+      state.movement +=
+          std::fabs(static_cast<double>(shifted->fingering.fret - hand->fingering.fret));
+      check_shift_speed(state, profile.name, *hand, *shifted);
+    }
+    hand = shifted;
   }
 
-  for (const Group& group : sounding_groups(state)) {
-    check_stretch(state, profile, group);
-    check_polyphony(state, profile.name, profile.polyphony, group);
+  for (const Attack& attack : attacks) {
+    check_stretch(state, profile, attack);
+    check_polyphony(state, profile.name, profile.polyphony,
+                    Group{attack.startBeat, sounding_at(attack)});
   }
 }
 
 /** One take a percussion part is recorded on: the kit, or a voice dubbed over it. */
 struct KitPass {
   std::string id;
-  std::vector<std::size_t> members;
+  std::vector<TimedNote> members;
 };
 
 /** The kit read out of the profile once per call. */
@@ -495,19 +537,19 @@ const std::vector<Limb>& limbs_for(const Kit& kit, int pitch) {
 struct KitMemory {
   /** Limb that last struck each voice, so a voice keeps its stick. */
   std::map<int, Limb> limbForVoice;
-  /** Last stroke of each limb on each pass, as a note index. */
-  std::map<std::string, std::size_t> lastStroke;
+  /** Last stroke of each limb on each pass. */
+  std::map<std::string, TimedNote> lastStroke;
 };
 
 /** The passes one onset is played on: the kit, then each overdubbed voice in order met. */
 std::vector<KitPass> passes_at(const Analysis& state, const Kit& kit,
-                               const std::vector<std::size_t>& members) {
+                               const std::vector<TimedNote>& members) {
   std::vector<KitPass> passes{KitPass{"kit", {}}};
   std::map<int, std::size_t> overdub_pass;
-  for (std::size_t index : members) {
-    int pitch = state.notes[index].pitch;
+  for (const TimedNote& member : members) {
+    int pitch = state.notes[member.index].pitch;
     if (kit.overdub.count(pitch) == 0) {
-      passes[0].members.push_back(index);
+      passes[0].members.push_back(member);
       continue;
     }
     auto it = overdub_pass.find(pitch);
@@ -515,25 +557,23 @@ std::vector<KitPass> passes_at(const Analysis& state, const Kit& kit,
       it = overdub_pass.emplace(pitch, passes.size()).first;
       passes.push_back(KitPass{"overdub " + num(pitch), {}});
     }
-    passes[it->second].members.push_back(index);
+    passes[it->second].members.push_back(member);
   }
   return passes;
 }
 
 /** Layer 3: one limb cannot strike twice that close together. */
-void check_stroke_speed(Analysis& state, const std::string& name, std::size_t from_index,
-                        std::size_t to_index, Limb limb) {
+void check_stroke_speed(Analysis& state, const std::string& name, const TimedNote& from,
+                        const TimedNote& to, Limb limb) {
   if (!state.secondsPerBeat) {
     return;
   }
-  const NoteEvent& previous_note = state.notes[from_index];
-  const NoteEvent& note = state.notes[to_index];
-  double seconds = (note.startBeat - previous_note.startBeat) * *state.secondsPerBeat;
+  double seconds = (to.attackBeat - from.attackBeat) * *state.secondsPerBeat;
   if (seconds <= BEAT_EPS || seconds >= MIN_LIMB_STROKE_SECONDS) {
     return;
   }
   state.issues.push_back(PlayabilityIssue{PlayabilityIssueType::kTooFast, 3,
-                                          sorted({from_index, to_index}), note.startBeat, false,
+                                          sorted({from.index, to.index}), to.startBeat, false,
                                           std::string(to_string(limb)) + " strikes twice " +
                                               js::to_fixed(seconds, 3) + "s apart on " + name});
 }
@@ -543,15 +583,15 @@ bool place_pass(Analysis& state, const Kit& kit, const KitPass& pass, KitMemory&
   std::vector<Limb> taken;
   bool conflicted = false;
   // The most constrained voice picks first.
-  std::vector<std::size_t> members = pass.members;
-  std::stable_sort(members.begin(), members.end(), [&](std::size_t a, std::size_t b) {
-    std::size_t left = limbs_for(kit, state.notes[a].pitch).size();
-    std::size_t right = limbs_for(kit, state.notes[b].pitch).size();
-    return left != right ? left < right : a < b;
+  std::vector<TimedNote> members = pass.members;
+  std::stable_sort(members.begin(), members.end(), [&](const TimedNote& a, const TimedNote& b) {
+    std::size_t left = limbs_for(kit, state.notes[a.index].pitch).size();
+    std::size_t right = limbs_for(kit, state.notes[b.index].pitch).size();
+    return left != right ? left < right : a.index < b.index;
   });
-  for (std::size_t index : members) {
-    const NoteEvent& note = state.notes[index];
-    NotePlacement& placement = state.placements[index];
+  for (const TimedNote& member : members) {
+    const NoteEvent& note = state.notes[member.index];
+    NotePlacement& placement = state.placements[member.index];
     const std::vector<Limb>& candidates = limbs_for(kit, note.pitch);
     if (candidates.empty()) {
       continue;
@@ -584,69 +624,64 @@ bool place_pass(Analysis& state, const Kit& kit, const KitPass& pass, KitMemory&
     std::string stroke_key = pass.id + " " + std::string(to_string(chosen));
     auto last = memory.lastStroke.find(stroke_key);
     if (last != memory.lastStroke.end()) {
-      std::size_t previous_index = last->second;
-      if (state.notes[previous_index].pitch != note.pitch) {
+      TimedNote previous_stroke = last->second;
+      if (state.notes[previous_stroke.index].pitch != note.pitch) {
         // The limb had to travel across the kit rather than repeat a voice.
         state.movement += 1;
       }
-      check_stroke_speed(state, kit.profile.name, previous_index, index, chosen);
+      check_stroke_speed(state, kit.profile.name, previous_stroke, member, chosen);
     }
-    memory.lastStroke[stroke_key] = index;
+    memory.lastStroke[stroke_key] = member;
   }
   return conflicted;
 }
 
-/** Note indices sharing each distinct onset, in onset order; silent notes take no limb. */
-std::vector<Group> onset_groups(const Analysis& state) {
-  std::vector<Group> groups;
-  for (std::size_t index : state.order) {
-    const NoteEvent& note = state.notes[index];
-    if (note.durationBeat <= 0) {
-      continue;
-    }
-    if (groups.empty() || !is_simultaneous(groups.back().startBeat, note.startBeat)) {
-      groups.push_back(Group{note.startBeat, {}});
-    }
-    groups.back().members.push_back(index);
-  }
-  return groups;
-}
-
 /** Layers 2 and 3 for a kit, and the limb assignment that goes with them. */
-void place_on_kit(Analysis& state, const Kit& kit) {
+void place_on_kit(Analysis& state, const Kit& kit, const std::vector<Attack>& attacks) {
   KitMemory memory;
-  for (const Group& group : onset_groups(state)) {
+  for (const Attack& attack : attacks) {
+    Group strokes{attack.startBeat, {}};
+    for (const TimedNote& member : attack.members) {
+      strokes.members.push_back(member.index);
+    }
     bool conflicted = false;
-    for (const KitPass& pass : passes_at(state, kit, group.members)) {
+    for (const KitPass& pass : passes_at(state, kit, attack.members)) {
       if (!place_pass(state, kit, pass, memory)) {
         continue;
       }
       conflicted = true;
+      std::vector<std::size_t> struck;
+      for (const TimedNote& member : pass.members) {
+        struck.push_back(member.index);
+      }
       state.issues.push_back(PlayabilityIssue{
-          PlayabilityIssueType::kLimbConflict, 2, sorted(pass.members), group.startBeat, true,
+          PlayabilityIssueType::kLimbConflict, 2, sorted(std::move(struck)), attack.startBeat, true,
           num(static_cast<double>(pass.members.size())) +
               " simultaneous strokes cannot be shared among the limbs of " + kit.profile.name});
     }
     if (!conflicted) {
-      check_polyphony(state, kit.profile.name, kit.profile.polyphony, group);
+      check_polyphony(state, kit.profile.name, kit.profile.polyphony, strokes);
     }
   }
 }
 
 /** Movement per unit time, on a saturating 1..5 scale. */
-double difficulty_of(const Analysis& state, std::optional<double> bpm) {
+double difficulty_of(const std::vector<Attack>& attacks, double movement,
+                     std::optional<double> bpm) {
   double first = std::numeric_limits<double>::infinity();
   double last = -std::numeric_limits<double>::infinity();
-  for (const NoteEvent& note : state.notes) {
-    first = js::min(first, note.startBeat);
-    last = js::max(last, note.startBeat + js::max(0, note.durationBeat));
+  for (const Attack& attack : attacks) {
+    for (const TimedNote& member : attack.members) {
+      first = js::min(first, member.startBeat);
+      last = js::max(last, member.endBeat);
+    }
   }
   double span_beats = last - first;
   if (!std::isfinite(span_beats) || span_beats <= BEAT_EPS) {
     return MIN_DIFFICULTY;
   }
   double seconds = (span_beats * 60) / (bpm ? *bpm : REFERENCE_BPM);
-  double rate = state.movement / seconds;
+  double rate = movement / seconds;
   double scaled =
       MIN_DIFFICULTY + (MAX_DIFFICULTY - MIN_DIFFICULTY) * (1 - js::exp(-rate / DIFFICULTY_SCALE));
   return js::round(scaled * 1e4) / 1e4;
@@ -685,41 +720,30 @@ PlayabilityReport playability(const std::vector<NoteEvent>& notes,
   InstrumentProfile instrument = to_instrument_profile(profile, "playability profile");
 
   Analysis state{notes, {}, {}, {}, 0, std::nullopt};
-  state.order.resize(notes.size());
+  state.order = canonical_note_order(notes);
   state.placements.resize(notes.size());
   for (std::size_t i = 0; i < notes.size(); ++i) {
-    state.order[i] = i;
     state.placements[i].note = i;
   }
-  std::stable_sort(state.order.begin(), state.order.end(), [&](std::size_t a, std::size_t b) {
-    // left.startBeat - right.startBeat || left.pitch - right.pitch || a - b
-    double by_onset = notes[a].startBeat - notes[b].startBeat;
-    if (by_onset != 0) {
-      return by_onset < 0;
-    }
-    if (notes[a].pitch != notes[b].pitch) {
-      return notes[a].pitch < notes[b].pitch;
-    }
-    return a < b;
-  });
   if (bpm) {
     state.secondsPerBeat = 60 / *bpm;
   }
 
+  std::vector<Attack> attacks = timeline_of(state);
   if (const auto* stringed = std::get_if<StringedProfile>(&instrument)) {
     check_existence(state, stringed->name, stringed->articulations,
                     [&](int pitch) { return sounds_in(instrument, pitch); });
-    place_on_neck(state, *stringed);
+    place_on_neck(state, *stringed, attacks);
   } else {
     const auto& percussion = std::get<PercussionProfile>(instrument);
     // Read once, so the per-note stages below are lookups.
     Kit kit = read_kit(percussion);
     check_existence(state, percussion.name, percussion.articulations,
                     [&](int pitch) { return !limbs_for(kit, pitch).empty(); });
-    place_on_kit(state, kit);
+    place_on_kit(state, kit, attacks);
   }
 
-  return PlayabilityReport{difficulty_of(state, bpm), std::move(state.issues),
+  return PlayabilityReport{difficulty_of(attacks, state.movement, bpm), std::move(state.issues),
                            std::move(state.placements)};
 }
 

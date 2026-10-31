@@ -9,6 +9,7 @@
 #include "analyze/histogram.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/validation.h"
+#include "core/validation/validation.h"
 #include "js/math.h"
 
 namespace cantus {
@@ -28,6 +29,15 @@ double clamp01(double value) { return js::min(1, js::max(0, value)); }
 
 double floor_mod(double value, double modulus) {
   return std::fmod(std::fmod(value, modulus) + modulus, modulus);
+}
+
+double resolve_span_end(std::optional<double> total_beats, double start_beat, double sounding_end,
+                        std::string_view name) {
+  if (!total_beats) {
+    return js::max(start_beat, sounding_end);
+  }
+  assert_range(*total_beats, js::min(0, start_beat), kMaxSafeInteger, name);
+  return js::max(start_beat, *total_beats);
 }
 
 double last_bar_of(const MeterArg& meter, double span_start, double span_end) {

@@ -38,6 +38,8 @@ import { type GenerationContextInput, resolveContext } from '../context/index.js
 export type HumanizeOptions = {
   /**
    * Time signature used to derive metric accents, in any form that names one.
+   * A meter map is read bar by bar, so a note after a change is accented in the
+   * signature in force where it sounds.
    *
    * @defaultValue 4/4
    */
@@ -141,8 +143,8 @@ export const MAX_VELOCITY = 127;
 export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {}): NoteEvent[] {
   const asked = assertOptions(opts, 'opts');
   // The meter is read once, here, and every position below is weighed against
-  // the signature it names — the one the piece opens in, given a whole map.
-  const ts = meterAt(0, toMeterData(asked.ts ?? DEFAULT_TS, 'ts'));
+  // the signature in force where it sounds.
+  const meter = toMeterData(asked.ts ?? DEFAULT_TS, 'ts');
   // Zero-length artefacts are routine in MIDI imports and never sound, so they
   // are accepted and dropped here, exactly as the analysis layer does — the two
   // sides of a pipeline must not disagree about the same array.
@@ -168,7 +170,7 @@ export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {
     // downbeat — two notes the input told apart, played as one.
     const startBeat = event.startBeat + timingOffset;
 
-    const weight = metricWeight(event.startBeat, ts);
+    const weight = metricWeight(event.startBeat, meter);
     const accentBoost = (weight / MAX_METRIC_WEIGHT) * accent;
     const velocityOffset = draw.float(
       -velocityJitter,
@@ -225,6 +227,35 @@ export type GrooveTemplate = {
 };
 
 /**
+ * The one signature a groove grid is laid on.
+ *
+ * A template is the grid of a single bar, so a meter that changes signature
+ * has no one grid to record or to apply: it is refused rather than read as the
+ * bar it opens in, which would lay every bar after the change on the wrong
+ * grid.
+ */
+function grooveSignature(ts: MeterLike): TimeSignature {
+  const meter = toMeterData(ts, 'ts');
+  if (!Array.isArray(meter)) {
+    return meter;
+  }
+  const opening = meterAt(0, meter);
+  for (const change of meter) {
+    if (
+      change.ts.numerator !== opening.numerator ||
+      change.ts.denominator !== opening.denominator
+    ) {
+      throw new InvalidInputError(
+        `groove time signature must be one signature throughout; received ` +
+          `${change.ts.numerator}/${change.ts.denominator} at beat ${change.startBeat} ` +
+          `in a meter that is ${opening.numerator}/${opening.denominator} at beat 0`,
+      );
+    }
+  }
+  return opening;
+}
+
+/**
  * Quantize a beat position to the nearest grid slot at the given subdivision,
  * within the bar that contains it.
  *
@@ -265,11 +296,13 @@ function quantizeToGrid(
  * template so {@link applyGrooveTemplate} can verify the meter matches.
  *
  * @param events The (typically "groovy", human-played) events to analyze.
- * @param ts The time signature, used to compute the bar length.
+ * @param ts The time signature, used to compute the bar length. A meter map
+ *   is accepted while it keeps one signature throughout.
  * @param subdivision Grid resolution: equal grid steps per quarter-note beat.
  *   Defaults to a sixteenth-note grid, which is where the timing deviations a
  *   template records — swing, push, drag — are audible.
  * @returns The extracted groove template.
+ * @throws If `ts` changes signature.
  * @category Rhythm & Meter
  */
 export function extractGrooveTemplate(
@@ -277,7 +310,7 @@ export function extractGrooveTemplate(
   ts: MeterLike,
   subdivision = DEFAULT_GROOVE_SUBDIVISION,
 ): GrooveTemplate {
-  const meter = meterAt(0, toMeterData(ts, 'ts'));
+  const meter = grooveSignature(ts);
   assertNoteEvents(events, 'groove source events', { allowNonPositiveDuration: true });
   assertPositiveInt(subdivision, 'groove subdivision');
   const barBeats = beatsPerBar(meter);
@@ -344,11 +377,13 @@ export function extractGrooveTemplate(
  *
  * @param events The events to reshape.
  * @param template The groove template, from {@link extractGrooveTemplate}.
- * @param ts The time signature, used to compute the bar length.
+ * @param ts The time signature, used to compute the bar length. A meter map
+ *   is accepted while it keeps one signature throughout.
  * @returns Reshaped copies of `events`, in input order.
- * @throws If `template.ts` is set and does not match `ts`, if `slotsPerBar` is
- *   not the number of slots a bar of `ts` holds at the template's subdivision,
- *   or if a slot carries a non-finite offset or a velocity outside [0, 127].
+ * @throws If `ts` changes signature, if `template.ts` is set and does not
+ *   match `ts`, if `slotsPerBar` is not the number of slots a bar of `ts` holds
+ *   at the template's subdivision, or if a slot carries a non-finite offset or
+ *   a velocity outside [0, 127].
  * @example
  * ```ts
  * import { extractGrooveTemplate, applyGrooveTemplate, parseTimeSignature } from '@libraz/libcantus';
@@ -370,7 +405,7 @@ export function applyGrooveTemplate(
   template: GrooveTemplate,
   ts: MeterLike,
 ): NoteEvent[] {
-  const meter = meterAt(0, toMeterData(ts, 'ts'));
+  const meter = grooveSignature(ts);
   assertNoteEvents(events, 'groove target events', { allowNonPositiveDuration: true });
   assertPositiveInt(template.subdivision, 'template subdivision');
   assertPositiveInt(template.slotsPerBar, 'template slotsPerBar');

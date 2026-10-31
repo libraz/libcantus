@@ -10,12 +10,14 @@
 #ifndef CANTUS_SRC_OPS_CODEC_A1B_H_
 #define CANTUS_SRC_OPS_CODEC_A1B_H_
 
+#include <memory>
 #include <optional>
 #include <string_view>
 #include <variant>
 #include <vector>
 
 #include "analyze/detect/profiles.h"
+#include "analyze/keys/keys.h"
 #include "cantus/analyze/detect.h"
 #include "cantus/analyze/keys.h"
 #include "json/json.h"
@@ -55,6 +57,14 @@ ProfileSource wire_profile_source(const json::Value* profile);
 /** `resolveModalCandidates`' reading of the `modes` option; `modes` is null for an absent one. */
 std::optional<std::variant<bool, std::vector<ModalScaleName>>> read_modal_modes(
     const json::Value* modes);
+
+/**
+ * The chords of wire segments as `detectModulations` reads them: each checked (`assertChord`, the
+ * tone guards, the dominant-seventh scan) and read the first time the search asks for it. The
+ * cache must outlive the source.
+ */
+ChordSource modulation_chord_source(const json::Array& segments,
+                                    std::vector<std::unique_ptr<Chord>>& cache);
 
 /** The `explain`-style switch `x === true` of an option bag. */
 bool is_true_option(const json::Value& asked, std::string_view key);

@@ -226,7 +226,9 @@ std::vector<CompositionViolation> harmony_violations(const Notes& melody,
             return motif.from && note.startBeat >= motif.startBeat - BEAT_EPS &&
                    note.startBeat < motif.endBeat - BEAT_EPS;
           });
-      bool strong = position_class(note.startBeat, plan.meters) == PositionClass::kStrong;
+      // A chord tone is asked for only on a strong pulse where the plan names a chord.
+      bool strong = position_class(note.startBeat, plan.meters) == PositionClass::kStrong &&
+                    timeline.at(note.startBeat).has_value();
       std::string actual;
       if (kinds.empty()) {
         actual = "no harmonic label";
@@ -271,6 +273,30 @@ Notes pick(const Notes& melody, const Indices& indices) {
   return out;
 }
 
+const PlannedPhrase* phrase_at(const CompositionPlan& plan, double beat) {
+  for (const PlannedPhrase& phrase : plan.phrases) {
+    if (beat >= phrase.startBeat - BEAT_EPS && beat < phrase.endBeat - BEAT_EPS) {
+      return &phrase;
+    }
+  }
+  return nullptr;
+}
+
+/**
+ * Where a statement's notes stop counting as its own: the final downbeat of the phrase it sits in
+ * when that phrase closes on a hold (a single onset from there on), which drops every later onset;
+ * otherwise the statement's end (`keptEnd`).
+ */
+double kept_end(const PlannedMotif& statement, const Notes& melody, const CompositionPlan& plan) {
+  const PlannedPhrase* phrase = phrase_at(plan, statement.startBeat);
+  if (phrase == nullptr) {
+    return statement.endBeat;
+  }
+  double downbeat = final_downbeat(*phrase, plan.meters);
+  bool held = notes_in_range(melody, downbeat, phrase->endBeat).size() == 1;
+  return held ? js::min(statement.endBeat, downbeat) : statement.endBeat;
+}
+
 /** A pitch level a derived statement replays its source at, and how many of its notes that excuses.
  */
 struct Replay {
@@ -285,8 +311,9 @@ double planned_level(const MotifRelationSummary& relation) {
 
 std::optional<Replay> replay_level(const Notes& melody, const Indices& source,
                                    const Indices& derived, const PlannedMotif& statement,
-                                   double source_end, const CompositionPlan& plan,
-                                   const KeyScale& key, const std::set<std::size_t>& closing) {
+                                   double source_end, double derived_end, bool source_cut,
+                                   const CompositionPlan& plan, const KeyScale& key,
+                                   const std::set<std::size_t>& closing) {
   const MotifRelationSummary& relation = *statement.relation;
   double planned = planned_level(relation);
   if (static_cast<std::size_t>(statement.phrase) >= plan.phrases.size()) {
@@ -310,8 +337,8 @@ std::optional<Replay> replay_level(const Notes& melody, const Indices& source,
   };
   std::vector<Candidate> replays;
   for (double level : relation_levels(relation.kind)) {
-    std::vector<MotifNote> notes = clip_statement(
-        replay_at(cell, relation, level, statement.startBeat, key), statement.endBeat);
+    std::vector<MotifNote> notes =
+        clip_statement(replay_at(cell, relation, level, statement.startBeat, key), derived_end);
     double away = 0;
     for (const MotifNote& note : notes) {
       if (outside(note.pitch)) {
@@ -327,16 +354,20 @@ std::optional<Replay> replay_level(const Notes& melody, const Indices& source,
   std::optional<Replay> best;
   for (const Candidate& replay : replays) {
     const std::vector<MotifNote>& expected = replay.notes;
-    if (expected.size() != derived.size()) {
+    Indices compared = derived;
+    if (source_cut && compared.size() > expected.size()) {
+      compared.resize(expected.size());
+    }
+    if (expected.size() != compared.size()) {
       continue;
     }
     double forced = 0;
     bool holds = true;
     for (std::size_t i = 0; holds && i < expected.size(); ++i) {
       const MotifNote& want = expected[i];
-      const NoteEvent& got = melody[derived[i]];
+      const NoteEvent& got = melody[compared[i]];
       if (i > 0) {
-        double gap = got.startBeat - melody[derived[i - 1]].startBeat;
+        double gap = got.startBeat - melody[compared[i - 1]].startBeat;
         holds = std::abs(gap - (want.startBeat - expected[i - 1].startBeat)) <= BEAT_EPS;
       }
       if (!holds || static_cast<double>(got.pitch) == want.pitch) {
@@ -344,7 +375,7 @@ std::optional<Replay> replay_level(const Notes& melody, const Indices& source,
       }
       std::size_t origin_at = backward ? cell.size() - 1 - i : i;
       forced += 1;
-      holds = closing.count(derived[i]) > 0 ||
+      holds = closing.count(compared[i]) > 0 ||
               (origin_at < source.size() && closing.count(source[origin_at]) > 0) ||
               (replay.outside == fewest_outside && outside(want.pitch));
     }
@@ -377,6 +408,13 @@ DerivationViolations motif_derivation_violations(const Notes& melody, const Comp
     const Nullable<MotifRelationSummary>& relation = statement.relation;
     std::string rationale = "the statement at beat " + number(statement.startBeat) +
                             " does not derive from its source the way the plan names";
+    double source_kept = kept_end(source, melody, plan);
+    double derived_kept = kept_end(statement, melody, plan);
+    // A statement a closing hold dropped whole leaves nothing to compare.
+    if (source_kept <= source.startBeat + BEAT_EPS ||
+        derived_kept <= statement.startBeat + BEAT_EPS) {
+      continue;
+    }
     if (source_notes.empty() || derived_notes.empty()) {
       out.errors.push_back(
           violation(ViolationKind::kMotifDerivation, ViolationSeverity::kError, statement.startBeat,
@@ -384,9 +422,22 @@ DerivationViolations motif_derivation_violations(const Notes& melody, const Comp
                     "no notes to compare", rationale));
       continue;
     }
+    bool source_cut = source_kept < source.endBeat - BEAT_EPS;
+    bool derived_cut = derived_kept < statement.endBeat - BEAT_EPS;
     if (!relation) {
-      double similarity =
-          melodic_similarity(pick(melody, source_notes), pick(melody, derived_notes));
+      // A variation keeps its source's onsets, so a span one hold dropped is read in neither.
+      double source_end =
+          derived_cut ? js::min(source_kept, source.startBeat + derived_kept - statement.startBeat)
+                      : source_kept;
+      double derived_end =
+          source_cut ? js::min(derived_kept, statement.startBeat + source_kept - source.startBeat)
+                     : derived_kept;
+      Indices source_line = notes_in_range(melody, source.startBeat, source_end);
+      Indices derived_line = notes_in_range(melody, statement.startBeat, derived_end);
+      if (source_line.empty() || derived_line.empty()) {
+        continue;
+      }
+      double similarity = melodic_similarity(pick(melody, source_line), pick(melody, derived_line));
       if (similarity < DEFAULT_VARIATION_THRESHOLD) {
         out.errors.push_back(violation(
             ViolationKind::kMotifDerivation, ViolationSeverity::kError, statement.startBeat,
@@ -395,8 +446,16 @@ DerivationViolations motif_derivation_violations(const Notes& melody, const Comp
       }
       continue;
     }
+    Indices kept = notes_in_range(melody, source.startBeat, source_kept);
+    bool backward = relation->kind == MotifRelationKind::kRetrograde ||
+                    relation->kind == MotifRelationKind::kRetrogradeInversion;
+    // Nothing of the source is left to replay, or a retrograde would replay the dropped tail first.
+    if (kept.empty() || (source_cut && backward)) {
+      continue;
+    }
     std::optional<Replay> replay =
-        replay_level(melody, source_notes, derived_notes, statement, source.endBeat, plan,
+        replay_level(melody, kept, notes_in_range(melody, statement.startBeat, derived_kept),
+                     statement, source_kept, derived_kept, source_cut, plan,
                      scale_of(key_at(statement.startBeat)), closing);
     double planned = planned_level(*relation);
     std::string kind(to_string(relation->kind));
@@ -414,15 +473,6 @@ DerivationViolations motif_derivation_violations(const Notes& melody, const Comp
     }
   }
   return out;
-}
-
-const PlannedPhrase* phrase_at(const CompositionPlan& plan, double beat) {
-  for (const PlannedPhrase& phrase : plan.phrases) {
-    if (beat >= phrase.startBeat - BEAT_EPS && beat < phrase.endBeat - BEAT_EPS) {
-      return &phrase;
-    }
-  }
-  return nullptr;
 }
 
 std::vector<CompositionViolation> register_violations(const Notes& melody,

@@ -20,13 +20,9 @@ import {
   resolveMeters,
 } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import {
-  assertGenerationBudget,
-  assertNoteEvents,
-  assertRange,
-} from '../../core/validation/index.js';
+import { assertGenerationBudget, assertNoteEvents } from '../../core/validation/index.js';
 import { BEAT_EPS, HUMANIZE_ADJACENCY } from '../adjacency.js';
-import { barSpanOf, lastBarOf } from '../form/internal.js';
+import { barSpanOf, firstSoundingBeat, lastBarOf, resolveSpanEnd } from '../form/internal.js';
 import { barGridStart, latestSoundingEnd } from '../grid.js';
 import { ioiBinIndex, isMultipleOf, rhythmLevel } from './internal.js';
 
@@ -444,17 +440,16 @@ export function rhythmOver(
   const meters = resolveMeters(opts, 'rhythm meters');
   assertNoteEvents(notes, 'rhythm notes', { allowNonPositiveDuration: true, budget: opts.budget });
   const sounding = notes.filter((note) => note.durationBeat > 0);
+  const startBeat = windowStart ?? barGridStart(firstSoundingBeat(sounding), meters);
+  const endBeat = resolveSpanEnd(
+    opts.totalBeats,
+    startBeat,
+    latestSoundingEnd(sounding),
+    'rhythm totalBeats',
+  );
   if (sounding.length === 0) {
     return emptyAnalysis();
   }
-
-  const firstOnset = sounding.reduce(
-    (min, n) => Math.min(min, n.startBeat),
-    Number.POSITIVE_INFINITY,
-  );
-  const startBeat = windowStart ?? barGridStart(firstOnset, meters);
-  const endBeat = Math.max(startBeat, opts.totalBeats ?? latestSoundingEnd(sounding));
-  assertRange(endBeat, Math.min(0, startBeat), Number.MAX_SAFE_INTEGER, 'rhythm totalBeats');
 
   const bars = barSpanOf(startBeat, endBeat, meters);
   assertGenerationBudget(

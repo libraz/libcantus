@@ -65,13 +65,14 @@ std::vector<int> all_sounding(const std::vector<PreparedTrack>& prepared, double
 
 /** Combine the harmonic, dissonance, and span terms at one sample beat (`sampleTension`). */
 double sample_tension_at(const std::vector<PreparedTrack>& prepared,
-                         const ArrangementHarmony& harmony, const MeterArg& meters,
-                         SafetyProfile profile, double beat) {
+                         const ArrangementHarmony& harmony, const KeyLookup& key_at,
+                         const MeterArg& meters, SafetyProfile profile, double beat) {
   std::vector<int> sounding = all_sounding(prepared, beat);
   if (sounding.empty()) {
     return 0;
   }
-  KeyScale key = harmony.scale_at(beat);
+  // The key whole: an augmented sixth is told from a dominant by its letters.
+  const ResolvedKey& key = key_at(beat);
   std::optional<FoundChord> chord = harmony.timeline.found_at(beat);
   double function_score = chord ? function_tension(function_of(chord->checked(), key)) : 0;
 
@@ -128,7 +129,7 @@ double sample_tension_at(const std::vector<PreparedTrack>& prepared,
     if (chord) {
       query.chord = chord->raw;
     }
-    query.key = key;
+    query.key = key.scale;
     query.otherVoices = others;
     query.strongBeat = strong_beat;
     // Only the verdict is read, so the replacement-pitch search is skipped.
@@ -158,9 +159,9 @@ double sample_tension_at(const std::vector<PreparedTrack>& prepared,
 }  // namespace
 
 std::vector<TensionPoint> sample_tension(const std::vector<PreparedTrack>& prepared,
-                                         const ArrangementHarmony& harmony, SafetyProfile profile,
-                                         const MeterMap& meters, const TensionGrid& grid,
-                                         std::optional<double> budget) {
+                                         const ArrangementHarmony& harmony, const KeyLookup& key_at,
+                                         SafetyProfile profile, const MeterMap& meters,
+                                         const TensionGrid& grid, std::optional<double> budget) {
   const MeterArg meter_arg(meters);
   double sample_count =
       js::max(0, std::ceil((grid.total_beats - grid.sample_start) / grid.step - BEAT_EPS));
@@ -180,7 +181,7 @@ std::vector<TensionPoint> sample_tension(const std::vector<PreparedTrack>& prepa
     double beat =
         i == 0 ? js::max(grid.sample_start, grid.music_start) : grid.sample_start + i * grid.step;
     points.push_back(
-        TensionPoint{beat, sample_tension_at(prepared, harmony, meter_arg, profile, beat)});
+        TensionPoint{beat, sample_tension_at(prepared, harmony, key_at, meter_arg, profile, beat)});
   }
   return points;
 }
@@ -264,13 +265,12 @@ std::vector<TensionPoint> tension_curve(const std::vector<ArrangementTrack>& tra
   std::vector<PreparedTrack> prepared = prepare_tracks(tracks);
   ArrangementHarmony harmony;
   harmony.timeline = host_of(timeline);
-  harmony.scale_at = [&key_at](double beat) { return scale_of(key_at(beat)); };
   TensionGrid grid;
   grid.sample_start = placed.origin;
   grid.music_start = placed.startBeat;
   grid.total_beats = total_beats;
   grid.step = step;
-  return sample_tension(prepared, harmony, profile, meters, grid, budget);
+  return sample_tension(prepared, harmony, key_at, profile, meters, grid, budget);
 }
 
 std::vector<TensionPoint> tension_curve_from(const std::vector<ArrangementTrack>& tracks,

@@ -59,12 +59,12 @@ function hasModifier(node, kind) {
   return (ts.getCombinedModifierFlags(node) & kind) !== 0;
 }
 
-/** Whether a type is a plain object shape whose field names are worth recording. */
+/** The field names of a plain object shape (through unions and intersections), or undefined. */
 function objectFields(checker, type) {
   const fields = new Set();
   const parts = type.isUnion() ? type.types : [type];
   for (const part of parts) {
-    if (!(part.flags & ts.TypeFlags.Object)) continue;
+    if (!(part.flags & (ts.TypeFlags.Object | ts.TypeFlags.Intersection))) continue;
     if (checker.isArrayType(part) || checker.isTupleType(part)) continue;
     if (part.getCallSignatures().length > 0) continue;
     const symbol = part.getSymbol();
@@ -72,6 +72,19 @@ function objectFields(checker, type) {
     for (const prop of part.getProperties()) fields.add(prop.getName());
   }
   return fields.size > 0 ? [...fields] : undefined;
+}
+
+/** Parameter names that carry a call's options. */
+const OPTION_PARAMS = new Set(['opts', 'options']);
+
+/**
+ * The option bag of a parameter: the field names when it is an optional `opts` / `options`
+ * parameter whose resolved type is an object shape, else undefined. Python binds such a bag
+ * to keyword-only arguments; every other parameter stays positional.
+ */
+function optionBag(checker, p, name, optional) {
+  if (!optional || p.dotDotDotToken || !OPTION_PARAMS.has(name)) return undefined;
+  return objectFields(checker, checker.getNonNullableType(checker.getTypeAtLocation(p)));
 }
 
 function paramName(decl, index) {
@@ -98,11 +111,8 @@ function paramsOf(checker, decls) {
       optional: Boolean(p.questionToken || p.initializer) || i >= minRequired,
       rest: Boolean(p.dotDotDotToken),
     };
-    if (!entry.rest) {
-      const type = checker.getNonNullableType(checker.getTypeAtLocation(p));
-      const fields = objectFields(checker, type);
-      if (fields) entry.fields = fields;
-    }
+    const bag = optionBag(checker, p, entry.name, entry.optional);
+    if (bag) entry.bag = bag;
     return entry;
   });
   // Function.prototype.length of the runtime function: parameters before the first default or rest.

@@ -135,6 +135,25 @@ describe('named transformations of a motif', () => {
     expect(relation?.rationale).toContain('upside down');
   });
 
+  it('names an evenly timed symmetric cell played backwards a retrograde', () => {
+    const scale = relateMotifs(
+      motifFromNotes(line(0, [60, 62, 64])),
+      motifFromNotes(line(4, [64, 62, 60])),
+    );
+    expect(scale?.kind).toBe('retrograde');
+    const zigzag = relateMotifs(
+      motifFromNotes(line(0, [60, 62, 60, 62])),
+      motifFromNotes(line(4, [62, 60, 62, 60])),
+    );
+    expect(zigzag?.kind).toBe('retrograde');
+  });
+
+  it('names an inversion moved off the first note without claiming the first note as its axis', () => {
+    const relation = relateMotifs(model, motifFromNotes(line(4, [65, 63, 58])));
+    expect(relation?.kind).toBe('inversion');
+    expect(relation?.rationale).not.toContain('first note');
+  });
+
   it('names a retrograde, rhythm included', () => {
     const uneven: NoteEvent[] = [
       { pitch: 60, startBeat: 0, durationBeat: 1 },
@@ -470,6 +489,16 @@ describe('melodicContour', () => {
     expect(contour.troughIndex).toBe(0);
     expect(contour.range).toBe(12);
     expect(contour.rationale).toContain('ascending');
+  });
+
+  it('quotes the net movement as the share of motion it is', () => {
+    // 16 semitones of motion, 12 of them net: 75%, though 14 run up.
+    expect(melodicContour(line(0, [60, 64, 67, 65, 69, 72])).rationale).toBe(
+      'The net rise is 75% of the motion, so the line is ascending',
+    );
+    expect(melodicContour(line(0, [60, 64, 60, 64, 60, 64, 60])).rationale).toBe(
+      'Changes direction without settling either way (the net movement is 0% of the motion), so the line is a wave',
+    );
   });
 
   it('classifies a falling line as descending', () => {

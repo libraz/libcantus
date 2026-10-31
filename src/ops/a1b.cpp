@@ -296,23 +296,8 @@ void register_keys() {
       beats.push_back(std::move(written));
     }
     // Each chord is checked and read the first time the search needs it.
-    std::vector<std::unique_ptr<Chord>> read(chords.size());
-    ChordSource chord_at = [&](std::size_t index) -> const Chord& {
-      if (!read[index]) {
-        const json::Value& wire = get(chords[index], "chord");
-        // `assertChord`, then the guards of the tones, then `soundsDominantSeventh`'s scans of the
-        // intervals, which the candidate a fifth below the root asks for.
-        assert_record(wire, "chord");
-        assert_finite_number(get(wire, "rootPc"), "chord.rootPc");
-        ChordQuality quality = assert_chord_quality(wire);
-        assert_mask_inputs(wire);
-        if (reads_interval(wire, 4)) {
-          reads_interval(wire, 10);
-        }
-        read[index] = std::make_unique<Chord>(read_chord_fields(wire, quality));
-      }
-      return *read[index];
-    };
+    std::vector<std::unique_ptr<Chord>> read;
+    ChordSource chord_at = modulation_chord_source(chords, read);
     std::vector<std::size_t> starts;
     json::Value out = to_json(detect_modulations_over(
         beats, chord_at, typed, wire_profile_source(field(opts, "profile")), &starts));

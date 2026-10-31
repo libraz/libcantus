@@ -450,3 +450,85 @@ describe('the built-in lick dictionary is one object for the whole process', () 
     expect(BASS_LICKS[0]?.id).toBe(id);
   });
 });
+
+describe('transforms keep each stream to itself', () => {
+  const backbeat: GridEvent[] = [
+    ...[0, 2, 4, 6, 8, 10, 12, 14].map((step) => ({ step, velocity: 0.7, limb: 'hat' })),
+    { step: 0, velocity: 1, limb: 'kick' },
+    { step: 4, velocity: 1, limb: 'snare' },
+    { step: 8, velocity: 1, limb: 'kick' },
+    { step: 12, velocity: 1, limb: 'snare' },
+  ];
+  const stepsOf = (events: readonly GridEvent[], limb: string) =>
+    events.filter((event) => event.limb === limb).map((event) => event.step);
+
+  it('doubles each stream into its own gaps', () => {
+    const doubled = double(backbeat);
+    expect(stepsOf(doubled, 'hat')).toEqual(Array.from({ length: 16 }, (_, step) => step));
+    expect(stepsOf(doubled, 'kick')).toEqual([0, 4, 8, 12]);
+    expect(stepsOf(doubled, 'snare')).toEqual([4, 8, 12, 14]);
+    // The same figure in another order adds the same notes.
+    const byStream = (events: readonly GridEvent[]) =>
+      ['hat', 'kick', 'snare'].map((limb) => stepsOf(events, limb));
+    expect(byStream(double([...backbeat].reverse()))).toEqual(byStream(doubled));
+  });
+
+  it('adds only hats to a hat figure', () => {
+    const hats = backbeat.filter((event) => event.limb === 'hat');
+    expect(double(hats).every((event) => event.limb === 'hat')).toBe(true);
+    expect(double(hats)).toHaveLength(16);
+  });
+
+  it('draws the decoration of each stream on its own', () => {
+    const ghosts: GridEvent[] = [
+      { step: 6, velocity: 0.3, limb: 'snare' },
+      { step: 6, velocity: 0.3, limb: 'hat' },
+    ];
+    const kept = Array.from(
+      { length: 40 },
+      (_, seed) => ornamentBy(ghosts, () => true, 0.5, resolveContext(seed).part('test')).length,
+    );
+    expect(kept).toContain(1);
+  });
+
+  it('anticipates each stream on its own draw', () => {
+    const beats: GridEvent[] = [
+      { step: 4, velocity: 1, limb: 'snare' },
+      { step: 4, velocity: 1, limb: 'hat' },
+    ];
+    const added = Array.from(
+      { length: 40 },
+      (_, seed) => syncopate(beats, 0.5, resolveContext(seed).part('test')).length - beats.length,
+    );
+    expect(added).toContain(1);
+  });
+});
+
+describe('deform reads every dial it is given', () => {
+  const figure: GridEvent[] = [{ step: 0, velocity: 1 }];
+
+  it('refuses an ornament dial outside [0, 1] with no test to use it', () => {
+    expect(() => deform(figure, { ornament: 7 }, draw)).toThrow(InvalidInputError);
+  });
+
+  it('refuses a meter that names no signature at the neutral dial', () => {
+    expect(() => deform(figure, { ts: 'banana' }, draw)).toThrow(InvalidInputError);
+    expect(() => deform(figure, { ts: 'banana', rhythmic: 0.5 }, draw)).toThrow(InvalidInputError);
+  });
+});
+
+describe('a query matches the grouping of a meter', () => {
+  const grouped = (grouping?: number[]) =>
+    grouping === undefined
+      ? { numerator: 7, denominator: 8 }
+      : { numerator: 7, denominator: 8, grouping };
+
+  it('keeps 3+2+2 and 2+2+3 apart', () => {
+    const written = entry('seven', { ts: grouped([3, 2, 2]) });
+    expect(fitsQuery(written, { ts: grouped([3, 2, 2]) })).toBe(true);
+    expect(fitsQuery(written, { ts: grouped([2, 2, 3]) })).toBe(false);
+    expect(fitsQuery(written, { ts: grouped() })).toBe(false);
+    expect(fitsQuery(entry('plain', { ts: grouped() }), { ts: grouped([2, 2, 3]) })).toBe(false);
+    expect(fitsQuery(entry('plain', { ts: grouped() }), { ts: grouped() })).toBe(true);
+  });
+});

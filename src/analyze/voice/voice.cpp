@@ -10,10 +10,12 @@
 
 #include "analyze/adjacency.h"
 #include "cantus/core/errors.h"
+#include "cantus/core/interval.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/pitch.h"
 #include "cantus/core/validation.h"
 #include "cantus/theory/counterpoint.h"
+#include "core/event_index/order.h"
 #include "js/math.h"
 #include "js/number.h"
 
@@ -98,11 +100,9 @@ double interval_above_bass(double pitch, const std::vector<OtherVoice>& others,
   return mod12(pitch_class_of(pitch) - pitch_class_of(ref));
 }
 
-/**
- * Classify a suspension figure from the interval class above the sounding bass and the
- * resolution direction (`suspensionType`).
+/** The figure a suspended interval class names, from its first interval alone (`suspendedFigure`).
  */
-std::optional<SuspensionFigure> suspension_type(double ic, double delta) {
+std::optional<SuspensionFigure> suspended_figure(double ic, double delta) {
   if (delta > 0) {
     // Resolving upward is the 2-3 only from a second above the bass.
     if (ic == 1 || ic == 2) {
@@ -124,6 +124,61 @@ std::optional<SuspensionFigure> suspension_type(double ic, double delta) {
   }
   // Any other interval above the bass is a downward-resolving dissonance with no standard figure.
   return std::nullopt;
+}
+
+/** The interval classes above the bass each figure resolves to (`SUSPENSION_RESOLUTIONS`). */
+std::vector<double> suspension_resolutions(SuspensionFigure figure) {
+  switch (figure) {
+    case SuspensionFigure::kSus4_3:
+      return {3, 4};
+    case SuspensionFigure::kSus6_5:
+      return {7};
+    case SuspensionFigure::kSus7_6:
+      return {8, 9};
+    case SuspensionFigure::kSus9_8:
+      return {0};
+    case SuspensionFigure::kSus2_3:
+      return {3, 4};
+  }
+  return {};
+}
+
+/**
+ * Classify a suspension figure from the interval class above the sounding bass, the resolution
+ * direction and the interval class the resolution lands on above the same bass
+ * (`suspensionType`): a figure names both intervals.
+ */
+std::optional<SuspensionFigure> suspension_type(double ic, double delta, double resolved_ic) {
+  std::optional<SuspensionFigure> figure = suspended_figure(ic, delta);
+  if (!figure) {
+    return std::nullopt;
+  }
+  std::vector<double> targets = suspension_resolutions(*figure);
+  if (std::find(targets.begin(), targets.end(), resolved_ic) == targets.end()) {
+    return std::nullopt;
+  }
+  return figure;
+}
+
+/**
+ * Whether a pitch clashes with the chord sounding under it, as a solo line is heard against its
+ * harmony (`clashesWithChord`): a dissonance above the bass, the fourth included, or a second,
+ * seventh or tritone against any chord tone.
+ */
+bool clashes_with_chord(double pitch, const Chord& chord) {
+  if (!is_consonant_interval(interval_above_bass(pitch, {}, chord), true)) {
+    return true;
+  }
+  std::vector<double> tones;
+  for (double interval : chord.intervals) {
+    tones.push_back(chord.rootPc + interval);
+  }
+  if (chord.bassPc) {
+    tones.push_back(*chord.bassPc);
+  }
+  return std::any_of(tones.begin(), tones.end(), [&](double tone) {
+    return !is_consonant_interval(mod12(pitch_class_of(pitch) - tone), false);
+  });
 }
 
 /**
@@ -254,19 +309,39 @@ std::vector<IdentifiedVoiceNote> to_voice_notes(const std::vector<NoteEvent>& ev
 std::vector<AnalyzedNote> analyze_voice_over(const std::vector<VoiceNote>& voice,
                                              const VoiceHost& host) {
   std::vector<AnalyzedNote> result;
+  // Melodic neighbours are read along the notes that sound: a zero-length note has none and is
+  // no one's.
+  std::vector<std::size_t> sounding =
+      sounding_indices(std::vector<NoteEvent>(voice.begin(), voice.end()));
+  std::vector<std::optional<std::size_t>> line(voice.size());
+  for (std::size_t position = 0; position < sounding.size(); ++position) {
+    line[sounding[position]] = position;
+  }
   for (std::size_t i = 0; i < voice.size(); ++i) {
     const VoiceNote& note = voice[i];
-    const VoiceNote* prev_note = i > 0 ? &voice[i - 1] : nullptr;
-    const VoiceNote* next_note = i + 1 < voice.size() ? &voice[i + 1] : nullptr;
+    const VoiceNote* prev_note = nullptr;
+    const VoiceNote* next_note = nullptr;
+    if (line[i]) {
+      std::size_t position = *line[i];
+      if (position > 0) {
+        prev_note = &voice[sounding[position - 1]];
+      }
+      if (position + 1 < sounding.size()) {
+        next_note = &voice[sounding[position + 1]];
+      }
+    }
     // A neighboring note sharing this note's onset is a simultaneous cluster member, not a melodic
     // predecessor/successor.
-    double prev_end = prev_note == nullptr ? -std::numeric_limits<double>::infinity()
-                                           : prev_note->startBeat + prev_note->durationBeat;
-    double note_end = note.startBeat + note.durationBeat;
     const VoiceNote* prev =
-        prev_note != nullptr && adjacent(prev_end, note.startBeat) ? prev_note : nullptr;
+        prev_note != nullptr && !same_instant(prev_note->startBeat, note.startBeat) &&
+                adjacent(prev_note->startBeat + prev_note->durationBeat, note.startBeat)
+            ? prev_note
+            : nullptr;
     const VoiceNote* next =
-        next_note != nullptr && adjacent(note_end, next_note->startBeat) ? next_note : nullptr;
+        next_note != nullptr && !same_instant(next_note->startBeat, note.startBeat) &&
+                adjacent(note.startBeat + note.durationBeat, next_note->startBeat)
+            ? next_note
+            : nullptr;
     std::optional<VoiceChord> chord = host.chord_at(note.startBeat);
     std::vector<TheoryLabel> labels;
     bool member = member_of(note.pitch, chord);
@@ -308,13 +383,19 @@ std::vector<AnalyzedNote> analyze_voice_over(const std::vector<VoiceNote>& voice
       bool prepared = prev->pitch == note.pitch && member_of(prev->pitch, prev_chord);
       bool resolves = is_step(next->pitch, pitch);
       std::vector<OtherVoice> others = host.others_at(note.startBeat);
+      // A solo line has no other voice to clash with, so the chord it is heard against stands in.
       bool vertically_dissonant =
-          std::any_of(others.begin(), others.end(), [&](const OtherVoice& other) {
-            return creates_vertical_dissonance(pitch, other.pitch_of(), true);
-          });
+          !others.empty()
+              ? std::any_of(others.begin(), others.end(),
+                            [&](const OtherVoice& other) {
+                              return creates_vertical_dissonance(pitch, other.pitch_of(), true);
+                            })
+              : clashes_with_chord(pitch, chord->chord);
       if (prepared && vertically_dissonant && resolves) {
         double ic = interval_above_bass(pitch, others, chord->chord);
-        std::optional<SuspensionFigure> type = suspension_type(ic, next->pitch - pitch);
+        double resolved_ic = interval_above_bass(next->pitch, others, chord->chord);
+        std::optional<SuspensionFigure> type =
+            suspension_type(ic, next->pitch - pitch, resolved_ic);
         if (type) {
           TheoryLabel label = resolving_label(TheoryLabelKind::kSuspension, next->pitch);
           label.type = *type;

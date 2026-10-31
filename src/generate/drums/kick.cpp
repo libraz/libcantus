@@ -3,11 +3,14 @@
 #include "generate/drums/kick.h"
 
 #include <cmath>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
+
+#include "js/math.h"
 
 namespace cantus {
 
@@ -99,9 +102,22 @@ bool is_in_pre_chorus_lift(SectionType section, double bar, double section_bars,
   return bar >= section_bars - 2;
 }
 
-KickPattern realise_kick_figure(const KickFigure& figure, SectionType section, double bar,
-                                const Draw& draw, double rhythmic) {
-  KickPattern pattern(static_cast<std::size_t>(KICK_STEPS), false);
+namespace {
+
+/** Whether each slot of a realised bar sounds. */
+KickPattern pattern_of(const KickEntries& entries) {
+  KickPattern pattern;
+  for (const std::optional<double>& entry : entries) {
+    pattern.push_back(entry.has_value());
+  }
+  return pattern;
+}
+
+}  // namespace
+
+KickEntries realise_kick_entries(const KickFigure& figure, SectionType section, double bar,
+                                 const Draw& draw, double rhythmic) {
+  KickEntries entries(static_cast<std::size_t>(KICK_STEPS));
   for (const KickSlot& slot : figure) {
     if (slot.step < 0 || slot.step >= KICK_STEPS) {
       continue;
@@ -120,19 +136,27 @@ KickPattern realise_kick_figure(const KickFigure& figure, SectionType section, d
     }
     std::size_t index = static_cast<std::size_t>(slot.step);
     if (!slot.probability) {
-      pattern[index] = true;
+      entries[index] = -std::numeric_limits<double>::infinity();
       continue;
     }
     SeedSegment address =
         slot.slot ? SeedSegment(*slot.slot) : SeedSegment(static_cast<double>(slot.step));
-    if (draw.prob(leaned_by(*slot.probability, rhythmic), {"kick", bar, address})) {
-      pattern[index] = true;
+    // The slot sounds while its draw is under the leaned chance: from `at / probability - 0.5` up.
+    double at = draw.at({"kick", bar, address});
+    if (at < leaned_by(*slot.probability, rhythmic)) {
+      entries[index] = js::min(entries[index].value_or(std::numeric_limits<double>::infinity()),
+                               at / *slot.probability - 0.5);
     }
   }
-  return pattern;
+  return entries;
 }
 
 KickPattern get_kick_pattern(SectionType section, DrumStyle style, double bar, const Draw& draw,
+                             double rhythmic) {
+  return pattern_of(get_kick_entries(section, style, bar, draw, rhythmic));
+}
+
+KickEntries get_kick_entries(SectionType section, DrumStyle style, double bar, const Draw& draw,
                              double rhythmic) {
   const KickFigure* own = &default_figure();
   for (const auto& [name, figure] : KICK_FIGURES) {
@@ -142,12 +166,12 @@ KickPattern get_kick_pattern(SectionType section, DrumStyle style, double bar, c
     }
   }
   if (section != SectionType::kOutro) {
-    return realise_kick_figure(*own, section, bar, draw, rhythmic);
+    return realise_kick_entries(*own, section, bar, draw, rhythmic);
   }
   KickFigure figure = outro_figure();
   KickFigure stated = stated_slots(*own);
   figure.insert(figure.end(), stated.begin(), stated.end());
-  return realise_kick_figure(figure, section, bar, draw, rhythmic);
+  return realise_kick_entries(figure, section, bar, draw, rhythmic);
 }
 
 }  // namespace cantus

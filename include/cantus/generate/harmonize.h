@@ -55,7 +55,8 @@ struct ClassifiedMelodyTone {
 
 /**
  * Classify a melody's ornaments from the melody and the metre alone (`classifyMelodyTones`).
- * @param melody The melody, in ascending onset order.
+ * @param melody The melody, in any order; it is read in onset order, ties by pitch, and a note
+ *   of zero length is structural and no other note's neighbour.
  * @param ts Time signature used to weight metric accents.
  * @returns One classification per input note, in input order.
  * @throws InvalidInputError if the meter or a note is invalid.
@@ -84,7 +85,7 @@ std::optional<ReharmonizeStrength> parse_reharmonize_strength(std::string_view n
 struct HarmonizeOptions {
   explicit HarmonizeOptions(std::vector<NoteEvent> melody_) : melody(std::move(melody_)) {}
 
-  /** The melody to harmonize, in ascending onset order. */
+  /** The melody to harmonize, in any order; it is read in onset order. */
   std::vector<NoteEvent> melody;
   /** The key to harmonize in; the name "infer" (the default) estimates it from the melody. */
   std::optional<KeyArg> key;

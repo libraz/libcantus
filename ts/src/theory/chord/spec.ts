@@ -790,7 +790,7 @@ function assertDegreeList(
  */
 export function assertChordSpec(spec: ChordSpec): ChordSpec {
   if (spec === null || typeof spec !== 'object') {
-    throw new InvalidInputError(`chord spec must be an object; received ${typeof spec}`);
+    throw new InvalidInputError(`chord spec must be an object; received ${describeRejected(spec)}`);
   }
   assertFiniteNumber(spec.rootPc, 'chord spec rootPc');
   if (spec.bassPc !== undefined) {

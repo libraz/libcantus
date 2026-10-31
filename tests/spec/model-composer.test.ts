@@ -17,7 +17,7 @@ import {
   type Vocabulary,
 } from '@libraz/libcantus/generate';
 import { Composer, type ComposerOptions, Score, Timeline } from '@libraz/libcantus/model';
-import { majorKey, resolveKey, toKeyScale } from '@libraz/libcantus/theory';
+import { majorKey, makeChord, resolveKey, toKeyScale } from '@libraz/libcantus/theory';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -453,6 +453,26 @@ describe('the bar a progression is laid out on', () => {
       ],
     });
     expect(() => changing.progression({ style: 'dance', bars: 4 })).toThrow(InvalidInputError);
+  });
+
+  it('hands a part that takes a meter the whole meter of a piece that changes', () => {
+    const meters = [
+      { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
+      { startBeat: 8, ts: { numerator: 3, denominator: 4 } },
+    ];
+    const segments = [
+      { startBeat: 0, endBeat: 8, chord: makeChord(0, 'maj') },
+      { startBeat: 8, endBeat: 14, chord: makeChord(7, 'maj') },
+    ];
+    const written = Composer.of({ key: KEY, seed: 7, meters }).bass(segments, { style: 'pop' });
+    const byHand = generateBassLine({
+      segments,
+      key: KEY,
+      style: 'pop',
+      ts: meters,
+      ctx: { seed: 7 },
+    });
+    expect(written.notes).toEqual(byHand);
   });
 });
 

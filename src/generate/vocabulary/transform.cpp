@@ -59,10 +59,9 @@ struct PathSampler {
   const Draw& draw;
   const SeedPath& path;
 
-  bool prob(double p, std::string_view tag, double step) const {
+  bool prob(double p, const SeedPath& key) const {
     SeedPath full = path;
-    full.emplace_back(std::string(tag));
-    full.emplace_back(step);
+    full.insert(full.end(), key.begin(), key.end());
     return draw.prob(p, full);
   }
 };
@@ -82,7 +81,7 @@ const OrnamentTest& assert_ornament_test(const OrnamentTest& test, std::string_v
   return test;
 }
 
-/** deform()'s options, read in the order TS reads them. */
+/** deform()'s options, read in the order `resolveDials` reads them. */
 struct TypedDeformPlan {
   const DeformOptions& opts;
   const MeterArg& ts;
@@ -96,12 +95,14 @@ struct TypedDeformPlan {
   }
   TimeSignature signature() const { return figure_signature(ts); }
   std::optional<OrnamentRequest<GridEventModel>> ornament() const {
-    if (!opts.ornament || !opts.isOrnament) {
+    if (!opts.ornament) {
       return std::nullopt;
     }
-    const OrnamentTest& test = assert_ornament_test(opts.isOrnament, "opts.isOrnament");
-    return OrnamentRequest<GridEventModel>{test,
-                                           assert_range(*opts.ornament, 0, 1, "ornament amount")};
+    double amount = assert_range(*opts.ornament, 0, 1, "ornament amount");
+    if (!opts.isOrnament) {
+      return std::nullopt;
+    }
+    return OrnamentRequest<GridEventModel>{opts.isOrnament, amount};
   }
 };
 

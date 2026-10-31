@@ -22,7 +22,9 @@ namespace cantus {
 
 /** Options of humanize() (`HumanizeOptions`). */
 struct HumanizeOptions {
-  /** Time signature used to derive metric accents; 4/4 when absent. */
+  /**
+   * Time signature used to derive metric accents, a meter map read bar by bar; 4/4 when absent.
+   */
   std::optional<MeterArg> ts;
   /** Maximum timing jitter in quarter-note beats, applied as plus or minus; 0.02 when absent. */
   std::optional<double> timing;
@@ -69,7 +71,8 @@ struct GrooveTemplate {
 /**
  * Capture the feel of a performance as a template (`extractGrooveTemplate`). The subdivision is a
  * sixteenth-note grid (4) when absent.
- * @throws InvalidInputError if the meter, the subdivision or an event is malformed.
+ * @throws InvalidInputError if the meter is malformed or changes signature, or the subdivision or
+ *   an event is malformed.
  */
 GrooveTemplate extract_groove_template(const std::vector<NoteEvent>& events, const MeterArg& ts,
                                        std::optional<int> subdivision = std::nullopt);
@@ -77,8 +80,9 @@ GrooveTemplate extract_groove_template(const std::vector<NoteEvent>& events, con
 /**
  * Snap events to a template's grid and offset them by its recorded deviations
  * (`applyGrooveTemplate`). Notes that never sound are omitted.
- * @throws InvalidInputError if the template's meter or slot count does not fit `ts`, a slot
- *   carries a non-finite offset or a velocity outside [0, 127], or an event is malformed.
+ * @throws InvalidInputError if `ts` changes signature, the template's meter or slot count does
+ *   not fit `ts`, a slot carries a non-finite offset or a velocity outside [0, 127], or an event is
+ *   malformed.
  */
 std::vector<NoteEvent> apply_groove_template(const std::vector<NoteEvent>& events,
                                              const GrooveTemplate& groove_template,

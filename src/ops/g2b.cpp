@@ -53,6 +53,12 @@ namespace {
 json::Value default_note_options() { return json::Value(json::Object()); }
 
 /** `opts.ts ?? DEFAULT_TS`, read as `meterAt(0, toMeterData(ts, 'ts'))`. */
+/** `toMeterData(opts.ts ?? fallback, 'ts')`: the whole meter, a map included. */
+MeterData read_meter_or(const json::Value& opts, const TimeSignature& fallback) {
+  const json::Value* ts = opt_null_default(opts, "ts");
+  return ts != nullptr ? read_meter_like(*ts, "ts") : MeterData(fallback);
+}
+
 TimeSignature read_ts_or(const json::Value& opts, const TimeSignature& fallback) {
   const json::Value* ts = opt_null_default(opts, "ts");
   return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : meter_at(0, fallback);
@@ -150,7 +156,7 @@ void register_groove() {
     const json::Value& asked = assert_options(a[1], "opts");
     // The meter is read once, here, and every position below is weighed against it.
     HumanizeRequest request;
-    request.ts = read_ts_or(asked, kGrooveDefaultTs);
+    request.ts = read_meter_or(asked, kGrooveDefaultTs);
     std::vector<NoteEvent> events =
         assert_note_events(a[0], "humanize events", line_options(undefined_value()));
     Sounding sounding = sounding_of(a[0], events);
@@ -178,7 +184,7 @@ void register_groove() {
     return json::Value(std::move(notes));
   });
   def("extractGrooveTemplate", [](Args& a) -> json::Value {
-    TimeSignature meter = meter_at(0, read_meter_like(a[1], "ts"));
+    TimeSignature meter = groove_signature(read_meter_like(a[1], "ts"));
     std::vector<NoteEvent> events =
         assert_note_events(a[0], "groove source events", line_options(undefined_value()));
     double subdivision = assert_positive_int(
@@ -187,7 +193,7 @@ void register_groove() {
     return to_json(extract_groove_template(events, meter, static_cast<int>(subdivision)));
   });
   def("applyGrooveTemplate", [](Args& a) -> json::Value {
-    TimeSignature meter = meter_at(0, read_meter_like(a[2], "ts"));
+    TimeSignature meter = groove_signature(read_meter_like(a[2], "ts"));
     std::vector<NoteEvent> events =
         assert_note_events(a[0], "groove target events", line_options(undefined_value()));
     const json::Value& given = a[1];
@@ -268,8 +274,7 @@ void register_ornament() {
         assert_note_events(a[0], "ornament notes", line_options(undefined_value()));
     OrnamentStyle style = *parse_ornament_style(assert_one_of(
         opt_or(asked, "style", json::Value("ghost")), ornament_style_names(), "ornament style"));
-    TimeSignature ts = read_ts_or(asked, kOrnamentDefaultTs);
-    cantus::assert_time_signature(ts);
+    MeterData ts = read_meter_or(asked, kOrnamentDefaultTs);
     std::optional<double> amount;
     if (const json::Value* given = opt_strict(asked, "amount")) {
       amount = assert_range(*given, 0, 1, "ornament amount");

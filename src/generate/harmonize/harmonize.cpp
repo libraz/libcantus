@@ -44,7 +44,8 @@ std::optional<ReharmonizeStrength> parse_reharmonize_strength(std::string_view n
 }
 
 HarmonizeResult harmonize_with(const HarmonizeRequest& request) {
-  const std::vector<NoteEvent>& sounding = request.sounding;
+  // Read in onset order whatever the listing, so a reordered melody is the same melody.
+  const std::vector<NoteEvent> sounding = in_onset_order(request.sounding);
   const TimeSignature& ts = request.ts;
   KeyScale key = request.key.scale;
   // Nothing to harmonize: inventing a tonic bar here would silently insert a ghost chord.
@@ -113,6 +114,7 @@ HarmonizeResult harmonize_with(const HarmonizeRequest& request) {
                      static_cast<double>(candidates.size()),
                  "harmonization placement search");
 
+  double best_fit = std::numeric_limits<double>::infinity();
   double best_cost = std::numeric_limits<double>::infinity();
   double best_ts = 0;
   std::vector<std::size_t> best_path;
@@ -123,8 +125,11 @@ HarmonizeResult harmonize_with(const HarmonizeRequest& request) {
     }
     HarmonizePass pass =
         harmonize_once(shifted, key, candidates, segments, jitter, ends.closing, articulated);
-    double total = pass.cost + key_fit_cost(shifted, key) + tessitura_cost(shifted);
-    if (total < best_cost) {
+    // Key fit comes first: no cadence reward buys a melody note out of the key.
+    double fit = key_fit_cost(shifted, key);
+    double total = pass.cost + tessitura_cost(shifted);
+    if (fit < best_fit || (fit == best_fit && total < best_cost)) {
+      best_fit = fit;
       best_cost = total;
       best_ts = shift;
       best_path = pass.path;

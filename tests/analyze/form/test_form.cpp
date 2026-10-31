@@ -1,11 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <vector>
 
+#include "analyze/form/hypermeter.h"
 #include "analyze/form/internal.h"
 #include "analyze/form/phrase.h"
 #include "cantus/analyze/form.h"
 #include "cantus/analyze/timeline.h"
 #include "cantus/core/errors.h"
+#include "cantus/model/score.h"
+#include "cantus/theory/scale.h"
 
 using namespace cantus;
 
@@ -89,4 +93,71 @@ TEST_CASE("bar evidence helpers", "[form]") {
   CHECK(combine_evidence({0.5, 0.5}) == 0.75);
   CHECK(bar_span_of(0, 6, MeterArg("4/4")) == 1.5);
   CHECK(last_bar_of(MeterArg("4/4"), 0, 8) == 1);
+}
+
+TEST_CASE("hypermeter over silence has no downbeat", "[form]") {
+  CHECK(hypermeter({}).downbeats.empty());
+  HypermeterOptions options;
+  options.totalBeats = 16;
+  CHECK(hypermeter({}, std::nullopt, options).downbeats.empty());
+}
+
+TEST_CASE("an end of span is checked before it is held to the start", "[form]") {
+  CHECK(resolve_span_end(std::nullopt, 4, 2, "x") == 4);
+  CHECK(resolve_span_end(2, 4, 8, "x") == 4);
+  CHECK_THROWS_WITH(resolve_span_end(-100, 4, 8, "x"),
+                    "x must be in [0, 9007199254740991]; received -100");
+  FormSectionOptions options;
+  options.totalBeats = -100;
+  CHECK_THROWS_AS(sections_from_notes(bars_of_triads({60, 65}), options), InvalidInputError);
+  CHECK_THROWS_AS(sections_from_notes({}, options), InvalidInputError);
+}
+
+TEST_CASE("a section keeps a note a hair before the downbeat", "[form]") {
+  std::vector<FormSection> sections = sections_from_notes({note(60, -0.03, 16)});
+  CHECK(sections.size() == 1);
+}
+
+TEST_CASE("a held dominant does not move the hyperbars of a period", "[form]") {
+  // I - IV - V - V | I - IV - V - I after a one-beat pickup.
+  std::vector<NoteEvent> notes = bars_of_triads({48, 53, 55, 55, 48, 53, 55, 48});
+  notes.push_back(note(67, -1, 1));
+  ChordTimelineOptions timeline_options;
+  timeline_options.key = KeyArg("C major");
+  ChordTimeline timeline = chord_timeline_from_notes(notes, timeline_options).timeline;
+  PhraseOptions options;
+  options.key = KeyContext(KeyArg("C major"));
+  std::vector<Phrase> phrases = phrases_from_timeline(timeline, notes, options);
+  REQUIRE(phrases.size() == 2);
+  CHECK(phrases[0].startBeat == -1);
+  CHECK(phrases[0].endBeat == 16);
+  CHECK(phrases[1].endBeat == 32);
+}
+
+TEST_CASE("cadence spans run to the end of the arrival chord", "[form]") {
+  std::vector<CadenceSpan> spans =
+      cadence_spans({CadenceArrival{8, 0.6}, CadenceArrival{3, 1}}, {{0, 8}, {8, 16}});
+  REQUIRE(spans.size() == 2);
+  CHECK(spans[0].endBeat == 16);
+  CHECK(spans[1].endBeat == 3);
+}
+
+TEST_CASE("a score reads its hyperbars from its own cadences as spans", "[form]") {
+  // I - IV - V - V | I - IV - V - I after a one-beat pickup, with a melody of one note per bar.
+  std::vector<NoteEvent> notes = bars_of_triads({48, 53, 55, 55, 48, 53, 55, 48});
+  const std::vector<int> tune = {76, 77, 74, 74, 76, 77, 74, 72};
+  for (std::size_t bar = 0; bar < tune.size(); ++bar) {
+    notes.push_back(note(tune[bar], static_cast<double>(bar) * 4, 4));
+  }
+  notes.push_back(note(67, -1, 1));
+  ScoreOptions options;
+  options.key = KeyArg("C major");
+  Score score = Score::of(notes, options);
+  Hypermeter grouping = score.hypermeter();
+  CHECK(grouping.groupBars == 4);
+  CHECK(grouping.downbeats == std::vector<double>{0, 16});
+  HypermeterOptions given;
+  given.cadenceBeats = std::vector<double>{12, 28};
+  Hypermeter plain = hypermeter(notes, std::nullopt, given);
+  CHECK(score.hypermeter(given).downbeats == plain.downbeats);
 }

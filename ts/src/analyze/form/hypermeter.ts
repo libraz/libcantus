@@ -15,12 +15,21 @@ import {
   assertGenerationBudget,
   assertNoteEvents,
   assertOptions,
-  assertRange,
 } from '../../core/validation/index.js';
+import type { ChordSegment } from '../../theory/chord/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { barGridStart, latestSoundingEnd } from '../grid.js';
+import { segmentStartingAt } from '../timeline/index.js';
 import type { BarSlice } from './internal.js';
-import { clamp01, firstSoundingBeat, floorMod, harmonicNovelty, sliceBars } from './internal.js';
+import {
+  clamp01,
+  firstSoundingBeat,
+  floorMod,
+  harmonicNovelty,
+  lastBarOf,
+  resolveSpanEnd,
+  sliceBars,
+} from './internal.js';
 
 /**
  * The bar groupings the search considers.
@@ -137,6 +146,57 @@ export type HypermeterOptions = {
   budget?: number;
 };
 
+/**
+ * A cadence as the form analyses read it: the span its arrival chord sounds
+ * through, and how strongly it marks the end of a group.
+ *
+ * Phrase boundaries and hyperbar ends are both read from this one record, so a
+ * held arrival chord is credited the same way by both.
+ */
+export type CadenceSpan = {
+  /** The beat the cadence arrives on. */
+  atBeat: number;
+  /** Where the arrival chord stops sounding; `atBeat` when only the arrival is known. */
+  endBeat: number;
+  /** How strongly the cadence marks a boundary, in [0, 1]. */
+  strength: number;
+};
+
+/**
+ * Each cadence as the span its arrival chord sounds through.
+ *
+ * @param arrivals The beat each cadence arrives on, with its strength.
+ * @param segments The chord timeline's segments; with none, each span is the
+ *   arrival beat alone.
+ * @returns One span per arrival, in the same order.
+ */
+export function cadenceSpans(
+  arrivals: readonly { atBeat: number; strength: number }[],
+  segments: readonly ChordSegment[],
+): CadenceSpan[] {
+  return arrivals.map(({ atBeat, strength }) => ({
+    atBeat,
+    endBeat: segmentStartingAt(segments, atBeat)?.endBeat ?? atBeat,
+    strength,
+  }));
+}
+
+/** A cadence read in bars: where it arrives, and the last bar its chord sounds in. */
+type CadenceBar = {
+  arrival: number;
+  last: number;
+  strength: number;
+};
+
+/** Read cadence spans as bars. */
+function cadenceBarsOf(spans: readonly CadenceSpan[], meter: MeterLike): CadenceBar[] {
+  return spans.map((span) => ({
+    arrival: barIndexAt(span.atBeat, meter),
+    last: lastBarOf(meter, span.atBeat, span.endBeat),
+    strength: span.strength,
+  }));
+}
+
 /** One grouping-and-phase reading, with the evidence behind it. */
 type Reading = {
   groupBars: number;
@@ -184,6 +244,14 @@ function accentContrast(
   return headSum / headCount - otherSum / otherCount;
 }
 
+/** How well a reading's group ends meet the cadences. */
+type CadenceFit = {
+  /** Share of the group ends a cadence closes, whatever its type. */
+  closed: number;
+  /** The same share with each end weighed by the strongest cadence closing it. */
+  weighted: number;
+};
+
 /**
  * Share of the hyperbar ends the reading predicts that a cadence closes.
  *
@@ -191,33 +259,59 @@ function accentContrast(
  * count different things: a cadence every four bars sits at a group end under a
  * two-bar reading as readily as under a four-bar one, so counting cadences
  * cannot tell the two apart. Counting group ends can — half the two-bar groups
- * end in nothing.
+ * end in nothing. The weighted share is what tells two phases apart: a passing
+ * plagal close in mid-phrase must not tie the half and authentic cadences that
+ * end a period's phrases.
  */
 function cadenceFitOf(
-  cadenceBars: ReadonlySet<number>,
+  cadences: readonly CadenceBar[],
   slices: readonly BarSlice[],
   groupBars: number,
   phase: number,
-): number {
+): CadenceFit {
   const lastBar = slices[slices.length - 1]?.index ?? -1;
+  // Each cadence counts once: it closes the first group end at or after its
+  // arrival while its chord still sounds there, and one held further closes no
+  // later group. Failing that, one arriving on a group head is elided into it.
+  const closing = new Map<number, number>();
+  const eliding = new Map<number, number>();
+  const credit = (bars: Map<number, number>, bar: number, strength: number): void => {
+    bars.set(bar, Math.max(bars.get(bar) ?? 0, strength));
+  };
+  for (const cadence of cadences) {
+    const end = cadence.arrival + floorMod(groupBars - 1 + phase - cadence.arrival, groupBars);
+    if (end <= cadence.last) {
+      credit(closing, end, cadence.strength);
+    } else if (
+      floorMod(cadence.arrival - phase, groupBars) === 0 &&
+      // Elision needs a next group to arrive into. Past the last bar the span
+      // holds there is none, so a cadence beat beyond the music is not evidence
+      // about how the music that was read is grouped.
+      cadence.arrival <= lastBar
+    ) {
+      credit(eliding, cadence.arrival - 1, cadence.strength);
+    }
+  }
   let ends = 0;
-  let fit = 0;
+  let closed = 0;
+  let weighted = 0;
   for (const slice of slices) {
     // A pickup heads no group, so it ends none either.
     if (slice.index < 0 || floorMod(slice.index - phase, groupBars) !== groupBars - 1) {
       continue;
     }
     ends += 1;
-    if (cadenceBars.has(slice.index)) {
-      fit += GROUP_FINAL_FIT;
-    } else if (slice.index < lastBar && cadenceBars.has(slice.index + 1)) {
-      // Elision needs a next group to arrive into. Past the last bar the span
-      // holds there is none, so a cadence beat beyond the music is not evidence
-      // about how the music that was read is grouped.
-      fit += ELIDED_FIT;
-    }
+    const final = closing.get(slice.index);
+    const elided = eliding.get(slice.index);
+    closed += Math.max(
+      final === undefined ? 0 : GROUP_FINAL_FIT,
+      elided === undefined ? 0 : ELIDED_FIT,
+    );
+    weighted += Math.max(GROUP_FINAL_FIT * (final ?? 0), ELIDED_FIT * (elided ?? 0));
   }
-  return ends === 0 ? 0 : clamp01(fit / ends);
+  return ends === 0
+    ? { closed: 0, weighted: 0 }
+    : { closed: clamp01(closed / ends), weighted: clamp01(weighted / ends) };
 }
 
 /**
@@ -281,6 +375,24 @@ export function hypermeter(
   meter?: MeterLike,
   opts: HypermeterOptions = {},
 ): Hypermeter {
+  return hypermeterOver(notes, meter, opts, (asked) =>
+    cadenceSpans(
+      (asked.cadenceBeats ?? []).map((atBeat) => ({ atBeat, strength: 1 })),
+      [],
+    ),
+  );
+}
+
+/**
+ * {@link hypermeter} with the cadences given as spans; `opts.cadenceBeats` is
+ * not read. `spansOf` is asked only once the span is long enough to group.
+ */
+export function hypermeterOver(
+  notes: readonly NoteEvent[],
+  meter: MeterLike | undefined,
+  opts: HypermeterOptions,
+  spansOf: (asked: HypermeterOptions) => readonly CadenceSpan[],
+): Hypermeter {
   const asked = assertOptions(opts, 'opts');
   // Read once, here: every bar question below is asked of the resolved map
   // rather than of whichever form the caller happened to hold. Absent is the
@@ -292,8 +404,12 @@ export function hypermeter(
   });
   const sounding = notes.filter((note) => note.durationBeat > 0);
   const firstOnset = firstSoundingBeat(sounding);
-  const spanEnd = asked.totalBeats ?? latestSoundingEnd(sounding);
-  assertRange(spanEnd, Math.min(0, firstOnset), Number.MAX_SAFE_INTEGER, 'hypermeter totalBeats');
+  const spanEnd = resolveSpanEnd(
+    asked.totalBeats,
+    firstOnset,
+    latestSoundingEnd(sounding),
+    'hypermeter totalBeats',
+  );
   // Whether the music starts before the downbeat is the analysis-wide pickup
   // question, and the slot grids of chord and key inference answer it here: a
   // note a millibeat early is playing beat 0, and only one a whole grid unit
@@ -301,6 +417,11 @@ export function hypermeter(
   // phase search a silent bar of its own to group against. An excerpt that
   // begins later keeps the beat it begins on.
   const spanStart = barGridStart(firstOnset, meters);
+  if (sounding.length === 0 || spanEnd <= spanStart + BEAT_EPS) {
+    // Nothing sounds, so there is no bar to group, as sections report no
+    // section for it.
+    return undecidedReading([]);
+  }
   const slices = sliceBars(sounding, meters, spanStart, spanEnd, asked.budget);
 
   // Counted over the bars a grouping can actually occupy, which is the set
@@ -319,25 +440,28 @@ export function hypermeter(
   );
 
   const novelty = slices.map((_, index) => harmonicNovelty(slices, index));
-  const cadenceBars = new Set((asked.cadenceBeats ?? []).map((beat) => barIndexAt(beat, meters)));
-  const hasCadences = cadenceBars.size > 0;
+  const cadenceBars = cadenceBarsOf(spansOf(asked), meters);
+  const hasCadences = cadenceBars.length > 0;
 
   const readings: Reading[] = [];
   for (const groupBars of candidates) {
     const phases = Array.from({ length: groupBars }, (_, phase) => ({
       phase,
       contrast: accentContrast(novelty, slices, groupBars, phase),
-      cadenceFit: cadenceFitOf(cadenceBars, slices, groupBars, phase),
+      fit: cadenceFitOf(cadenceBars, slices, groupBars, phase),
     }));
     // Where the cadences are known, they decide the phase: a cadence is what a
     // hyperbar ends with, so a reading that leaves them mid-group has misread
-    // the phase however the harmony moves. Harmonic contrast then chooses among
-    // the phases the cadences agree with, and across the groupings.
-    const bestFit = phases.reduce((best, reading) => Math.max(best, reading.cadenceFit), 0);
-    for (const { phase, contrast, cadenceFit } of phases) {
-      if (hasCadences && cadenceFit < bestFit - BEAT_EPS) {
+    // the phase however the harmony moves. The phase is chosen on the weighted
+    // fit; across the groupings it is the share of ends closed that counts.
+    // Harmonic contrast then chooses among the phases the cadences agree with,
+    // and across the groupings.
+    const bestFit = phases.reduce((best, reading) => Math.max(best, reading.fit.weighted), 0);
+    for (const { phase, contrast, fit } of phases) {
+      if (hasCadences && fit.weighted < bestFit - BEAT_EPS) {
         continue;
       }
+      const cadenceFit = fit.closed;
       const evidence = clamp01(
         hasCadences
           ? // Floored at zero rather than summed raw: group heads that restate

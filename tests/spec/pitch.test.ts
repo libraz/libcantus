@@ -608,3 +608,58 @@ describe('a spelling side the table does not carry', () => {
     );
   });
 });
+
+describe('octave-less notes keep their letter arithmetic', () => {
+  /** The same computation on the note placed in octave 4, with the octave dropped. */
+  const bare = (note: Note): Note => ({ letter: note.letter, alter: note.alter });
+
+  it('transposes an extreme alteration as the octave-bearing note does', () => {
+    expect(transposeNote({ letter: 0, alter: -6 }, 0)).toEqual({ letter: 0, alter: -6 });
+    expect(formatNote(transposeNote({ letter: 0, alter: -6 }, 0))).toBe('Cbbbbbb');
+    for (const alter of [-6, -4, -1, 0, 3, 6]) {
+      for (const semitones of [-13, -7, -1, 0, 1, 6, 12, 14]) {
+        const note: Note = { letter: 4, alter };
+        const name = `${alter} by ${semitones}`;
+        let octaved: Note | undefined;
+        try {
+          octaved = bare(transposeNote({ ...note, octave: 4 }, semitones));
+        } catch {
+          octaved = undefined;
+        }
+        if (octaved === undefined) {
+          expect(() => transposeNote(note, semitones), name).toThrow(RangeError);
+        } else {
+          expect(transposeNote(note, semitones), name).toEqual(octaved);
+        }
+      }
+    }
+  });
+
+  it('refuses an interval that leaves the alteration range, as with an octave', () => {
+    expect(() => transposeByInterval({ letter: 0, alter: 6 }, 'A1')).toThrow(RangeError);
+    expect(() => transposeByInterval({ letter: 0, alter: 6, octave: 4 }, 'A1')).toThrow(RangeError);
+    expect(transposeByInterval({ letter: 0, alter: -6 }, 'P5')).toEqual({ letter: 4, alter: -6 });
+  });
+
+  it('measures extreme alterations by letter and accidental, not modulo 12', () => {
+    expect(spelledInterval(parseNote('C'), parseNote('Ebbbbbb'))).toEqual(
+      spelledInterval(parseNote('C4'), parseNote('Ebbbbbb4')),
+    );
+    expect(spelledInterval(parseNote('C'), parseNote('Ebbbbbb')).quality).toBe('ddddd');
+    const unison = spelledInterval(parseNote('C###'), parseNote('Cbbb'));
+    expect(unison).toEqual({ number: 1, quality: 'AAAAAA', semitones: -6, descending: true });
+    expect(spelledInterval(parseNote('Ab'), parseNote('G#'))).toEqual(
+      spelledInterval(parseNote('Ab4'), parseNote('G#5')),
+    );
+    expect(spelledInterval(parseNote('C'), parseNote('Cb')).descending).toBe(true);
+  });
+});
+
+describe('a parsed octave of -0', () => {
+  it('reads as octave 0 in every system', () => {
+    expect(Object.is(parseNote('C-0').octave, 0)).toBe(true);
+    expect(parseNote('C-0')).toEqual(parseNote('C0'));
+    expect(Object.is(parseNote('gis-0').octave, 0)).toBe(true);
+    expect(parseNote('gis-0')).toEqual(parseNote('gis0'));
+  });
+});

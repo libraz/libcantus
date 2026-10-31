@@ -59,9 +59,7 @@ struct SourcedGridModel {
 struct PartSampler {
   const Draw& draw;
 
-  bool prob(double p, std::string_view tag, double step) const {
-    return draw.prob(p, SeedPath{std::string(tag), step});
-  }
+  bool prob(double p, const SeedPath& key) const { return draw.prob(p, key); }
 };
 
 /** Defensive copy of one onset, checked as it is copied (`copyEvent`). */
@@ -127,7 +125,7 @@ std::vector<RhythmEvent> from_grid(const std::vector<SourcedGridEvent>& events, 
   return out;
 }
 
-/** deform()'s options, read in the order TS reads them. */
+/** deform()'s options, read in the order `resolveDials` reads them. */
 struct RhythmDeformPlan {
   const RhythmDeformOptions& opts;
   const ResolvedContext& resolved;
@@ -142,15 +140,18 @@ struct RhythmDeformPlan {
   }
   TimeSignature signature() const { return figure_signature(MeterArg(ts)); }
   std::optional<OrnamentRequest<SourcedGridModel>> ornament() const {
-    if (!resolved.ornament || !opts.isOrnament) {
+    if (!resolved.ornament) {
+      return std::nullopt;
+    }
+    double amount = assert_range(*resolved.ornament, 0, 1, "ornament amount");
+    if (!opts.isOrnament) {
       return std::nullopt;
     }
     const RhythmOrnamentTest& test = opts.isOrnament;
     std::function<bool(const SourcedGridEvent&)> marks = [&test](const SourcedGridEvent& e) {
       return test(e.source);
     };
-    return OrnamentRequest<SourcedGridModel>{
-        marks, assert_range(*resolved.ornament, 0, 1, "ornament amount")};
+    return OrnamentRequest<SourcedGridModel>{marks, amount};
   }
 };
 
@@ -183,7 +184,7 @@ Rhythm with_grid(const RhythmData& data, const std::vector<SourcedGridEvent>& ev
   return Rhythm(RhythmData{from_grid(events, span_of(data.events)), data.ts});
 }
 
-/** The pattern's span as a count of sixteenths, for the transforms (`#spanSteps`). */
+/** The pattern's span as a count of sixteenths, whatever span it covers (`#spanSteps`). */
 double span_steps(const RhythmData& data) { return span_of(data.events) / STEP_BEATS; }
 
 }  // namespace
@@ -204,12 +205,12 @@ Rhythm Rhythm::syncopate(double amount, const std::optional<GenerationContextInp
 }
 
 Rhythm Rhythm::double_time() const {
-  double span = assert_span_steps(span_steps(data_));
+  double span = span_steps(data_);
   return with_grid(data_, double_time_figure<SourcedGridModel>(to_grid(data_.events), span));
 }
 
 Rhythm Rhythm::half_time() const {
-  double span = assert_span_steps(span_steps(data_));
+  double span = span_steps(data_);
   return with_grid(data_, half_time_figure<SourcedGridModel>(to_grid(data_.events), span));
 }
 
@@ -229,7 +230,7 @@ Rhythm Rhythm::deform(const RhythmDeformOptions& opts,
                       const std::optional<GenerationContextInput>& ctx) const {
   ResolvedContext resolved = resolve_context(ctx);
   Draw draw = resolved.part(kPart);
-  double span = assert_span_steps(span_steps(data_));
+  double span = span_steps(data_);
   RhythmDeformPlan plan{opts, resolved, data_.ts};
   return with_grid(
       data_, deform_figure<SourcedGridModel>(to_grid(data_.events), span, plan, PartSampler{draw}));

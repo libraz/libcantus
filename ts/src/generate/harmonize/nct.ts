@@ -1,4 +1,5 @@
 import { HUMANIZE_ADJACENCY } from '../../analyze/adjacency.js';
+import { canonicalNoteOrder, soundingIndices } from '../../core/event-index/order.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import { meterAt, metricWeight, pulseBeats, toMeterData } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
@@ -87,7 +88,11 @@ function sameDirection(prev: number, note: number, next: number): boolean {
  * predecessor and successor has no figure to belong to and stays structural, so
  * the first and last notes of a phrase are always structural.
  *
- * @param melody The melody, in ascending onset order.
+ * The notes are read in onset order, ties by pitch, whatever order they are
+ * listed in. A note of zero length sounds nothing: it is structural and is no
+ * other note's neighbour.
+ *
+ * @param melody The melody, in any order.
  * @param ts Time signature used to weight metric accents.
  * @returns One classification per input note, in input order.
  * @example
@@ -110,22 +115,35 @@ export function classifyMelodyTones(
   const meter = meterAt(0, toMeterData(ts, 'ts'));
   assertNoteEvents(melody, 'melody notes', { allowNonPositiveDuration: true });
   const pulse = pulseBeats(meter);
-  return melody.map((_, index) => {
-    const role = roleOfNote(melody, index, meter, pulse);
-    return { noteIndex: index, role, ornamental: role !== 'structural' };
+  const sounding = new Set(soundingIndices(melody));
+  const line = canonicalNoteOrder(melody).filter((index) => sounding.has(index));
+  const roles = melody.map((): MelodyToneRole => 'structural');
+  line.forEach((index, position) => {
+    const before = line[position - 1];
+    const after = line[position + 1];
+    roles[index] = roleOfNote(
+      before === undefined ? undefined : melody[before],
+      melody[index],
+      after === undefined ? undefined : melody[after],
+      meter,
+      pulse,
+    );
   });
+  return roles.map((role, index) => ({
+    noteIndex: index,
+    role,
+    ornamental: role !== 'structural',
+  }));
 }
 
 /** Classify one note against the neighbours that immediately frame it. */
 function roleOfNote(
-  melody: readonly NoteEvent[],
-  index: number,
+  prev: NoteEvent | undefined,
+  note: NoteEvent | undefined,
+  next: NoteEvent | undefined,
   ts: TimeSignature,
   pulse: number,
 ): MelodyToneRole {
-  const note = melody[index];
-  const prev = melody[index - 1];
-  const next = melody[index + 1];
   if (!note || !prev || !next) {
     return 'structural';
   }

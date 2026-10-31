@@ -158,7 +158,8 @@ KeyScale read_key_like(const json::Value& value) {
       return normalized_key_scale(*data);
     }
   }
-  throw InvalidInputError("key must be a key name or a key/scale; received " + js::type_of(value));
+  throw InvalidInputError("key must be a key name or a key/scale; received " +
+                          describe_rejected(value));
 }
 
 KeyArg read_key_arg(const json::Value& value) {
@@ -428,7 +429,7 @@ bool reads_interval(const json::Value& chord, int semitones) {
 
 ChordSpec read_chord_spec(const json::Value& value) {
   if (value.is_null() || js::type_of(value) != "object") {
-    throw InvalidInputError("chord spec must be an object; received " + js::type_of(value));
+    throw InvalidInputError("chord spec must be an object; received " + describe_rejected(value));
   }
   ChordSpec spec;
   spec.rootPc = assert_finite_number(get(value, "rootPc"), "chord spec rootPc");

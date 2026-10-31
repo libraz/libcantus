@@ -75,14 +75,15 @@ std::vector<FormSection> sections_from_notes(const std::vector<NoteEvent>& notes
       sounding.push_back(note);
     }
   }
+  // The pickup rule the whole analysis shares.
+  double first_sounding = first_sounding_beat(sounding);
+  double first_onset = bar_grid_start(first_sounding, meters);
+  double span_end = resolve_span_end(opts.totalBeats, first_onset, latest_sounding_end(sounding),
+                                     "section totalBeats");
   if (sounding.empty()) {
     // Nothing sounds, so there is no material to hear a form in.
     return {};
   }
-  // The pickup rule the whole analysis shares.
-  double first_onset = bar_grid_start(first_sounding_beat(sounding), meters);
-  double span_end = js::max(first_onset, opts.totalBeats.value_or(latest_sounding_end(sounding)));
-  assert_range(span_end, js::min(0, first_onset), kMaxSafeInteger, "section totalBeats");
   double threshold = opts.threshold.value_or(SECTION_DEFAULT_THRESHOLD);
   assert_range(threshold, 0, 1, "section threshold");
   HypermeterOptions grouping_options;
@@ -113,8 +114,10 @@ std::vector<FormSection> sections_from_notes(const std::vector<NoteEvent>& notes
     Unit unit;
     unit.startBeat = start_beat;
     unit.endBeat = end_beat;
+    // The opening unit holds everything before its end: a note a millibeat early sounds in it.
+    double from_beat = index == 0 ? js::min(first_sounding, start_beat) : start_beat;
     for (const NoteEvent& note : sounding) {
-      if (note.startBeat >= start_beat - BEAT_EPS && note.startBeat < end_beat - BEAT_EPS) {
+      if (note.startBeat >= from_beat - BEAT_EPS && note.startBeat < end_beat - BEAT_EPS) {
         unit.notes.push_back(note);
       }
     }

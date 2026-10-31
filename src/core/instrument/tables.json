@@ -97,6 +97,11 @@
       "module": "core/instrument/playability.ts",
       "export": "SIMULTANEITY_BEATS",
       "cxx_type": "double"
+    },
+    {
+      "module": "core/instrument/playability.ts",
+      "export": "LEGATO_OVERLAP_BEATS",
+      "cxx_type": "double"
     }
   ]
 }

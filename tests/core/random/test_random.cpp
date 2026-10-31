@@ -26,6 +26,24 @@ TEST_CASE("Rng rejects bad arguments without consuming a draw", "[random]") {
   CHECK(rng.next() == 0.6011037519201636);
 }
 
+TEST_CASE("Rng float stays below its upper bound", "[random]") {
+  Rng narrow = create_rng(1);
+  Rng wide = create_rng(1);
+  Rng at_zero = create_rng(1);
+  for (int i = 0; i < 2000; ++i) {
+    CHECK(narrow.float_(0.7, 0.7000000000000001) < 0.7000000000000001);
+    CHECK(wide.float_(1e16, 1e16 + 2) < 1e16 + 2);
+    CHECK(at_zero.float_(-5e-324, 0) < 0);
+  }
+  Rng floats = create_rng(7);
+  Rng units = create_rng(7);
+  for (int i = 0; i < 50; ++i) {
+    double unit = units.next();
+    CHECK(floats.float_(2, 6) == 2 + unit * 4);
+  }
+  CHECK(create_rng(3).float_(5, 5) == 5);
+}
+
 TEST_CASE("derive_seed and PositionalRng hash UTF-16 code units", "[random]") {
   CHECK(derive_seed(42, {"drums", "chorus", 3.0}) == 1211545333U);
   CHECK(derive_seed(7) == 352299484U);

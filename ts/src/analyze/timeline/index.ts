@@ -734,7 +734,10 @@ function chordConfidence(
  * metric-accent bonus for onsets inside the window), keeps the significantly
  * weighted pitch classes, and picks the best {@link detectChord} match by the
  * standing of its root — the weight it carries, or the bass it stands in — plus
- * key membership, exactness, and how much of the window it accounts for.
+ * key membership, exactness, and how much of the window it accounts for. Noise
+ * is set aside only while the rest still names a chord: a held bass outweighs
+ * the short chord struck above it, and the window is then read from every
+ * pitch class it sounds.
  */
 function analyzeWindow(
   notes: readonly NoteEvent[],
@@ -754,28 +757,17 @@ function analyzeWindow(
     .map((weight, pc) => ({ pc, weight }))
     .filter(({ weight }) => weight > 0)
     .sort((a, b) => b.weight - a.weight || a.pc - b.pc);
-  const selected = ranked
+  const bassPc = pitchClass(windowBass(notes, windowStart, windowEnd, meters, harmonicRhythm));
+  const sounding = ranked.slice(0, MAX_DETECTION_PCS).map(({ pc }) => pc);
+  const significant = ranked
     .filter(({ weight }) => weight >= maxWeight * NOISE_THRESHOLD_RATIO)
     .slice(0, MAX_DETECTION_PCS)
     .map(({ pc }) => pc);
-
-  // Feed detection with the window's true bass as the lowest pitch so inversion
-  // detection works. If that pitch class was removed as noise, detection must
-  // become unordered instead: promoting the strongest remaining tone to bass
-  // manufactures a slash chord that the input never established.
-  const bassPc = pitchClass(windowBass(notes, windowStart, windowEnd, meters, harmonicRhythm));
-  const hasBass = selected.includes(bassPc);
-  const detectionPitches = hasBass
-    ? selected.map((pc) => (pc === bassPc ? pc : pc + 12))
-    : selected;
-
-  // A bass heard nowhere above the harmony is a bass, whatever pitch class it
-  // carries, so no reading may spend it twice — once as the slash the input
-  // played and once as an extension it did not.
-  const pedalPc =
-    hasBass && bassSoundsOnlyBelow(notes, windowStart, windowEnd, bassPc) ? bassPc : null;
-
-  const matches = detectChord(detectionPitches, { input: hasBass ? 'midi' : 'pitchClass' });
+  let detection = detectWindow(significant, bassPc, notes, windowStart, windowEnd);
+  if (detection.matches.length === 0 && significant.length < sounding.length) {
+    detection = detectWindow(sounding, bassPc, notes, windowStart, windowEnd);
+  }
+  const { selected, hasBass, pedalPc, matches } = detection;
   let bestMatch: ChordMatch | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const match of matches) {
@@ -835,6 +827,39 @@ function analyzeWindow(
   }
 
   return null;
+}
+
+/** What chord detection makes of one choice of a window's pitch classes. */
+type WindowDetection = {
+  selected: number[];
+  hasBass: boolean;
+  pedalPc: number | null;
+  matches: ChordMatch[];
+};
+
+/** Detect the chords a window's selected pitch classes name over its bass. */
+function detectWindow(
+  selected: number[],
+  bassPc: number,
+  notes: readonly NoteEvent[],
+  windowStart: number,
+  windowEnd: number,
+): WindowDetection {
+  // Feed detection with the window's true bass as the lowest pitch so inversion
+  // detection works. If that pitch class was removed as noise, detection must
+  // become unordered instead: promoting the strongest remaining tone to bass
+  // manufactures a slash chord that the input never established.
+  const hasBass = selected.includes(bassPc);
+  const detectionPitches = hasBass
+    ? selected.map((pc) => (pc === bassPc ? pc : pc + 12))
+    : selected;
+  // A bass heard nowhere above the harmony is a bass, whatever pitch class it
+  // carries, so no reading may spend it twice — once as the slash the input
+  // played and once as an extension it did not.
+  const pedalPc =
+    hasBass && bassSoundsOnlyBelow(notes, windowStart, windowEnd, bassPc) ? bassPc : null;
+  const matches = detectChord(detectionPitches, { input: hasBass ? 'midi' : 'pitchClass' });
+  return { selected, hasBass, pedalPc, matches };
 }
 
 /**

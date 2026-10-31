@@ -277,40 +277,83 @@ function describesMap(index: MeterIndex, map: MeterMap): boolean {
 }
 
 /**
- * Build and cache the index of a map.
- *
- * A meter change starts a new bar, so a span that does not divide evenly into
- * its own bars still contributes a whole final bar — an incomplete bar before a
- * change is a bar all the same.
+ * One entry of a meter map as the bar arithmetic reads it.
  */
-function buildMeterIndex(map: MeterMap, validated: boolean): MeterIndex {
-  const startBeats = new Array<number>(map.length);
-  const signatures = new Array<TimeSignature>(map.length);
-  const barAnchors = new Array<number>(map.length);
-  const barBeats = new Array<number>(map.length);
-  const barsBefore = new Array<number>(map.length);
+export type MeterSegment = {
+  /** Beat the entry takes effect at, as written. */
+  startBeat: number;
+  /** The signature in force from that beat until the next entry. */
+  ts: TimeSignature;
+  /** Beat the entry's bar lines are counted from. */
+  barAnchor: number;
+  /** Bar length in quarter-note beats; 0 for a hole in an unvalidated map. */
+  barBeats: number;
+  /** Index of the entry's bar at its anchor, so that beat 0 lies in bar 0. */
+  barsBefore: number;
+};
+
+/**
+ * Walk a meter map entry by entry: the one reading of where each entry's bars
+ * lie and how they are numbered, for every consumer of a map.
+ *
+ * The opening signature counts its bars from beat 0 rather than from the onset
+ * it is written at, so a map whose first entry sits at the pickup it covers lays
+ * its bar lines where the bare signature does. Every later entry starts a bar at
+ * its own onset, and a span ending in a partial bar still counts that bar whole.
+ * The numbering is then shifted so that the bar containing beat 0 is bar 0
+ * however many entries the pickup is written as; a pickup entry ending at beat 0
+ * holds bars -1 and below.
+ */
+export function meterSegments(map: MeterMap): MeterSegment[] {
+  const segments = new Array<MeterSegment>(map.length);
   let bars = 0;
+  let atZero = 0;
   for (let i = 0; i < map.length; i += 1) {
     const entry = map[i];
     const startBeat = entry?.startBeat ?? 0;
     const barLen = entry === undefined ? 0 : barBeatsOf(entry.ts);
-    // The opening signature counts its bars from beat 0 rather than from the
-    // onset the map is written at: beat 0 is the downbeat, so a map whose first
-    // entry sits at the pickup it covers lays its bar lines exactly where the
-    // bare signature lays them. Every later entry starts a bar of its own.
-    const anchor = i === 0 ? 0 : startBeat;
-    startBeats[i] = startBeat;
-    signatures[i] =
-      entry === undefined ? { numerator: 4, denominator: 4 } : copyTimeSignature(entry.ts);
-    barAnchors[i] = anchor;
-    barBeats[i] = barLen;
-    barsBefore[i] = bars;
+    const barAnchor = i === 0 ? 0 : startBeat;
+    segments[i] = {
+      startBeat,
+      ts: entry === undefined ? { numerator: 4, denominator: 4 } : copyTimeSignature(entry.ts),
+      barAnchor,
+      barBeats: barLen,
+      barsBefore: bars,
+    };
+    if (i > 0 && startBeat <= BEAT_EPS) {
+      atZero = i;
+    }
     const next = map[i + 1];
     if (next !== undefined && barLen > 0) {
-      bars += Math.max(1, Math.ceil((next.startBeat - anchor) / barLen - BEAT_EPS));
+      // The opening span may end at or before beat 0 and so hold no bar from its
+      // anchor on; every later span holds at least the bar it starts.
+      const span = Math.ceil((next.startBeat - barAnchor) / barLen - BEAT_EPS);
+      bars += i === 0 ? span : Math.max(1, span);
     }
   }
-  const index: MeterIndex = { startBeats, signatures, barAnchors, barBeats, barsBefore, validated };
+  const zero = segments[atZero];
+  if (atZero > 0 && zero !== undefined && zero.barBeats > 0) {
+    const shift = zero.barsBefore + Math.floor(-zero.barAnchor / zero.barBeats + BEAT_EPS);
+    if (shift !== 0) {
+      for (const segment of segments) {
+        segment.barsBefore -= shift;
+      }
+    }
+  }
+  return segments;
+}
+
+/** Build and cache the index of a map. */
+function buildMeterIndex(map: MeterMap, validated: boolean): MeterIndex {
+  const segments = meterSegments(map);
+  const index: MeterIndex = {
+    startBeats: segments.map((segment) => segment.startBeat),
+    signatures: segments.map((segment) => segment.ts),
+    barAnchors: segments.map((segment) => segment.barAnchor),
+    barBeats: segments.map((segment) => segment.barBeats),
+    barsBefore: segments.map((segment) => segment.barsBefore),
+    validated,
+  };
   INDEX_CACHE.set(map, index);
   return rememberRead(map, index);
 }

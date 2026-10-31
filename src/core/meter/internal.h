@@ -41,6 +41,26 @@ std::optional<std::vector<double>> pulse_grouping_of(const TimeSignature& ts);
 /** Length of a bar in quarter-note beats. */
 double bar_beats_of(const TimeSignature& ts);
 
+/** One entry of a meter map as the bar arithmetic reads it (`MeterSegment`). */
+struct MeterSegment {
+  /** Beat the entry takes effect at, as written. */
+  double startBeat;
+  /** The signature in force from that beat until the next entry. */
+  TimeSignature ts;
+  /** Beat the entry's bar lines are counted from. */
+  double barAnchor;
+  /** Bar length in quarter-note beats. */
+  double barBeats;
+  /** Index of the entry's bar at its anchor, so that beat 0 lies in bar 0. */
+  double barsBefore;
+};
+
+/**
+ * Walk a meter map entry by entry (`meterSegments`): the opening entry is anchored at beat 0,
+ * every later one at its onset, and bars are numbered so the bar containing beat 0 is bar 0.
+ */
+std::vector<MeterSegment> meter_segments(const MeterMap& map);
+
 /** Index of the map entry in force at a beat. */
 std::size_t entry_index_of(const MeterMap& map, double beat);
 

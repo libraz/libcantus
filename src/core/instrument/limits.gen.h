@@ -34,6 +34,9 @@ inline constexpr double STRING_CROSSING_COST = 2;
 /** SIMULTANEITY_BEATS of ts/src/core/instrument/playability.ts. */
 inline constexpr double SIMULTANEITY_BEATS = 0.0078125;
 
+/** LEGATO_OVERLAP_BEATS of ts/src/core/instrument/playability.ts. */
+inline constexpr double LEGATO_OVERLAP_BEATS = 0.0625;
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_CORE_INSTRUMENT_LIMITS_GEN_H_

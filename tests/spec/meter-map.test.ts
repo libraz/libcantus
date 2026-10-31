@@ -18,6 +18,8 @@ import {
   pulseBeats,
   resolveMeters,
 } from '@libraz/libcantus/core';
+import { humanize, ornament } from '@libraz/libcantus/generate';
+import { Score } from '@libraz/libcantus/model';
 import { describe, expect, it } from 'vitest';
 
 const COMMON = parseTimeSignature('4/4');
@@ -136,6 +138,58 @@ describe('a map whose first entry is not written at beat 0', () => {
     expect(barPositionToBeat({ bar: 2, beat: 0 }, map)).toBe(6);
     expect(metricWeight(6, map)).toBe(3);
     expect(metricWeight(4, map)).toBe(3);
+  });
+});
+
+describe('a pickup written as an entry of its own', () => {
+  it('numbers the bar at beat 0 as bar 0 after a one-beat pickup entry', () => {
+    const map: MeterMap = [
+      { startBeat: -1, ts: parseTimeSignature('1/4') },
+      { startBeat: 0, ts: COMMON },
+    ];
+    expect(barIndexAt(0, map)).toBe(0);
+    expect(barStartBeat(0, map)).toBe(0);
+    expect(formatBarPosition(0, map)).toBe('1.1');
+    expect(barPositionToBeat({ bar: 0, beat: 0 }, map)).toBe(0);
+    expect(barPositionToBeat({ bar: 1, beat: 0 }, map)).toBe(4);
+    expect(barIndexAt(-0.5, map)).toBe(-1);
+    expect(barPositionToBeat({ bar: -1, beat: 0 }, map)).toBe(-1);
+    expect(barIndexAt(4, map)).toBe(1);
+  });
+
+  it('numbers the bar at beat 0 as bar 0 when the pickup entry has a bar of its own', () => {
+    const map: MeterMap = [
+      { startBeat: -1, ts: COMMON },
+      { startBeat: 0, ts: WALTZ },
+    ];
+    expect(barIndexAt(0, map)).toBe(0);
+    expect(formatBarPosition(0, map)).toBe('1.1');
+    expect(barIndexAt(-1, map)).toBe(-1);
+    expect(barPositionToBeat({ bar: 1, beat: 0 }, map)).toBe(3);
+  });
+
+  it('keeps bars contiguous across several pickup entries', () => {
+    const map: MeterMap = [
+      { startBeat: -3, ts: parseTimeSignature('2/4') },
+      { startBeat: -1, ts: parseTimeSignature('1/4') },
+      { startBeat: 0, ts: COMMON },
+    ];
+    expect([-2, -1, 0, 4].map((beat) => barIndexAt(beat, map))).toEqual([-2, -1, 0, 1]);
+    expect([-2, -1, 0, 1].map((bar) => barPositionToBeat({ bar, beat: 0 }, map))).toEqual([
+      -2, -1, 0, 4,
+    ]);
+  });
+
+  it('lays the default chord grid out the same wherever the opening entry is written', () => {
+    const notes = [...triad(60, 0, 1.5), ...triad(67, 1.5, 2.5)];
+    const segmentsUnder = (startBeat: number) =>
+      chordTimelineFromNotes(notes, {
+        meters: [
+          { startBeat, ts: COMMON },
+          { startBeat: 8, ts: WALTZ },
+        ],
+      }).timeline.segments.map((segment) => [segment.startBeat, segment.endBeat]);
+    expect(segmentsUnder(-0.5)).toEqual(segmentsUnder(0));
   });
 });
 
@@ -417,5 +471,20 @@ describe('the bar a beat is in is the bar it is in', () => {
         beatsPerBarAt(beat, { numerator: 7, denominator: 8 }),
       );
     }
+  });
+});
+
+describe('a score reads its own meter map', () => {
+  it('humanizes and ornaments exactly as the bare calls given that map do', () => {
+    const notes: NoteEvent[] = Array.from({ length: 14 }, (_, beat) => ({
+      pitch: 60 + (beat % 5),
+      startBeat: beat,
+      durationBeat: 1,
+    }));
+    const score = Score.of(notes, { meters: CHANGING });
+    expect(score.humanize({ timing: 0, velocity: 0, accent: 12 }).notes).toEqual(
+      humanize(notes, { ts: CHANGING, timing: 0, velocity: 0, accent: 12 }),
+    );
+    expect(score.ornament().notes).toEqual(ornament(notes, { ts: CHANGING }));
   });
 });

@@ -4,7 +4,8 @@
  */
 
 import type { MeterMap } from '../../core/meter/index.js';
-import { metricWeight } from '../../core/meter/index.js';
+import { BEAT_EPS, barStartBeat, beatsPerBarAt, metricWeight } from '../../core/meter/index.js';
+import type { PlannedPhrase } from './types.js';
 
 /** How a position stands in the bar: a strong pulse, a weak pulse, or off the pulses. */
 export type PositionClass = 'strong' | 'weak' | 'off';
@@ -22,4 +23,21 @@ export const STRONG_WEIGHT = 2;
 export function positionClass(beat: number, meters: MeterMap): PositionClass {
   const weight = metricWeight(beat, meters);
   return weight >= STRONG_WEIGHT ? 'strong' : weight > 0 ? 'weak' : 'off';
+}
+
+/**
+ * The downbeat of a phrase's final bar, or the phrase start when that comes
+ * later: where the generator's closing hold begins, dropping every onset after
+ * the note it holds.
+ *
+ * @param phrase The phrase.
+ * @param meters The meter map.
+ * @returns The beat.
+ */
+export function finalDownbeat(phrase: PlannedPhrase, meters: MeterMap): number {
+  let downbeat = barStartBeat(phrase.startBeat, meters);
+  while (downbeat + beatsPerBarAt(downbeat, meters) < phrase.endBeat - BEAT_EPS) {
+    downbeat += beatsPerBarAt(downbeat, meters);
+  }
+  return Math.max(downbeat, phrase.startBeat);
 }

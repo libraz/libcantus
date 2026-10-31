@@ -409,3 +409,41 @@ describe('a groove template written by hand', () => {
     }
   });
 });
+
+describe('a meter that changes', () => {
+  const waltzAfterFour = [
+    { startBeat: 0, ts: { numerator: 4, denominator: 4 } },
+    { startBeat: 4, ts: { numerator: 3, denominator: 4 } },
+  ];
+
+  it('accents each note in the signature in force where it sounds', () => {
+    // Beat 7 is the downbeat of the second 3/4 bar, and a weak beat in 4/4.
+    const [late] = humanize(makeEvents([7], 60), {
+      ts: waltzAfterFour,
+      timing: 0,
+      velocity: 0,
+      accent: 24,
+    });
+    expect(late?.velocity).toBe(84);
+  });
+
+  it('refuses to lay one groove grid over two signatures', () => {
+    const events = makeEvents([0, 1, 4.5]);
+    expect(() => extractGrooveTemplate(events, waltzAfterFour)).toThrow(
+      /one signature throughout; received 3\/4 at beat 4/,
+    );
+    const template = extractGrooveTemplate(events, FOUR_FOUR);
+    expect(() => applyGrooveTemplate(events, template, waltzAfterFour)).toThrow(
+      /one signature throughout/,
+    );
+  });
+
+  it('takes a map that keeps one signature', () => {
+    const steady = [
+      { startBeat: 0, ts: FOUR_FOUR },
+      { startBeat: 8, ts: FOUR_FOUR },
+    ];
+    const events = makeEvents([0, 1.05, 2]);
+    expect(extractGrooveTemplate(events, steady)).toEqual(extractGrooveTemplate(events, FOUR_FOUR));
+  });
+});

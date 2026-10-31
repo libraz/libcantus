@@ -138,10 +138,10 @@ class Score {
    */
   Score quantize(double grid) const;
 
-  /** The notes humanized against the opening signature (`humanize`). */
+  /** The notes humanized against the score's meter map (`humanize`). */
   Score humanize(const HumanizeOptions& opts = {}) const;
 
-  /** The notes ornamented against the opening signature (`ornament`). */
+  /** The notes ornamented against the score's meter map (`ornament`). */
   Score ornament(const OrnamentOptions& opts = {}) const;
 
   /** The notes placed on a groove template's slots (`groove`). */
@@ -239,8 +239,6 @@ class Score {
   ChordTimelineOptions analysis_options(const ChordTimelineOptions& opts = {}) const;
   /** The key regions: the stated key across the score, or those read from the notes. */
   std::vector<KeyRegion> key_regions() const;
-  /** Where the score's own harmony closes, as beats. */
-  std::vector<double> cadence_beats() const;
   /** The key each note is read against. */
   KeyContext key_context(const std::optional<KeyArg>& key) const;
 

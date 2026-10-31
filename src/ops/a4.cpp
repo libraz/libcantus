@@ -812,7 +812,7 @@ void register_arrange() {
     grid.music_start = placed.startBeat;
     grid.total_beats = total_beats;
     grid.step = step;
-    return to_json(sample_tension(prepared, h.harmony, profile, meters, grid, budget));
+    return to_json(sample_tension(prepared, h.harmony, *h.lookup, profile, meters, grid, budget));
   });
 
   def("tensionCurveFrom", [](Args& a) -> json::Value {

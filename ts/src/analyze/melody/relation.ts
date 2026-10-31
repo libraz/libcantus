@@ -239,7 +239,9 @@ function stretchPhrase(ratio: number): string {
  * them does, so a statement a fourth higher in doubled note values is
  * recognised for what it is, and a cell that reads as both an inversion and a
  * retrograde is named by the way its rhythm runs rather than by which name came
- * to hand first. A pair whose rhythms correspond in neither direction — the same
+ * to hand first. An evenly timed cell runs the same both ways, so there the
+ * reading that needs no transposition wins: a cell played backwards on its own
+ * pitches is a retrograde. A pair whose rhythms correspond in neither direction — the same
  * way round for a repetition or a transposition, the model played backwards for
  * a retrograde, note values and all — is not a transformation of the motif but a
  * different figure, and answers null; {@link melodicSimilarity} is what scores
@@ -372,12 +374,17 @@ export function relateMotifs(
     }
   }
 
-  if (forward && shapes.includes('inversion')) {
+  // Even rhythm runs both ways, so the shape that needs no transposition names the pair.
+  const literalRetrograde =
+    backward &&
+    shapes.includes('retrograde') &&
+    answer[0]?.pitch === model[model.length - 1]?.pitch;
+  if (forward && shapes.includes('inversion') && !(literalRetrograde && semitones !== 0)) {
     return {
       ...base,
       kind: 'inversion',
       rationale:
-        'Inversion: every interval turned upside down about the first note' +
+        `Inversion: every interval turned upside down${semitones === 0 ? ' about the first note' : ''}` +
         (stretched ? `, in ${stretchPhrase(timeRatio)}` : ''),
     };
   }

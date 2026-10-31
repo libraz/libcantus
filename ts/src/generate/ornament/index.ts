@@ -15,8 +15,8 @@
 import type { Articulation } from '../../core/instrument/index.js';
 import {
   isStrongBeat,
+  type MeterData,
   type MeterLike,
-  meterAt,
   type TimeSignature,
   toMeterData,
 } from '../../core/meter/index.js';
@@ -26,7 +26,6 @@ import {
   assertOneOf,
   assertOptions,
   assertRange,
-  assertTimeSignature,
   dropSilentNotes,
 } from '../../core/validation/index.js';
 import {
@@ -78,7 +77,8 @@ export type OrnamentOptions = {
   amount?: number;
   /**
    * Time signature, in any form that names one, used to tell strong positions
-   * from weak ones.
+   * from weak ones. A meter map is read bar by bar, so a note after a change
+   * is weighed in the signature in force where it sounds.
    *
    * @defaultValue 4/4
    */
@@ -118,9 +118,9 @@ function eligible(
   note: NoteEvent,
   previous: NoteEvent | undefined,
   next: NoteEvent | undefined,
-  ts: TimeSignature,
+  meter: MeterData,
 ): boolean {
-  const strong = isStrongBeat(note.startBeat, ts);
+  const strong = isStrongBeat(note.startBeat, meter);
   switch (style) {
     case 'ghost':
       return !strong;
@@ -130,7 +130,7 @@ function eligible(
     case 'drag':
       // A drag leads somewhere: it is the weak note before a strong one, so the
       // next onset in the material has to be the strong position it runs into.
-      return !strong && next !== undefined && isStrongBeat(next.startBeat, ts);
+      return !strong && next !== undefined && isStrongBeat(next.startBeat, meter);
     case 'slide':
       return previous !== undefined && Math.abs(note.pitch - previous.pitch) >= SLIDE_MIN_SEMITONES;
   }
@@ -199,8 +199,7 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
   const asked = assertOptions(opts, 'opts');
   assertNoteEvents(notes, 'ornament notes', { allowNonPositiveDuration: true });
   const style = assertOneOf(asked.style ?? DEFAULT_STYLE, ORNAMENT_STYLES, 'ornament style');
-  const ts = meterAt(0, toMeterData(asked.ts ?? DEFAULT_TS, 'ts'));
-  assertTimeSignature(ts);
+  const meter = toMeterData(asked.ts ?? DEFAULT_TS, 'ts');
   if (asked.amount !== undefined) {
     assertRange(asked.amount, 0, 1, 'ornament amount');
   }
@@ -220,7 +219,7 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
     const decorated: NoteEvent = { ...note };
     if (
       note.articulation !== undefined ||
-      !eligible(style, note, previousOf.get(note), nextOf.get(note), ts)
+      !eligible(style, note, previousOf.get(note), nextOf.get(note), meter)
     ) {
       return decorated;
     }

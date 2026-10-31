@@ -1,6 +1,6 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
-import { assertFiniteNumber } from '../../core/validation/index.js';
+import { assertFiniteNumber, describeRejected } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
 import { parseChordSymbol } from './index.js';
 
@@ -101,6 +101,6 @@ export function toChordData(value: ChordLike): Chord {
     return normalizedChord(data as Chord);
   }
   throw new InvalidInputError(
-    `chord must be a chord symbol or chord data; received ${typeof value}`,
+    `chord must be a chord symbol or chord data; received ${describeRejected(value)}`,
   );
 }

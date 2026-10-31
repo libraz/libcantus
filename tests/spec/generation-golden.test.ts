@@ -434,13 +434,6 @@ const GOLDEN: Record<number, Record<string, unknown>> = {
         velocity: 55,
       },
       {
-        pitch: 38,
-        startBeat: 0.5,
-        durationBeat: 0.25,
-        velocity: 32,
-        articulation: 'ghost',
-      },
-      {
         pitch: 42,
         startBeat: 0.5,
         durationBeat: 0.25,
@@ -451,12 +444,6 @@ const GOLDEN: Record<number, Record<string, unknown>> = {
         startBeat: 0.75,
         durationBeat: 0.25,
         velocity: 80,
-      },
-      {
-        pitch: 38,
-        startBeat: 0.75,
-        durationBeat: 0.25,
-        velocity: 75,
       },
       {
         pitch: 42,
@@ -539,12 +526,6 @@ const GOLDEN: Record<number, Record<string, unknown>> = {
         velocity: 55,
       },
       {
-        pitch: 38,
-        startBeat: 2.75,
-        durationBeat: 0.25,
-        velocity: 75,
-      },
-      {
         pitch: 42,
         startBeat: 2.75,
         durationBeat: 0.25,
@@ -573,6 +554,13 @@ const GOLDEN: Record<number, Record<string, unknown>> = {
         startBeat: 3.5,
         durationBeat: 0.25,
         velocity: 55,
+      },
+      {
+        pitch: 38,
+        startBeat: 3.75,
+        durationBeat: 0.25,
+        velocity: 32,
+        articulation: 'ghost',
       },
       {
         pitch: 42,

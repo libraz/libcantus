@@ -139,3 +139,27 @@ export function hashPath(domain: number, root: number, path: readonly (string | 
   }
   return fmix32(hash);
 }
+
+/** Scratch view for stepping a double to its neighbour below. */
+const stepBytes = new DataView(new ArrayBuffer(8));
+
+/**
+ * A unit draw scaled into [lo, hi).
+ *
+ * `lo + unit * (hi - lo)` rounds up to `hi` when the span is narrow against the
+ * magnitude of its ends, so a result at `hi` is pulled back to the largest
+ * double below it. An empty range, `lo === hi`, answers `lo`.
+ */
+export function scaleUnitDraw(unit: number, lo: number, hi: number): number {
+  const value = lo + unit * (hi - lo);
+  if (value < hi || lo === hi) {
+    return value;
+  }
+  if (hi === 0) {
+    return -Number.MIN_VALUE;
+  }
+  stepBytes.setFloat64(0, hi);
+  const bits = stepBytes.getBigUint64(0);
+  stepBytes.setBigUint64(0, hi > 0 ? bits - 1n : bits + 1n);
+  return stepBytes.getFloat64(0);
+}

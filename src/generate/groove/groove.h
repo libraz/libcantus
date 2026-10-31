@@ -17,7 +17,8 @@ namespace cantus {
 
 /** The options of humanize after their checks. */
 struct HumanizeRequest {
-  TimeSignature ts;
+  /** The meter accents are read against, in the signature in force at each note. */
+  MeterData ts;
   double timing = 0;
   double velocityJitter = 0;
   double accent = 0;
@@ -38,6 +39,12 @@ struct GroovedNote {
 std::vector<GroovedNote> groove_notes(const std::vector<NoteEvent>& sounding,
                                       const GrooveTemplate& groove_template,
                                       const TimeSignature& meter);
+
+/**
+ * The one signature a groove grid is laid on (`grooveSignature`).
+ * @throws InvalidInputError if the meter changes signature.
+ */
+TimeSignature groove_signature(const MeterData& meter);
 
 /** The meter humanize reads accents against when the caller names none (`DEFAULT_TS`). */
 extern const TimeSignature kGrooveDefaultTs;

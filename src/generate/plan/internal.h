@@ -9,6 +9,7 @@
 #include <cstdint>
 
 #include "cantus/core/meter.h"
+#include "cantus/generate/plan.h"
 
 namespace cantus {
 
@@ -20,6 +21,12 @@ const char* position_class_name(PositionClass position);
 
 /** The class of a position under a meter map (`positionClass`). */
 PositionClass position_class(double beat, const MeterMap& meters);
+
+/**
+ * The downbeat of a phrase's final bar, or the phrase start when that comes later: where the
+ * generator's closing hold begins (`finalDownbeat`).
+ */
+double final_downbeat(const PlannedPhrase& phrase, const MeterMap& meters);
 
 }  // namespace cantus
 

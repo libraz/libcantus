@@ -85,6 +85,19 @@ describe('suspension figures', () => {
     expect(suspension(71, 1, 36, makeChord(0, 'maj'))).toBeNull();
   });
 
+  it('names no figure whose resolution lands on another interval', () => {
+    // B over C falling to B flat over C7 is a seventh going to a seventh.
+    expect(suspension(71, -1, 36, makeChord(0, 'dom7'))).toBeNull();
+    // An augmented fourth falling a semitone lands on the perfect fourth.
+    expect(suspension(66, -1, 36, makeChord(0, 'maj'))).toBeNull();
+    // A flat ninth falling a whole step lands on the major seventh.
+    expect(suspension(61, -2, 36, makeChord(0, 'maj7'))).toBeNull();
+    // The same suspended intervals resolving where the figures say still name them.
+    expect(suspension(71, -2, 36, makeChord(0, 'maj'))).toBe('sus7-6');
+    expect(suspension(66, -2, 36, makeChord(0, 'maj'))).toBe('sus4-3');
+    expect(suspension(61, -1, 36, makeChord(0, 'maj'))).toBe('sus9-8');
+  });
+
   it('keeps every reported figure on an interval the note actually forms', () => {
     const failures: string[] = [];
     let figured = 0;

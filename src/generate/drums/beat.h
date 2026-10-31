@@ -6,6 +6,7 @@
 #ifndef CANTUS_SRC_GENERATE_DRUMS_BEAT_H_
 #define CANTUS_SRC_GENERATE_DRUMS_BEAT_H_
 
+#include <array>
 #include <optional>
 
 #include "cantus/generate/context.h"
@@ -13,6 +14,7 @@
 #include "generate/drums/hihat.h"
 #include "generate/drums/hit.h"
 #include "generate/drums/internal.h"
+#include "generate/drums/kick.h"
 
 namespace cantus {
 
@@ -27,6 +29,8 @@ struct SectionCtx {
   double rhythmic;
   /** Ornament dial in [0, 1]. */
   double ornament;
+  /** Whether the ornament dial is the rhythmic dial standing in for one the caller did not name. */
+  bool ornamentFollowsRhythmic;
   /** Difficulty ceiling, absent when the caller set none. */
   std::optional<double> difficulty;
   bool ghostBoost;
@@ -53,6 +57,8 @@ struct BeatCtx {
   double openHhBeat;
   /** Hi-hat subdivision for this bar. */
   HiHatLevel hhLevel;
+  /** The rhythmic-dial setting each hi-hat subdivision enters at in this bar, by HiHatLevel. */
+  std::array<double, 3> hhEntries;
   const Draw& draw;
 };
 
@@ -60,7 +66,7 @@ struct BeatCtx {
 double swing16(double tick, const SectionCtx& sec, double swing_amount);
 
 /** Emit the kick for one beat (`generateKickForBeat`). */
-void generate_kick_for_beat(const BeatCtx& ctx, const SectionCtx& sec, const KickPattern& kick);
+void generate_kick_for_beat(const BeatCtx& ctx, const SectionCtx& sec, const KickEntries& kick);
 
 /** Emit the backbeat snare or side-stick for one beat (`generateSnareForBeat`). */
 void generate_snare_for_beat(const BeatCtx& ctx, const SectionCtx& sec, bool is_intro_first);

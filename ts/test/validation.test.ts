@@ -82,7 +82,7 @@ const NOTE_EVENT_VALIDATION_COVERAGE: Readonly<Record<string, readonly string[]>
   'src/analyze/arrange/session.ts:update': ['arrangementSessionUpdate'],
   'src/analyze/arrange/tracks.ts:analyzePolyphony': ['analyzePolyphony'],
   'src/analyze/detect/index.ts:detectKeyFromNotes': ['detectKeyFromNotes'],
-  'src/analyze/form/hypermeter.ts:hypermeter': ['hypermeter'],
+  'src/analyze/form/hypermeter.ts:hypermeterOver': ['hypermeter'],
   'src/analyze/form/phrase.ts:phrasesFromTimeline': ['phrasesFromTimeline'],
   'src/analyze/form/section.ts:sectionsFromNotes': ['sectionsFromNotes'],
   'src/analyze/keys/index.ts:keyTimelineFromNotes': ['keyTimelineFromNotes'],

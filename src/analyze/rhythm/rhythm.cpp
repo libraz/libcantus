@@ -285,17 +285,12 @@ RhythmAnalysis rhythm_over(const std::vector<NoteEvent>& notes, const RhythmAnal
       sounding.push_back(note);
     }
   }
+  double start_beat = window_start.value_or(bar_grid_start(first_sounding_beat(sounding), meters));
+  double end_beat = resolve_span_end(opts.totalBeats, start_beat, latest_sounding_end(sounding),
+                                     "rhythm totalBeats");
   if (sounding.empty()) {
     return empty_analysis();
   }
-
-  double first_onset = std::numeric_limits<double>::infinity();
-  for (const NoteEvent& note : sounding) {
-    first_onset = js::min(first_onset, note.startBeat);
-  }
-  double start_beat = window_start.value_or(bar_grid_start(first_onset, meters));
-  double end_beat = js::max(start_beat, opts.totalBeats.value_or(latest_sounding_end(sounding)));
-  assert_range(end_beat, js::min(0, start_beat), kMaxSafeInteger, "rhythm totalBeats");
 
   double bars = bar_span_of(start_beat, end_beat, meters);
   assert_generation_budget(std::ceil(bars) * BUDGET_SLOTS_PER_BAR, "rhythm analysis slots",

@@ -103,6 +103,8 @@ double beats_to_ticks(double beat, int ppq) {
   assert_finite_number(beat, "beat");
   assert_positive_int(ppq, "ppq");
   double ticks = js::round(beat * ppq);
+  // A count past the safe integers is not a whole tick, and ticks_to_beats refuses it.
+  assert_integer(ticks, "ticks result");
   return ticks == 0 ? 0 : ticks;
 }
 

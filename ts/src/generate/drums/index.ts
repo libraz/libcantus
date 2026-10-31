@@ -34,7 +34,7 @@ import {
 } from './fills.js';
 import {
   footHiHatVelocity,
-  getHiHatLevel,
+  getHiHatBar,
   openHiHatBarInterval,
   openHiHatBeat,
   shouldPlayHiHat,
@@ -64,7 +64,7 @@ import {
   sectionDensityMultiplier,
   sectionEnergy,
 } from './internal.js';
-import { getKickPattern, isInPreChorusLift, type KickPattern } from './kick.js';
+import { getKickEntries, isInPreChorusLift, type KickEntries } from './kick.js';
 import { generateAuxPercussionForBar, getPercussionConfig } from './percussion.js';
 
 export type { FillArchetype, FillStroke, FillType, FillVelocity } from './fills.js';
@@ -328,6 +328,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     densityMult,
     rhythmic,
     ornament: ornamentDial,
+    ornamentFollowsRhythmic: resolved.ornament === undefined,
     difficulty,
     ghostBoost: mapping.ghostBoost,
     useRide: shouldUseRideForSection(section, style),
@@ -371,7 +372,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     : undefined;
 
   const reuseSectionKick = (section === 'b' || section === 'chorus') && style !== 'sparse';
-  let sectionKick: KickPattern | undefined;
+  let sectionKick: KickEntries | undefined;
 
   /** Onsets written from a pattern the caller named, which the ceiling spares. */
   const exemptOnsets = new Set<string>();
@@ -379,7 +380,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   for (let bar = 0; bar < opts.bars; bar += 1) {
     const barStart = bar * barBeats;
     const isLastBar = bar === opts.bars - 1;
-    const hhLevel = getHiHatLevel(section, style, rhythmic, bpm, draw, difficulty, bar);
+    const hiHat = getHiHatBar(section, style, rhythmic, bpm, draw, difficulty, bar);
 
     if (bar === 0 && section === 'chorus') {
       track.add(GM.CRASH, barStart, 0.5, 100 * densityMult);
@@ -392,12 +393,12 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
       barHasOpenHh = !track.hasCrashNear(barStart + openHhBeatIndex);
     }
 
-    let kick: KickPattern | undefined;
+    let kick: KickEntries | undefined;
     if (!euclidKick && reuseSectionKick) {
-      sectionKick ??= getKickPattern(section, style, 0, draw, rhythmic);
+      sectionKick ??= getKickEntries(section, style, 0, draw, rhythmic);
       kick = sectionKick;
     } else if (!euclidKick) {
-      kick = getKickPattern(section, style, bar, draw, rhythmic);
+      kick = getKickEntries(section, style, bar, draw, rhythmic);
     }
 
     // The lift is a build into a chorus, so what follows decides it. Passing
@@ -468,7 +469,8 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
         swingAmount,
         barHasOpenHh,
         openHhBeat: openHhBeatIndex,
-        hhLevel,
+        hhLevel: hiHat.level,
+        hhEntries: hiHat.entries,
         draw,
       };
 
@@ -547,7 +549,7 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   const written = track.hits
     .filter((hit) => hit.startBeat < endBeat && playableOn(kit, hit.pitch))
     .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
-  return underCeiling(written, bpm, difficulty, exemptOnsets);
+  return underCeiling(written, bpm, difficulty, exemptOnsets, track);
 }
 
 /**
@@ -560,14 +562,20 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
  * what makes "no voice repeats faster than the ceiling sustains" true of the
  * output instead of true of each generator separately.
  *
- * The earlier of two strokes too close together is the one kept, since it is
- * the one the passage was already committed to, and strokes at the same instant
- * are left alone — two voices layered on one onset are not a stream.
+ * Strokes are settled in the order the rhythmic dial brings them in, and then
+ * in time: one that sounds at every setting before one the dial adds, and of
+ * two the dial adds, the one a lower setting already plays. A stroke too close
+ * to one already kept is dropped, so raising the dial only ever adds strokes —
+ * a syncopation the dial brings in never displaces the beat it anticipates.
+ * Strokes at the same instant are left alone — two voices layered on one
+ * onset are not a stream.
  *
  * @param hits The finished part, in onset order.
  * @param bpm Tempo.
  * @param difficulty The ceiling, or undefined for no ceiling.
  * @param exempt Onset keys the ceiling does not touch.
+ * @param track The list the part was written into, which knows the dial
+ *   setting each stroke enters at.
  * @returns The strokes that survive, in the order given.
  */
 function underCeiling(
@@ -575,25 +583,50 @@ function underCeiling(
   bpm: number,
   difficulty: number | undefined,
   exempt: ReadonlySet<string>,
+  track: HitList,
 ): DrumHit[] {
   if (difficulty === undefined) {
     return [...hits];
   }
-  const lastOnset = new Map<number, number>();
-  const kept: DrumHit[] = [];
-  for (const hit of hits) {
-    const previous = lastOnset.get(hit.pitch);
+  const entries = hits.map((hit) => track.entryOf(hit.pitch, hit.startBeat));
+  const order = hits
+    .map((_, index) => index)
+    .sort((a, b) => {
+      const left = entries[a] as number;
+      const right = entries[b] as number;
+      return left < right ? -1 : left > right ? 1 : a - b;
+    });
+  // The kept onsets of each pitch, in time order.
+  const keptBeats = new Map<number, number[]>();
+  const kept = hits.map(() => false);
+  for (const index of order) {
+    const hit = hits[index] as DrumHit;
+    const beats = keptBeats.get(hit.pitch) ?? [];
+    // The first kept onset after this one.
+    let at = 0;
+    let end = beats.length;
+    while (at < end) {
+      const mid = (at + end) >>> 1;
+      if ((beats[mid] as number) > hit.startBeat) {
+        end = mid;
+      } else {
+        at = mid + 1;
+      }
+    }
+    const previous = beats[at - 1];
+    const next = beats[at];
     const reachable =
-      previous === undefined ||
       exempt.has(onsetKey(hit.pitch, hit.startBeat)) ||
-      sustainsStrokes(hit.startBeat - previous, bpm, difficulty);
+      ((previous === undefined || sustainsStrokes(hit.startBeat - previous, bpm, difficulty)) &&
+        (next === undefined || sustainsStrokes(next - hit.startBeat, bpm, difficulty)));
     if (!reachable) {
       continue;
     }
-    kept.push(hit);
-    lastOnset.set(hit.pitch, hit.startBeat);
+    kept[index] = true;
+    beats.splice(at, 0, hit.startBeat);
+    keptBeats.set(hit.pitch, beats);
   }
-  return kept;
+  return hits.filter((_, index) => kept[index]);
 }
 
 /**

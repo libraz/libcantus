@@ -190,3 +190,16 @@ TEST_CASE("a slash chord its notes spell exactly reads at full confidence", "[ti
   CHECK(result.segmentConfidence[0] == 1);
   CHECK(result.timeline.segments[0].chord.bassPc == 7);
 }
+
+TEST_CASE("a held bass does not hide the chord struck above it", "[timeline]") {
+  std::vector<NoteEvent> notes = {note(36, 0, 4)};
+  for (double beat : {1.0, 3.0}) {
+    for (int pitch : {60, 64, 67}) {
+      notes.push_back(note(pitch, beat, 0.25));
+    }
+  }
+  ChordTimelineResult result = chord_timeline_from_notes(notes);
+  REQUIRE(result.timeline.segments.size() == 1);
+  CHECK(result.timeline.segments[0].chord.rootPc == 0);
+  CHECK(result.timeline.segments[0].chord.quality == ChordQuality::kMaj);
+}

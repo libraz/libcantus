@@ -14,6 +14,7 @@
 #include "cantus/core/validation.h"
 #include "cantus/theory/chord.h"
 #include "cantus/theory/scale.h"
+#include "core/event_index/order.h"
 #include "core/validation/validation.h"
 #include "generate/context/context.h"
 #include "generate/motif/limits.gen.h"
@@ -341,6 +342,9 @@ std::vector<MotifResult> develop_notes(const std::vector<NoteEvent>& notes,
     return out;
   }
 
+  // The cell is walked forwards in time, ties by pitch, so the motion a note continues and the
+  // pitches claimed first do not depend on the listing.
+  std::vector<std::size_t> line = canonical_note_order(notes);
   // A degenerate near-zero span is clamped so the tile count stays finite, and the offset is
   // stepped multiplicatively so rounding error cannot accumulate over tiles.
   double tile_span = js::max(span, MOTIF_MIN_TILE_SPAN);
@@ -351,7 +355,7 @@ std::vector<MotifResult> develop_notes(const std::vector<NoteEvent>& notes,
     // Placed pitch by cell pitch, so a tile cannot fold two of the cell's pitches onto one.
     std::map<double, double> taken;
     std::optional<double> previous;
-    for (std::size_t note_index = 0; note_index < notes.size(); ++note_index) {
+    for (std::size_t note_index : line) {
       const NoteEvent& n = notes[note_index];
       double cell_pitch = pitches[note_index];
       double start_beat = offset + (n.startBeat - origin);

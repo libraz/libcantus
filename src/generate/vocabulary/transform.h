@@ -14,9 +14,9 @@
  *   SameValueZero identity of `streamOf(e)`.
  * - `M::placed(e, step)`, `{ ...e, step }`; `M::placed(e, step, v)`, `{ ...e, step, velocity }`.
  *
- * A sampler `S` is a draw bound to its path: `s.prob(p, tag, step)` is
- * `draw.prob(p, ...path, tag, step)`. The functions here run after their arguments have been
- * checked; the checks stay with the callers, in TS order.
+ * A sampler `S` is a draw bound to its path: `s.prob(p, key)` is `draw.prob(p, ...path, ...key)`,
+ * with the key from draw_key(). The functions here run after their arguments have been checked;
+ * the checks stay with the callers, in TS order.
  */
 #ifndef CANTUS_SRC_GENERATE_VOCABULARY_TRANSFORM_H_
 #define CANTUS_SRC_GENERATE_VOCABULARY_TRANSFORM_H_
@@ -70,10 +70,26 @@ void sort_by_step(std::vector<typename M::Event>& events) {
                    });
 }
 
-/** `${streamOf(event)}@${step}`, the key a stream's position is held under. */
+/** `${streamOf(event)}@${step}`, the key a stream's position is held under (`positionKey`). */
 template <class M>
 std::string position_key(const typename M::Event& event, double step) {
   return M::stream_text(event) + "@" + js::to_string(step);
+}
+
+/** The draw an onset is decided by, after its tag: its stream, when it has one, and its step. */
+template <class M>
+SeedPath draw_key(std::string_view tag, const typename M::Event& event) {
+  std::string stream = M::stream_text(event);
+  if (stream.empty()) {
+    return SeedPath{std::string(tag), M::step(event)};
+  }
+  return SeedPath{std::string(tag), std::move(stream), M::step(event)};
+}
+
+/** Where an onset lands at double time: a whole step on the nearest sixteenth, any other exactly.
+ */
+inline double halved_step(double step) {
+  return std::trunc(step) == step ? js::round(step / 2) : step / 2;
 }
 
 /** `thin`: keep the onsets ranked at or above the floor the amount names. */
@@ -91,23 +107,38 @@ std::vector<typename M::Event> thin_figure(const std::vector<typename M::Event>&
   return out;
 }
 
-/** `double`: one softer note halfway into each gap the grid has a position for. */
+/** `double`: one softer note halfway into each gap of a stream the grid has a position for. */
 template <class M>
 std::vector<typename M::Event> double_figure(const std::vector<typename M::Event>& figure,
                                              double span_steps) {
   std::vector<typename M::Event> sorted = figure;
   sort_by_step<M>(sorted);
+  // The next onset of each event's own stream, found walking back from the end.
+  std::vector<double> next_step(sorted.size(), span_steps);
+  std::vector<std::pair<typename M::StreamKey, double>> following;
+  for (std::size_t i = sorted.size(); i-- > 0;) {
+    typename M::StreamKey key = M::stream_key(sorted[i]);
+    auto held = std::find_if(following.begin(), following.end(), [&key](const auto& entry) {
+      return M::same_stream(entry.first, key);
+    });
+    if (held == following.end()) {
+      following.emplace_back(std::move(key), M::step(sorted[i]));
+    } else {
+      next_step[i] = held->second;
+      held->second = M::step(sorted[i]);
+    }
+  }
   std::vector<typename M::Event> out;
   for (std::size_t i = 0; i < sorted.size(); ++i) {
     const typename M::Event& event = sorted[i];
     out.push_back(event);
     double step = M::step(event);
-    double next = i + 1 < sorted.size() ? M::step(sorted[i + 1]) : span_steps;
-    double mid = step + (next - step) / 2;
+    double mid = step + (next_step[i] - step) / 2;
     if (std::isfinite(mid) && std::trunc(mid) == mid && mid > step && mid < span_steps) {
       out.push_back(M::placed(event, mid, M::scaled(M::velocity(event), ADDED_NOTE_VELOCITY)));
     }
   }
+  sort_by_step<M>(out);
   return out;
 }
 
@@ -144,8 +175,8 @@ std::vector<typename M::Event> double_time_figure(const std::vector<typename M::
     }
   };
   for (const typename M::Event& event : figure) {
-    // An odd step halves onto no grid position, so it is placed on the nearest one.
-    double step = js::round(M::step(event) / 2);
+    // An odd step is placed on the nearest position rather than dropped.
+    double step = halved_step(M::step(event));
     place(event, step, M::velocity(event));
     double repeated = step + span_steps / 2;
     if (repeated < span_steps) {
@@ -174,7 +205,7 @@ std::vector<typename M::Event> syncopate_figure(const std::vector<typename M::Ev
         occupied.count(position_key<M>(event, anticipated)) > 0) {
       continue;
     }
-    if (!sampler.prob(dial, "syncopate", step)) {
+    if (!sampler.prob(dial, draw_key<M>("syncopate", event))) {
       continue;
     }
     out.push_back(
@@ -191,7 +222,7 @@ std::vector<typename M::Event> ornament_figure(
     const std::function<bool(const typename M::Event&)>& marks, double amount, const S& sampler) {
   std::vector<typename M::Event> out;
   for (const typename M::Event& event : figure) {
-    if (!marks(event) || sampler.prob(amount, "ornament", M::step(event))) {
+    if (!marks(event) || sampler.prob(amount, draw_key<M>("ornament", event))) {
       out.push_back(event);
     }
   }
@@ -206,34 +237,34 @@ struct OrnamentRequest {
 };
 
 /**
- * `deform`: rate, then the rhythmic dial, then the ornament dial, each step reading its options
- * from `plan` only when TS would:
+ * `deform` after `resolveDials`: every dial is read and checked up front, in TS order, whichever
+ * of them the figure then uses:
  *
  * - `plan.rate()`: the FigureRate `asked.rate` selects;
  * - `plan.rhythmic()`: the checked rhythmic dial, or nullopt;
- * - `plan.signature()`: the checked meter, asked for only when the rhythmic dial moves the figure;
- * - `plan.ornament()`: the checked ornament request, or nullopt.
+ * - `plan.signature()`: the checked meter;
+ * - `plan.ornament()`: the checked ornament request, or nullopt when either the amount or the
+ *   test is absent; each one present is checked, the amount first.
  */
 template <class M, class P, class S>
 std::vector<typename M::Event> deform_figure(const std::vector<typename M::Event>& figure,
                                              double span_steps, P& plan, const S& sampler) {
   FigureRate rate = plan.rate();
+  std::optional<double> rhythmic = plan.rhythmic();
+  TimeSignature signature = plan.signature();
+  std::optional<OrnamentRequest<M>> ornament = plan.ornament();
   std::vector<typename M::Event> out =
       rate == FigureRate::kHalf     ? half_time_figure<M>(figure, span_steps)
       : rate == FigureRate::kDouble ? double_time_figure<M>(figure, span_steps)
                                     : figure;
-  if (std::optional<double> rhythmic = plan.rhythmic()) {
-    if (*rhythmic < NEUTRAL_RHYTHMIC) {
-      // Less means the notes that carry the least of the figure's own metre.
-      out =
-          thin_figure<M>(out, (NEUTRAL_RHYTHMIC - *rhythmic) / NEUTRAL_RHYTHMIC, plan.signature());
-    } else if (*rhythmic > NEUTRAL_RHYTHMIC) {
-      TimeSignature signature = plan.signature();
-      out = syncopate_figure<M>(out, (*rhythmic - NEUTRAL_RHYTHMIC) / NEUTRAL_RHYTHMIC, signature,
-                                sampler);
-    }
+  if (rhythmic && *rhythmic < NEUTRAL_RHYTHMIC) {
+    // Less means the notes that carry the least of the figure's own metre.
+    out = thin_figure<M>(out, (NEUTRAL_RHYTHMIC - *rhythmic) / NEUTRAL_RHYTHMIC, signature);
+  } else if (rhythmic && *rhythmic > NEUTRAL_RHYTHMIC) {
+    out = syncopate_figure<M>(out, (*rhythmic - NEUTRAL_RHYTHMIC) / NEUTRAL_RHYTHMIC, signature,
+                              sampler);
   }
-  if (std::optional<OrnamentRequest<M>> ornament = plan.ornament()) {
+  if (ornament) {
     out = ornament_figure<M>(out, ornament->marks, ornament->amount, sampler);
   }
   sort_by_step<M>(out);

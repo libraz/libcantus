@@ -24,7 +24,13 @@ import { barGridStart, latestSoundingEnd } from '../grid.js';
 import { windowWeights } from '../histogram.js';
 import { melodicSimilarity } from '../melody/index.js';
 import { hypermeter } from './hypermeter.js';
-import { clamp01, firstSoundingBeat, lastBarOf, weightSimilarity } from './internal.js';
+import {
+  clamp01,
+  firstSoundingBeat,
+  lastBarOf,
+  resolveSpanEnd,
+  weightSimilarity,
+} from './internal.js';
 
 /**
  * A span of music labelled by which earlier span it restates.
@@ -226,16 +232,21 @@ export function sectionsFromNotes(
     budget: opts.budget,
   });
   const sounding = notes.filter((note) => note.durationBeat > 0);
+  // The pickup rule the whole analysis shares: a note a millibeat before the
+  // downbeat is playing it, and only one a whole bar early opens a pickup.
+  const firstSounding = firstSoundingBeat(sounding);
+  const firstOnset = barGridStart(firstSounding, meters);
+  const spanEnd = resolveSpanEnd(
+    opts.totalBeats,
+    firstOnset,
+    latestSoundingEnd(sounding),
+    'section totalBeats',
+  );
   if (sounding.length === 0) {
     // Nothing sounds, so there is no material to hear a form in. A section over
     // an empty span would name a stretch of silence as a statement.
     return [];
   }
-  // The pickup rule the whole analysis shares: a note a millibeat before the
-  // downbeat is playing it, and only one a whole bar early opens a pickup.
-  const firstOnset = barGridStart(firstSoundingBeat(sounding), meters);
-  const spanEnd = Math.max(firstOnset, opts.totalBeats ?? latestSoundingEnd(sounding));
-  assertRange(spanEnd, Math.min(0, firstOnset), Number.MAX_SAFE_INTEGER, 'section totalBeats');
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
   assertRange(threshold, 0, 1, 'section threshold');
   const unitBars =
@@ -263,9 +274,12 @@ export function sectionsFromNotes(
       index === unitCount - 1
         ? spanEnd
         : barPositionToBeat({ bar: barStart + unitBars, beat: 0 }, meters);
+    // The opening unit holds everything before its end: a note a millibeat
+    // early sounds in it even though the grid starts on the downbeat.
+    const fromBeat = index === 0 ? Math.min(firstSounding, startBeat) : startBeat;
     const unitNotes = sounding
       .filter(
-        (note) => note.startBeat >= startBeat - BEAT_EPS && note.startBeat < endBeat - BEAT_EPS,
+        (note) => note.startBeat >= fromBeat - BEAT_EPS && note.startBeat < endBeat - BEAT_EPS,
       )
       .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
     units.push({

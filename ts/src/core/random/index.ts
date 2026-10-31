@@ -11,6 +11,7 @@
 
 import { InvalidInputError } from '../errors/index.js';
 import { assertFiniteNumber, assertInteger, assertRange } from '../validation/index.js';
+import { scaleUnitDraw } from './internal.js';
 
 export type { PositionalRng } from './positional.js';
 export { createPositionalRng, includeAt } from './positional.js';
@@ -89,7 +90,7 @@ export function createRng(seed: number): Rng {
         );
       }
       assertFiniteNumber(hi - lo, 'float span');
-      return lo + next() * (hi - lo);
+      return scaleUnitDraw(next(), lo, hi);
     },
   };
 }

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "cantus/core/validation.h"
 #include "core/errors/errors.h"
@@ -434,17 +435,18 @@ double metric_grid_unit(const MeterArg& meter) {
   if (map == nullptr) {
     return pulse_beats_of(std::get<TimeSignature>(resolved));
   }
+  std::vector<MeterSegment> segments = meter_segments(*map);
   double unit = 0;
-  for (const MeterChange& change : *map) {
-    unit = common_step(unit, pulse_beats_of(change.ts));
+  for (const MeterSegment& segment : segments) {
+    unit = common_step(unit, pulse_beats_of(segment.ts));
   }
   if (unit <= 0) {
     return pulse_beats_of(kDefaultTs);
   }
-  double origin = map->front().startBeat;
+  // Bars are laid from beat 0, so each change is measured from there.
   double on_changes = unit;
-  for (const MeterChange& change : *map) {
-    on_changes = common_step(on_changes, std::fabs(change.startBeat - origin));
+  for (const MeterSegment& segment : segments) {
+    on_changes = common_step(on_changes, std::fabs(segment.barAnchor));
   }
   // An onset a hair off a beat would divide the grid down to the hair; past the division limit
   // it is read as unmeasured.

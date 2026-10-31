@@ -112,6 +112,33 @@ function streamOf(event: GridEvent): string {
   return event.limb ?? event.voice ?? '';
 }
 
+/** Where an onset of this stream sits: the key a stream's position is held under. */
+function positionKey(event: GridEvent, step: number): string {
+  return `${streamOf(event)}@${step}`;
+}
+
+/**
+ * The address of the draw an onset is decided by: its stream and its step.
+ *
+ * Two limbs on one sixteenth are two decisions, so the stream is part of the
+ * address; the one stream a single-voice figure has adds nothing to it.
+ */
+function drawKey(event: GridEvent): (string | number)[] {
+  const stream = `${streamOf(event)}`;
+  return stream === '' ? [event.step] : [stream, event.step];
+}
+
+/**
+ * Where an onset lands when the figure is played twice as fast.
+ *
+ * A whole step halves exactly or, when odd, onto the nearest sixteenth; an
+ * onset already off the straight grid (a triplet) halves exactly, so it keeps
+ * its own grid rather than being pulled onto the straight one.
+ */
+function halvedStep(step: number): number {
+  return Number.isInteger(step) ? Math.round(step / 2) : step / 2;
+}
+
 /** The bar the figures are written on when the caller names no meter. */
 export const FIGURE_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
@@ -202,18 +229,27 @@ export function thin<T extends GridEvent>(
 ): T[] {
   const figure = assertGridEvents<T>(events);
   assertRange(amount, 0, 1, 'thin amount');
-  const signature = meterAt(0, toMeterData(ts, 'ts'));
+  return thinFigure(figure, amount, meterAt(0, toMeterData(ts, 'ts')));
+}
+
+/** {@link thin} after its checks. */
+function thinFigure<T extends GridEvent>(
+  figure: readonly T[],
+  amount: number,
+  ts: TimeSignature,
+): T[] {
   // Five ranks (0..4), so a full turn of the dial reaches the downbeat alone.
   const floor = Math.min(4, Math.floor(amount * 5));
-  return figure.filter((event) => stepWeight(event.step, signature) >= floor);
+  return figure.filter((event) => stepWeight(event.step, ts) >= floor);
 }
 
 /**
  * Fill in the gaps of a figure, one note per gap.
  *
  * Doubling is what a player does when asked for more of the same rather than
- * for something different: the added note sits halfway between two the figure
- * already has, takes its predecessor's identity, and is played softer.
+ * for something different: the added note sits halfway between two onsets of
+ * one stream (the limb, else the voice), takes its predecessor's identity, and
+ * is played softer. A gap between two limbs is no gap for either of them.
  *
  * @param events The figure, which need not be sorted.
  * @param spanSteps Length of the figure in sixteenths.
@@ -224,22 +260,27 @@ export function thin<T extends GridEvent>(
 export function double<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
   assertSpanSteps(spanSteps);
   const sorted = [...assertGridEvents(events)].sort((a, b) => a.step - b.step);
+  // The next onset of each event's own stream, found walking back from the end.
+  const nextStep: number[] = [];
+  const following = new Map<string, number>();
+  for (let i = sorted.length - 1; i >= 0; i -= 1) {
+    const event = sorted[i] as T;
+    const stream = streamOf(event);
+    nextStep[i] = following.get(stream) ?? spanSteps;
+    following.set(stream, event.step);
+  }
   const out: T[] = [];
-  for (let i = 0; i < sorted.length; i += 1) {
-    const event = sorted[i];
-    if (!event) {
-      continue;
-    }
+  sorted.forEach((event, i) => {
     out.push(event);
-    const next = sorted[i + 1]?.step ?? spanSteps;
+    const next = nextStep[i] ?? spanSteps;
     const mid = event.step + (next - event.step) / 2;
     // Only where the grid has a position for it: a gap of one sixteenth is
     // already as dense as the figure is written.
     if (Number.isInteger(mid) && mid > event.step && mid < spanSteps) {
       out.push({ ...event, step: mid, velocity: event.velocity * ADDED_NOTE_VELOCITY });
     }
-  }
-  return out;
+  });
+  return out.sort((a, b) => a.step - b.step);
 }
 
 /** How loud a note added by a transform is, relative to the one it follows. */
@@ -257,7 +298,12 @@ export const ADDED_NOTE_VELOCITY = 0.75;
  */
 export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
   assertSpanSteps(spanSteps);
-  return assertGridEvents(events)
+  return halfTimeFigure(assertGridEvents(events), spanSteps);
+}
+
+/** {@link halfTime} after its checks, over any span a figure covers. */
+export function halfTimeFigure<T extends GridEvent>(figure: readonly T[], spanSteps: number): T[] {
+  return figure
     .map((event) => ({ ...event, step: event.step * 2 }))
     .filter((event) => event.step < spanSteps);
 }
@@ -267,6 +313,9 @@ export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = 
  *
  * The repeat is what makes this the mirror of {@link halfTime} rather than a
  * figure with a hole in it: the bar stays full.
+ *
+ * A whole step halves onto the nearest sixteenth; an onset off the straight
+ * grid, a triplet, halves exactly and stays on its own grid.
  *
  * Halving brings positions together, and two onsets of one stream landing on
  * the same step are one stroke played louder rather than two: a drum struck
@@ -284,21 +333,27 @@ export function halfTime<T extends GridEvent>(events: readonly T[], spanSteps = 
  */
 export function doubleTime<T extends GridEvent>(events: readonly T[], spanSteps = BAR_STEPS): T[] {
   assertSpanSteps(spanSteps);
-  assertGridEvents(events);
+  return doubleTimeFigure(assertGridEvents(events), spanSteps);
+}
+
+/** {@link doubleTime} after its checks, over any span a figure covers. */
+export function doubleTimeFigure<T extends GridEvent>(
+  figure: readonly T[],
+  spanSteps: number,
+): T[] {
   const merged = new Map<string, T>();
   const place = (event: T, step: number, velocity: number): void => {
-    const key = `${streamOf(event)}@${step}`;
+    const key = positionKey(event, step);
     const held = merged.get(key);
     if (held === undefined || velocity > held.velocity) {
       merged.set(key, { ...event, step, velocity });
     }
   };
-  for (const event of events) {
-    // An odd step halves onto no grid position, so it is placed on the nearest
-    // one. Dropping it instead took the "a" of the kick and three of the four
-    // ghosts out of the figure that names the genre, and returned the result as
-    // though it were the same figure played faster.
-    const step = Math.round(event.step / 2);
+  for (const event of figure) {
+    // An odd step is placed on the nearest position rather than dropped:
+    // dropping took the "a" of the kick and three of the four ghosts out of
+    // the figure that names the genre.
+    const step = halvedStep(event.step);
     place(event, step, event.velocity);
     const repeated = step + spanSteps / 2;
     if (repeated < spanSteps) {
@@ -368,20 +423,31 @@ export function syncopate<T extends GridEvent>(
   const dial = asked === undefined ? amount : asked.amount;
   const signature = meterAt(0, toMeterData(asked?.ts ?? FIGURE_TS, 'ts'));
   assertRange(dial as number, 0, 1, 'syncopate amount');
-  const occupied = new Set(figure.map((event) => `${streamOf(event)}@${event.step}`));
+  return syncopateFigure(figure, dial as number, signature, sampler, path);
+}
+
+/** {@link syncopate} after its checks. */
+function syncopateFigure<T extends GridEvent>(
+  figure: readonly T[],
+  dial: number,
+  ts: TimeSignature,
+  sampler: Draw,
+  path: readonly (string | number)[],
+): T[] {
+  const occupied = new Set(figure.map((event) => positionKey(event, event.step)));
   const out: T[] = [...figure];
   for (const event of figure) {
     const anticipated = event.step - 1;
     // The downbeat takes none: its anticipation would fall in the bar before
     // the one the figure belongs to.
     if (
-      stepWeight(event.step, signature) < 2 ||
+      stepWeight(event.step, ts) < 2 ||
       anticipated < 1 ||
-      occupied.has(`${streamOf(event)}@${anticipated}`)
+      occupied.has(positionKey(event, anticipated))
     ) {
       continue;
     }
-    if (!sampler.prob(dial as number, ...path, 'syncopate', event.step)) {
+    if (!sampler.prob(dial, ...path, 'syncopate', ...drawKey(event))) {
       continue;
     }
     out.push({ ...event, step: anticipated, velocity: event.velocity * ADDED_NOTE_VELOCITY });
@@ -418,8 +484,19 @@ export function ornamentBy<T extends GridEvent>(
   const sampler = assertDraw(draw);
   assertSeedPath(path);
   assertRange(amount, 0, 1, 'ornament amount');
+  return ornamentFigure(figure, marks, amount, sampler, path);
+}
+
+/** {@link ornamentBy} after its checks. */
+function ornamentFigure<T extends GridEvent>(
+  figure: readonly T[],
+  marks: (event: T) => boolean,
+  amount: number,
+  sampler: Draw,
+  path: readonly (string | number)[],
+): T[] {
   return figure.filter(
-    (event) => !marks(event) || sampler.prob(amount, ...path, 'ornament', event.step),
+    (event) => !marks(event) || sampler.prob(amount, ...path, 'ornament', ...drawKey(event)),
   );
 }
 
@@ -487,8 +564,8 @@ export const NEUTRAL_RHYTHMIC = 0.5;
  * const busier = deform(figure, { rhythmic: 0.9 }, draw, 'bar', 0);
  * // Above the neutral middle the figure is syncopated: onsets are added off
  * // the beat, and the result comes back sorted by position.
- * busier.length; // 7
- * busier.map((event) => event.step); // [0, 3, 4, 7, 8, 11, 12]
+ * busier.length; // 6
+ * busier.map((event) => event.step); // [0, 3, 4, 8, 11, 12]
  * ```
  *
  * @category Composition
@@ -501,38 +578,78 @@ export function deform<T extends GridEvent>(
 ): T[] {
   const figure = assertGridEvents<T>(events);
   const asked = assertRecord<DeformOptions>(opts, 'opts');
-  assertDraw(draw);
+  const sampler = assertDraw(draw);
   assertSeedPath(path);
   const spanSteps = assertSpanSteps(asked.spanSteps === undefined ? BAR_STEPS : asked.spanSteps);
-  const ts = asked.ts ?? FIGURE_TS;
+  return deformFigure(figure, spanSteps, resolveDials(asked), sampler, path);
+}
+
+/**
+ * What {@link deform} reads from its options, every dial checked.
+ */
+export type ResolvedDials = {
+  rate: (typeof FIGURE_RATES)[number];
+  rhythmic: number | undefined;
+  ts: TimeSignature;
+  ornament: number | undefined;
+  isOrnament: ((event: GridEvent) => boolean) | undefined;
+};
+
+/**
+ * Read and check every dial of a deform request up front.
+ *
+ * Whether a request is accepted depends on its own values only, never on which
+ * other dial happens to consume one.
+ */
+export function resolveDials(asked: DeformOptions): ResolvedDials {
   const rate = assertOneOf(asked.rate ?? 'straight', FIGURE_RATES, 'rate');
+  const rhythmic =
+    asked.rhythmic === undefined
+      ? undefined
+      : assertRange(asked.rhythmic, 0, 1, 'complexity rhythmic');
+  const ts = meterAt(0, toMeterData(asked.ts ?? FIGURE_TS, 'ts'));
+  const ornament =
+    asked.ornament === undefined ? undefined : assertRange(asked.ornament, 0, 1, 'ornament amount');
+  const isOrnament = asked.isOrnament
+    ? assertFunction<(event: GridEvent) => boolean>(asked.isOrnament, 'opts.isOrnament')
+    : undefined;
+  return { rate, rhythmic, ts, ornament, isOrnament };
+}
+
+/** {@link deform} after its checks, over any span a figure covers. */
+export function deformFigure<T extends GridEvent>(
+  figure: readonly T[],
+  spanSteps: number,
+  dials: ResolvedDials,
+  sampler: Draw,
+  path: readonly (string | number)[],
+): T[] {
   let out: T[] =
-    rate === 'half'
-      ? halfTime(figure, spanSteps)
-      : rate === 'double'
-        ? doubleTime(figure, spanSteps)
+    dials.rate === 'half'
+      ? halfTimeFigure(figure, spanSteps)
+      : dials.rate === 'double'
+        ? doubleTimeFigure(figure, spanSteps)
         : [...figure];
 
-  if (asked.rhythmic !== undefined) {
-    const rhythmic = assertRange(asked.rhythmic, 0, 1, 'complexity rhythmic');
-    if (rhythmic < NEUTRAL_RHYTHMIC) {
-      // Below the middle the request is for less, and less means the notes that
-      // carry the least of the metre — of the figure's own metre, so the bar
-      // this figure is written in is the bar its positions are ranked against.
-      out = thin(out, (NEUTRAL_RHYTHMIC - rhythmic) / NEUTRAL_RHYTHMIC, ts);
-    } else if (rhythmic > NEUTRAL_RHYTHMIC) {
-      out = syncopate(
-        out,
-        { amount: (rhythmic - NEUTRAL_RHYTHMIC) / NEUTRAL_RHYTHMIC, ts },
-        draw,
-        ...path,
-      );
-    }
+  const { rhythmic } = dials;
+  if (rhythmic !== undefined && rhythmic < NEUTRAL_RHYTHMIC) {
+    // Below the middle the request is for less, and less means the notes that
+    // carry the least of the metre — of the figure's own metre, so the bar
+    // this figure is written in is the bar its positions are ranked against.
+    out = thinFigure(out, (NEUTRAL_RHYTHMIC - rhythmic) / NEUTRAL_RHYTHMIC, dials.ts);
+  } else if (rhythmic !== undefined && rhythmic > NEUTRAL_RHYTHMIC) {
+    out = syncopateFigure(
+      out,
+      (rhythmic - NEUTRAL_RHYTHMIC) / NEUTRAL_RHYTHMIC,
+      dials.ts,
+      sampler,
+      path,
+    );
   }
 
-  if (asked.ornament !== undefined && asked.isOrnament) {
-    const isOrnament = assertFunction<(event: T) => boolean>(asked.isOrnament, 'opts.isOrnament');
-    out = ornamentBy(out, (event) => isOrnament(event), asked.ornament, draw, ...path);
+  const { ornament, isOrnament } = dials;
+  if (ornament !== undefined && isOrnament !== undefined) {
+    out = ornamentFigure(out, (event) => isOrnament(event), ornament, sampler, path);
   }
 
   return out.sort((a, b) => a.step - b.step);

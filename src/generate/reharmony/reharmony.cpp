@@ -116,6 +116,37 @@ NoteData tritone_substitute_root(const Chord& dominant, const NoteData& tonic,
   return transpose_note(resolution, 1);
 }
 
+/** The third a mediant root offset is (`MEDIANT_THIRDS`). */
+const char* mediant_third(int offset) {
+  switch (offset) {
+    case 3:
+      return "m3";
+    case 4:
+      return "M3";
+    case 8:
+      return "-M3";
+    default:
+      return "-m3";
+  }
+}
+
+/**
+ * The root spelling of a chromatic mediant (`mediantRoot`): the letter a third from the source
+ * root, altered to the mediant's pitch class.
+ */
+NoteData mediant_root(const Chord& source, int offset, const NoteData& tonic, const KeyScale& key) {
+  NoteData root = spell_pitch_class(source.rootPc, tonic, key);
+  if (source.rootSpelling) {
+    NoteData hint;
+    hint.letter = source.rootSpelling->letter;
+    hint.alter = source.rootSpelling->alter;
+    if (note_to_pitch_class(hint) == mod12(source.rootPc)) {
+      root = hint;
+    }
+  }
+  return transpose_by_interval(NoteArg(root), IntervalArg(mediant_third(offset)));
+}
+
 struct Candidate {
   Chord chord;
   SubstitutionType type;
@@ -203,8 +234,9 @@ std::vector<Substitution> substitute_chord_with(
       Chord mediant = make_chord(mod12(source.rootPc + offset), quality);
       if (common_tone_count(original_triad, chord_pitch_classes(mediant)) == 1 &&
           !is_diatonic(mediant, resolved)) {
-        candidates.push_back(
-            Candidate{spelled_in_key(mediant, tonic, scale), SubstitutionType::kChromaticMediant});
+        candidates.push_back(Candidate{
+            spelled_on_root(mediant, mediant_root(source, offset, tonic, scale), tonic, scale),
+            SubstitutionType::kChromaticMediant});
       }
     }
   }

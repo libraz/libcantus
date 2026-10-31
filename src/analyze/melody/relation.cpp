@@ -259,11 +259,16 @@ Nullable<MotifRelation> relate_lines(const std::vector<LineNote>& model,
     }
   }
 
-  if (forward && has_shape(shapes, PitchShape::kInversion)) {
+  // Even rhythm runs both ways, so the shape that needs no transposition names the pair.
+  bool literal_retrograde = backward && has_shape(shapes, PitchShape::kRetrograde) &&
+                            answer.front().pitch == model.back().pitch;
+  if (forward && has_shape(shapes, PitchShape::kInversion) &&
+      !(literal_retrograde && semitones != 0)) {
     MotifRelation out = base;
     out.kind = MotifRelationKind::kInversion;
-    out.rationale = "Inversion: every interval turned upside down about the first note" +
-                    std::string(stretched ? ", in " + stretch_phrase(time_ratio) : "");
+    out.rationale = std::string("Inversion: every interval turned upside down") +
+                    (semitones == 0 ? " about the first note" : "") +
+                    (stretched ? ", in " + stretch_phrase(time_ratio) : "");
     return out;
   }
   if (backward && has_shape(shapes, PitchShape::kRetrograde)) {

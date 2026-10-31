@@ -1,6 +1,7 @@
 import { analyzePolyphony } from '../analyze/arrange/index.js';
 import type { DetectKeyOptions } from '../analyze/detect/index.js';
 import { detectKeyFromNotes } from '../analyze/detect/index.js';
+import { hypermeterOver } from '../analyze/form/hypermeter.js';
 import type {
   FormSection,
   FormSectionOptions,
@@ -16,6 +17,7 @@ import {
   sectionsFromNotes,
   structuralCadences,
 } from '../analyze/form/index.js';
+import { boundaryCadences, keyContextFor } from '../analyze/form/phrase.js';
 import type { KeyRegion, KeyTimelineOptions } from '../analyze/keys/index.js';
 import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../analyze/keys/index.js';
 import type { MotifGraph, MotifGraphOptions } from '../analyze/melody/graph.js';
@@ -31,11 +33,7 @@ import type {
   ChordTimelineOptions,
   ChordTimelineResult,
 } from '../analyze/timeline/index.js';
-import {
-  chordTimelineFromNotes,
-  detectCadences,
-  statedKeyRegions,
-} from '../analyze/timeline/index.js';
+import { chordTimelineFromNotes, statedKeyRegions } from '../analyze/timeline/index.js';
 import type { AnalyzedNote, IdentifiedVoiceNote, KeyContext } from '../analyze/voice/index.js';
 import { toVoiceNotes } from '../analyze/voice/index.js';
 import type { NoteEventIndex, NoteEventIndexOptions } from '../core/event-index/index.js';
@@ -526,45 +524,44 @@ export class Score {
   /**
    * The notes pushed off the grid the way a player would.
    *
-   * The metric accents are read from the score's opening signature, since
-   * {@link HumanizeOptions} names one signature rather than a map; pass `ts`
-   * to read a later stretch of a score that changes meter.
+   * The metric accents are read against the score's meter map, exactly as
+   * {@link humanize} reads that map; pass `ts` to read against another meter.
    *
    * @param opts Jitter amounts, accent depth and the seed; see
    *   {@link HumanizeOptions}.
    * @returns The humanized score.
    */
   humanize(opts?: HumanizeOptions): Score {
-    return this.#withNotes(humanize(this.#data.notes, { ts: this.meterAt(0), ...opts }));
+    return this.#withNotes(humanize(this.#data.notes, { ts: this.#data.meters, ...opts }));
   }
 
   /**
    * The notes with ornaments added.
    *
-   * Strong positions are read from the score's opening signature, since
-   * {@link OrnamentOptions} names one signature rather than a map.
+   * Strong positions are read against the score's meter map, exactly as
+   * {@link ornament} reads that map.
    *
    * @param opts The ornament style, how much is decorated, and the seed; see
    *   {@link OrnamentOptions}.
    * @returns The ornamented score.
    */
   ornament(opts?: OrnamentOptions): Score {
-    return this.#withNotes(ornament(this.#data.notes, { ts: this.meterAt(0), ...opts }));
+    return this.#withNotes(ornament(this.#data.notes, { ts: this.#data.meters, ...opts }));
   }
 
   /**
    * The notes placed on a groove template's slots.
    *
-   * The template's per-bar grid is laid out against the score's opening
-   * signature, which is the signature the template must have been extracted
-   * under; a template carrying a different one is refused rather than drifting.
+   * The template's per-bar grid is laid out against the score's meter map,
+   * exactly as {@link applyGrooveTemplate} reads that map; a template extracted
+   * under another meter is refused rather than drifting.
    *
    * @param template The groove template, from `extractGrooveTemplate`.
    * @returns The score with the template's feel imposed.
    * @throws If the template was extracted under another meter.
    */
   groove(template: GrooveTemplate): Score {
-    return this.#withNotes(applyGrooveTemplate(this.#data.notes, template, this.meterAt(0)));
+    return this.#withNotes(applyGrooveTemplate(this.#data.notes, template, this.#data.meters));
   }
 
   /**
@@ -574,8 +571,8 @@ export class Score {
    * slot by slot for how far ahead of or behind the grid it sits and how hard
    * it is struck, and the reading is handed back as a template. Only the
    * subdivision is named, because the score already holds the meter the grid is
-   * laid out against — its opening signature, which is the one the template
-   * records and the one an apply-time meter is checked against.
+   * laid out against — its meter map, read exactly as
+   * {@link extractGrooveTemplate} reads that map.
    *
    * @param subdivision Grid steps per quarter-note beat; a sixteenth-note grid
    *   by default, which is where swing, push and drag are audible.
@@ -589,7 +586,7 @@ export class Score {
    * ```
    */
   grooveTemplate(subdivision?: number): GrooveTemplate {
-    return extractGrooveTemplate(this.#data.notes, this.meterAt(0), subdivision);
+    return extractGrooveTemplate(this.#data.notes, this.#data.meters, subdivision);
   }
 
   /**
@@ -751,10 +748,13 @@ export class Score {
    * @returns The grouping, its downbeats, a confidence, and a rationale.
    */
   hypermeter(opts?: HypermeterOptions): Hypermeter {
-    return hypermeter(this.#data.notes, this.#data.meters, {
-      cadenceBeats: this.#cadenceBeats(),
-      ...opts,
-    });
+    const asked: HypermeterOptions = { ...opts };
+    if ((asked.cadenceBeats ?? null) !== null) {
+      return hypermeter(this.#data.notes, this.#data.meters, asked);
+    }
+    return hypermeterOver(this.#data.notes, this.#data.meters, asked, () =>
+      this.#cadenceSpans(asked.budget),
+    );
   }
 
   /**
@@ -1231,11 +1231,20 @@ export class Score {
     return regions;
   }
 
-  /** Where the score's own harmony closes, as beats. */
-  #cadenceBeats(): number[] {
-    return detectCadences(this.#chordTimeline(), this.#keyContext(undefined)).map(
-      (hit) => hit.atBeat,
+  /**
+   * Where the score's own harmony closes, as the spans its arrival chords sound
+   * through, read in the key {@link Score.phrases} reads them in.
+   */
+  #cadenceSpans(budget: number | undefined) {
+    const timeline = this.#chordTimeline();
+    const key = keyContextFor(
+      this.#key === undefined ? undefined : keyIdentity(this.#key),
+      timeline,
+      this.#data.meters,
+      undefined,
+      budget,
     );
+    return boundaryCadences(timeline, key).spans;
   }
 
   /** The score's context as chord-timeline options, with the caller's on top. */

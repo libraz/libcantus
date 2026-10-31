@@ -59,12 +59,6 @@ int letter_semitones(int letter) { return kLetterSemitones[static_cast<std::size
 /** The note without its octave (`bareOf`). */
 NoteData bare_of(const NoteData& note) { return NoteData{note.letter, note.alter, std::nullopt}; }
 
-/** Shortest signed alteration taking a letter's natural pitch class to `pc` (`alterFor`). */
-double alter_for(int natural, int pc) {
-  int d = mod12(pc - natural);
-  return d > 6 ? d - 12 : d;
-}
-
 /** Whether a simple diatonic number (1..7 within an octave) is a perfect kind. */
 bool is_perfect_number(int simple_number) {
   return simple_number == 1 || simple_number == 4 || simple_number == 5;
@@ -141,14 +135,17 @@ double diatonic_index(const NoteData& note) {
 
 /**
  * The note `steps` semitones from `note`, with its letter moved to `absolute_letter`
- * (the tail shared by `transposeNote` and `transposeByInterval`).
+ * (`landOnLetter`). The alteration is letter arithmetic, so an octave-less note is spelled as the
+ * same note with an octave would be.
  */
 NoteData land_on_letter(const NoteData& note, double absolute_letter, double steps) {
   int letter = mod7(absolute_letter);
   int natural = letter_semitones(letter);
   if (!note.octave) {
-    return assert_note_values(letter, alter_for(natural, mod12(note_to_pitch_class(note) + steps)),
-                              std::nullopt, "transposed note");
+    int source = letter_semitones(mod7(note.letter));
+    double wrapped = 12 * std::floor(absolute_letter / 7);
+    return assert_note_values(letter, note.alter + source + steps - wrapped - natural, std::nullopt,
+                              "transposed note");
   }
   double octave = *note.octave + std::floor(absolute_letter / 7);
   // The same domain this module requires of a note it is given.
@@ -452,17 +449,14 @@ SpelledInterval spelled_interval(const NoteData& a, const NoteData& b) {
     // Signed pitch distance from a to b, so a note below a yields a negative span.
     semitones = note_to_midi(b) - note_to_midi(a);
   } else {
-    letter_steps = mod7(b.letter - a.letter);
-    double raw_semis = mod12(note_to_pitch_class(b) - note_to_pitch_class(a));
-    // Lift the chromatic span into the octave nearest the diatonic reference so wraparound
-    // intervals stay consistent with the diatonic number instead of collapsing modulo 12.
-    int reference = kSimpleReference[static_cast<std::size_t>(letter_steps + 1)];
-    if (reference - raw_semis > 6) {
-      raw_semis += 12;
-    } else if (raw_semis - reference > 6) {
-      raw_semis -= 12;
-    }
-    semitones = raw_semis;
+    // `b` is read in the octave putting its letter 0 to 6 steps above `a`'s: the octave-bearing
+    // measurement with the octaves dropped.
+    int from_letter = mod7(a.letter);
+    int to_letter = mod7(b.letter);
+    letter_steps = mod7(to_letter - from_letter);
+    int wrapped = to_letter < from_letter ? 12 : 0;
+    semitones =
+        letter_semitones(to_letter) + wrapped - letter_semitones(from_letter) + b.alter - a.alter;
   }
   auto number = static_cast<int>(std::fabs(letter_steps)) + 1;
   // The span is measured in the direction the letters move, not as a magnitude; a unison has no

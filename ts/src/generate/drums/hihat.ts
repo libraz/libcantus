@@ -53,6 +53,21 @@ function denser(level: HiHatLevel): HiHatLevel {
   return 'sixteenth';
 }
 
+/** The levels from sparsest to densest. */
+const LEVEL_ORDER: readonly HiHatLevel[] = ['quarter', 'eighth', 'sixteenth'];
+
+/** A bar's hi-hat subdivision, and the dial setting each subdivision enters at. */
+export type HiHatBar = {
+  /** The subdivision the bar is played at. */
+  level: HiHatLevel;
+  /**
+   * For each subdivision, the rhythmic-dial setting above which the bar is at
+   * least that dense: minus infinity where it always is, plus infinity where it
+   * never is.
+   */
+  entries: Readonly<Record<HiHatLevel, number>>;
+};
+
 /** Beats between consecutive strokes at a hi-hat subdivision. */
 export function hiHatStep(level: HiHatLevel): number {
   if (level === 'sixteenth') {
@@ -75,8 +90,11 @@ export function hiHatStep(level: HiHatLevel): number {
  *
  * The two dial draws are addressed by bar, so the dial moves the hats a bar at
  * a time rather than switching a whole section between two subdivisions.
+ *
+ * @returns The bar's level, and the dial setting each subdivision enters at;
+ *   see {@link HiHatBar}.
  */
-export function getHiHatLevel(
+export function getHiHatBar(
   section: SectionType,
   style: DrumStyle,
   rhythmic: number,
@@ -84,7 +102,7 @@ export function getHiHatLevel(
   draw: Draw,
   difficulty: number | undefined,
   bar: number,
-): HiHatLevel {
+): HiHatBar {
   const allow16th = bpm < HH_16TH_BPM_THRESHOLD;
   let base: HiHatLevel = 'eighth';
   let dialed = true;
@@ -126,27 +144,55 @@ export function getHiHatLevel(
     }
   }
 
+  // The tempo and the ceiling bound every level the dial can reach alike.
+  const playable = (proposed: HiHatLevel): HiHatLevel => {
+    let level = !allow16th && proposed === 'sixteenth' ? 'eighth' : proposed;
+    while (level !== 'quarter' && !sustainsStrokes(hiHatStep(level), bpm, difficulty)) {
+      level = sparser(level);
+    }
+    return level;
+  };
+
   let level = base;
+  let thinnedUpTo = Number.NEGATIVE_INFINITY;
+  let filledAbove = Number.POSITIVE_INFINITY;
   if (dialed) {
     // The middle of the dial is the style's own level, so the two halves are
     // read separately: the lower half thins the level out, the upper half
     // fills it in, and each transition is spread across its half instead of
     // landing on one bucket boundary.
-    if (draw.at('hhThin', bar) >= 2 * rhythmic) {
+    const thin = draw.at('hhThin', bar);
+    if (thin >= 2 * rhythmic) {
       level = sparser(level);
     }
-    if (draw.at('hhFill', bar) < 2 * rhythmic - 1) {
+    const fill = draw.at('hhFill', bar);
+    if (fill < 2 * rhythmic - 1) {
       level = denser(level);
     }
+    thinnedUpTo = thin / 2;
+    filledAbove = (fill + 1) / 2;
   }
 
-  if (!allow16th && level === 'sixteenth') {
-    level = 'eighth';
-  }
-  while (level !== 'quarter' && !sustainsStrokes(hiHatStep(level), bpm, difficulty)) {
-    level = sparser(level);
-  }
-  return level;
+  const rank = (candidate: HiHatLevel): number => LEVEL_ORDER.indexOf(candidate);
+  const sparsest = rank(playable(dialed ? sparser(base) : base));
+  const middle = rank(playable(base));
+  const densest = rank(playable(dialed ? denser(base) : base));
+  const entryOf = (grid: HiHatLevel): number =>
+    sparsest >= rank(grid)
+      ? Number.NEGATIVE_INFINITY
+      : middle >= rank(grid)
+        ? thinnedUpTo
+        : densest >= rank(grid)
+          ? filledAbove
+          : Number.POSITIVE_INFINITY;
+  return {
+    level: playable(level),
+    entries: {
+      quarter: entryOf('quarter'),
+      eighth: entryOf('eighth'),
+      sixteenth: entryOf('sixteenth'),
+    },
+  };
 }
 
 /**

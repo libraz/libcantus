@@ -515,3 +515,31 @@ describe('a Rhythm handed over as options', () => {
     );
   });
 });
+
+describe('Rhythm reshapes every pattern it can hold', () => {
+  it('hands an empty pattern back empty', () => {
+    const empty = Rhythm.of([], FOUR_FOUR);
+    expect(empty.halfTime().events).toEqual([]);
+    expect(empty.doubleTime().events).toEqual([]);
+    expect(empty.deform({ rate: 'half' }, { complexity: { rhythmic: 0.2 } }).events).toEqual([]);
+  });
+
+  it('reshapes a pattern whose span ends off the sixteenth grid', () => {
+    const triplet = Rhythm.of([{ position: 0, duration: 1 / 3 }], FOUR_FOUR);
+    expect(triplet.halfTime().events).toEqual([{ position: 0, duration: 1 / 3 }]);
+    expect(triplet.doubleTime().events.map((event) => event.position)).toHaveLength(2);
+    expect(() => Rhythm.generate('7/32', { ctx: { seed: 3 } }).deform()).not.toThrow();
+  });
+
+  it('keeps triplets on their own grid at double time', () => {
+    const triplets = Rhythm.of(
+      Array.from({ length: 12 }, (_, index) => ({ position: index / 3, duration: 1 / 3 })),
+      FOUR_FOUR,
+    );
+    const positions = triplets.doubleTime().events.map((event) => event.position);
+    expect(positions).toHaveLength(24);
+    positions.forEach((position, index) => {
+      expect(position).toBeCloseTo(index / 6, 12);
+    });
+  });
+});

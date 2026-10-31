@@ -10,6 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "cantus/core/meter.h"
@@ -28,6 +29,15 @@ double clamp01(double value);
 
 /** Remainder carrying the sign of the divisor (`floorMod`). */
 double floor_mod(double value, double modulus);
+
+/**
+ * Where an analysed span ends (`resolveSpanEnd`): `total_beats`, checked to lie in
+ * [min(0, start_beat), MAX_SAFE_INTEGER] before it is held to the start, or `sounding_end` when
+ * absent. Never before `start_beat`.
+ * @throws InvalidInputError if a given end is out of range or not finite.
+ */
+double resolve_span_end(std::optional<double> total_beats, double start_beat, double sounding_end,
+                        std::string_view name);
 
 /** Index of the last bar a span occupies; never before the span's first bar (`lastBarOf`). */
 double last_bar_of(const MeterArg& meter, double span_start, double span_end);

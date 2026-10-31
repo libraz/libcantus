@@ -320,13 +320,16 @@ ParseResult<Interval> try_parse_interval_text(const json::Value& name) {
 
 void register_interval_class() {
   def_class_method("Interval.between", [](Args& a) -> json::Value {
-    // `a.intervalTo(b)`: the first note is the receiver.
+    // `a.intervalTo(b)`: the first note measures, so only a Note can; the second is read for its
+    // data alone.
     if (!is_instance(a, 0, "Note")) {
-      property_of(a[0], "intervalTo");
-      throw js::TypeError("a.intervalTo is not a function");
+      throw InvalidInputError("interval a must be a Note; received " + describe_rejected(a[0]));
     }
-    Note first = read_note_instance(a, 0);
-    return to_json(Interval::between(first, read_note_peer(a, 1, "b")));
+    if (!is_instance(a, 1, "Note") &&
+        (!is_js_object(a[1]) || !is_js_object(surface_property(a[1], "data")))) {
+      throw InvalidInputError("interval b must be a Note; received " + describe_rejected(a[1]));
+    }
+    return to_json(Interval::between(read_note_instance(a, 0), read_note_peer(a, 1, "b")));
   });
   def_class_method("Interval.of", [](Args& a) -> json::Value {
     json::Value data = record({{"number", &a[0]}, {"quality", &a[1]}, {"semitones", &a[2]}});

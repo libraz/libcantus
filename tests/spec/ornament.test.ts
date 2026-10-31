@@ -307,3 +307,21 @@ describe('ornament works on any material', () => {
     expect(() => ornament(eighths(), { style: 'nope' as never })).toThrow();
   });
 });
+
+describe('ornament over a meter that changes', () => {
+  it('reads strong positions in the signature in force where each note sounds', () => {
+    const meters = [
+      { startBeat: 0, ts: parseTimeSignature('4/4') },
+      { startBeat: 4, ts: parseTimeSignature('3/4') },
+    ];
+    const notes: NoteEvent[] = [6, 7].map((startBeat) => ({
+      pitch: 60,
+      startBeat,
+      durationBeat: 1,
+      velocity: 80,
+    }));
+    const accented = ornament(notes, { style: 'accent', amount: 1, ts: meters });
+    // Beat 6 is the last beat of a 3/4 bar and beat 7 the next downbeat.
+    expect(accented.map((note) => note.articulation)).toEqual([undefined, 'accent']);
+  });
+});

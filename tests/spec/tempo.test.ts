@@ -255,6 +255,15 @@ describe('ticks', () => {
     expect(() => ticksToBeats(480, -1)).toThrow(InvalidInputError);
   });
 
+  it('refuses a tick count past the safe integers, so every result round-trips', () => {
+    for (const beat of [1e306, 1e13, -1e13]) {
+      expect(() => beatsToTicks(beat, 960)).toThrow(InvalidInputError);
+      expect(() => beatsToTicks(beat, 960)).toThrow(/ticks result/);
+    }
+    const largest = Math.floor(Number.MAX_SAFE_INTEGER / 960);
+    expect(ticksToBeats(beatsToTicks(largest, 960), 960)).toBe(largest);
+  });
+
   it('carries a pickup across the MIDI boundary and back', () => {
     // A tick count is a position, and a position before the first downbeat is
     // negative. Rejecting it would leave a pickup no way through the export.

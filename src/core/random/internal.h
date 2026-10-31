@@ -19,6 +19,9 @@ namespace cantus {
  */
 std::uint32_t hash_path(std::uint32_t domain, std::uint32_t root, const SeedPath& path);
 
+/** A unit draw scaled into [lo, hi), a result rounded up to `hi` pulled below it. */
+double scale_unit_draw(double unit, double lo, double hi);
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_CORE_RANDOM_INTERNAL_H_

@@ -53,3 +53,12 @@ TEST_CASE("a tonic that does not sound the key is rejected", "[spelling]") {
                   InvalidInputError);
   CHECK(spell_line({}, std::nullopt, KeyArg("C major")).empty());
 }
+
+TEST_CASE("a minor key spells its raised degrees on their own letters", "[spelling]") {
+  CHECK(names(spell_line(line({69, 68, 65, 64}), std::nullopt, KeyArg("A minor"))) ==
+        std::vector<std::string>{"A4", "G#4", "F4", "E4"});
+  CHECK(names(spell_line(line({75, 74, 71, 70}), std::nullopt, KeyArg("Eb minor"))) ==
+        std::vector<std::string>{"Eb5", "D5", "Cb5", "Bb4"});
+  CHECK(names(spell_line(line({68, 67, 68}), std::nullopt, KeyArg("G# minor"))) ==
+        std::vector<std::string>{"G#4", "F##4", "G#4"});
+}

@@ -8,7 +8,6 @@
 import type { MeterMap } from '../../core/meter/index.js';
 import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
-import type { KeyScale } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
   assertArray,
@@ -19,7 +18,7 @@ import {
 } from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
-import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
+import { majorKey, type ResolvedKey, resolveKey } from '../../theory/scale/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { functionOf } from '../functional/index.js';
 import { gridForNotes, latestSoundingEnd } from '../grid.js';
@@ -198,9 +197,8 @@ export function tensionCurve(
     const beat = i === 0 ? Math.max(sampleStart, musicStart) : sampleStart + i * step;
     points.push({
       beat,
-      // The pitch classes alone: tension is scored from what sounds against
-      // the tonic, and no reading below here asks how the key is written.
-      tension: sampleTension(prepared, timeline, scaleOf(keyAt(beat)), meters, profile, beat),
+      // The key whole: an augmented sixth is told from a dominant by its letters.
+      tension: sampleTension(prepared, timeline, keyAt(beat), meters, profile, beat),
     });
   }
   return points;
@@ -288,7 +286,7 @@ function allSounding(prepared: PreparedTrack[], beat: number): { pitch: number; 
 function sampleTension(
   prepared: PreparedTrack[],
   timeline: ChordTimeline,
-  key: KeyScale,
+  key: ResolvedKey,
   meters: MeterMap,
   profile: SafetyProfile,
   beat: number,
@@ -344,7 +342,7 @@ function sampleTension(
     }
     // Only the verdict is read, so the replacement-pitch search is skipped.
     const result = evaluateSafety(
-      { profile, candidatePitch: pitch, chord, key, otherVoices: others, strongBeat },
+      { profile, candidatePitch: pitch, chord, key: key.scale, otherVoices: others, strongBeat },
       { suggestions: false },
     );
     if (held !== undefined && tail !== undefined) {

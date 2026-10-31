@@ -9,6 +9,7 @@
 #include "cantus/core/errors.h"
 #include "cantus/core/validation.h"
 #include "cantus/generate/context.h"
+#include "core/random/internal.h"
 #include "core/validation/validation.h"
 #include "js/number.h"
 #include "json/json.h"
@@ -78,7 +79,7 @@ double Draw::float_(double lo, double hi, const SeedPath& path) const {
                             js::to_string(lo) + " > " + js::to_string(hi));
   }
   assert_finite_number(hi - lo, "float span");
-  return lo + at(path) * (hi - lo);
+  return scale_unit_draw(at(path), lo, hi);
 }
 
 }  // namespace cantus

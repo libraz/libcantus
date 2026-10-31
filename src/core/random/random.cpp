@@ -7,6 +7,7 @@
 
 #include "cantus/core/errors.h"
 #include "cantus/core/validation.h"
+#include "core/random/internal.h"
 #include "js/number.h"
 
 namespace cantus {
@@ -44,7 +45,7 @@ double Rng::float_(double lo, double hi) {
                             js::to_string(lo) + " > " + js::to_string(hi));
   }
   assert_finite_number(hi - lo, "float span");
-  return lo + next() * (hi - lo);
+  return scale_unit_draw(next(), lo, hi);
 }
 
 }  // namespace cantus

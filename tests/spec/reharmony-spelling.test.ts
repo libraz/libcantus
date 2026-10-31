@@ -55,6 +55,27 @@ describe('substituteChord spelling', () => {
   });
 });
 
+describe('chromatic mediants are written a third from the source root', () => {
+  it.each([
+    ['E', 'C major', ['G#', 'C#']],
+    ['C', 'A minor', ['Eb', 'E', 'Ab']],
+    ['Gm', 'Eb major', ['Bbm', 'Bm', 'Em']],
+    ['Dm', 'Bb major', ['Fm', 'F#m', 'Bm']],
+    ['A', 'F# minor', ['C', 'C#', 'F']],
+    ['Bbm', 'Db major', ['Dm', 'Gbm', 'Gm']],
+  ])('%s in %s', (chord, key, expected) => {
+    const mediants = substituteChord(parseChordSymbol(chord), key).filter(
+      (substitution) => substitution.type === 'chromaticMediant',
+    );
+    expect(mediants.map((substitution) => formatChordSymbol(substitution.chord))).toEqual(expected);
+    const sourceLetter = parseChordSymbol(chord).rootSpelling?.letter ?? -1;
+    for (const { chord: mediant } of mediants) {
+      const steps = (((mediant.rootSpelling?.letter ?? -1) - sourceLetter) % 7) + 7;
+      expect([2, 5]).toContain(steps % 7);
+    }
+  });
+});
+
 describe('modalInterchangePalette spelling', () => {
   it('borrows from the parallel minor with that key’s flats', () => {
     const symbols = modalInterchangePalette(majorKey(0)).map((borrowed) =>

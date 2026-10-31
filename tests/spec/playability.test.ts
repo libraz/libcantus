@@ -432,8 +432,8 @@ describe('a drum part is a kit take with voices dubbed over it', () => {
 });
 
 describe('playability layer 3', () => {
-  /** A twelve-fret leap between two sixteenth notes. */
-  const leap = [note(28, 0, 0.25), note(55, 0.25, 0.25)];
+  /** A twelve-fret leap between two stopped sixteenth notes. */
+  const leap = [note(29, 0, 0.25), note(56, 0.25, 0.25)];
 
   it('stays silent without a tempo', () => {
     const report = playability(leap, BASS_4_STRING);

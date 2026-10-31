@@ -420,6 +420,12 @@ CONSTANTS: frozenset[str] = frozenset(
 _constants: dict[str, Any] = {}
 
 
+def _options(bag: dict[str, Any]) -> Any:
+    """The options that were given, or UNSET when none was."""
+    given = {k: v for k, v in bag.items() if v is not None}
+    return given or UNSET
+
+
 def constant(name: str) -> Any:
     """The value of constant ``name``, read from the core on first access."""
     if name not in CONSTANTS:
@@ -464,8 +470,24 @@ def analyze_arrangement(
     )
 
 
-def analyze_chord(chord: Any, key: Any, opts: Any = UNSET, /) -> Any:
-    return runtime.call("analyzeChord", [chord, key, opts])
+def analyze_chord(
+    chord: Any,
+    key: Any,
+    /,
+    *,
+    applied: Any = None,
+    neapolitan: Any = None,
+    alternatives: Any = None,
+) -> Any:
+    return runtime.call(
+        "analyzeChord",
+        [chord, key],
+        {
+            "applied": applied,
+            "neapolitan": neapolitan,
+            "alternatives": alternatives,
+        },
+    )
 
 
 def analyze_polyphony(notes: Any, chord_at_beat: Any, key: Any, /) -> Any:
@@ -1226,8 +1248,24 @@ def exceeds_spacing(upper: Any, lower: Any, max_semitones: Any = UNSET, /) -> An
     return runtime.call("exceedsSpacing", [upper, lower, max_semitones])
 
 
-def explain_roman(chord: Any, key: Any, opts: Any = UNSET, /) -> Any:
-    return runtime.call("explainRoman", [chord, key, opts])
+def explain_roman(
+    chord: Any,
+    key: Any,
+    /,
+    *,
+    applied: Any = None,
+    neapolitan: Any = None,
+    alternatives: Any = None,
+) -> Any:
+    return runtime.call(
+        "explainRoman",
+        [chord, key],
+        {
+            "applied": applied,
+            "neapolitan": neapolitan,
+            "alternatives": alternatives,
+        },
+    )
 
 
 def extract_groove_template(events: Any, ts: Any, subdivision: Any = UNSET, /) -> Any:
@@ -1279,8 +1317,8 @@ def format_bar_position(beat_in_quarters: Any, meter: Any, decimals: Any = UNSET
     return runtime.call("formatBarPosition", [beat_in_quarters, meter, decimals])
 
 
-def format_chord_symbol(chord: Any, opts: Any = UNSET, /) -> Any:
-    return runtime.call("formatChordSymbol", [chord, opts])
+def format_chord_symbol(chord: Any, /, *, system: Any = None, flats: Any = None) -> Any:
+    return runtime.call("formatChordSymbol", [chord], {"system": system, "flats": flats})
 
 
 def format_key_name(key: Any, /, *, system: Any = None) -> Any:
@@ -2056,12 +2094,79 @@ def tempo_at(beat: Any, map: Any, /) -> Any:
     return runtime.call("tempoAt", [beat, map])
 
 
-def tension_curve(tracks: Any, opts: Any = UNSET, /) -> Any:
-    return runtime.call("tensionCurve", [tracks, opts])
+def tension_curve(
+    tracks: Any,
+    /,
+    *,
+    key: Any = None,
+    keys: Any = None,
+    timeline: Any = None,
+    harmony_tracks: Any = None,
+    min_severity: Any = None,
+    ts: Any = None,
+    meters: Any = None,
+    pickup_beats: Any = None,
+    harmonic_rhythm: Any = None,
+    profile: Any = None,
+    budget: Any = None,
+    step: Any = None,
+) -> Any:
+    return runtime.call(
+        "tensionCurve",
+        [tracks],
+        {
+            "key": key,
+            "keys": keys,
+            "timeline": timeline,
+            "harmonyTracks": harmony_tracks,
+            "minSeverity": min_severity,
+            "ts": ts,
+            "meters": meters,
+            "pickupBeats": pickup_beats,
+            "harmonicRhythm": harmonic_rhythm,
+            "profile": profile,
+            "budget": budget,
+            "step": step,
+        },
+    )
 
 
-def tension_curve_from(tracks: Any, analysis: Any, opts: Any = UNSET, /) -> Any:
-    return runtime.call("tensionCurveFrom", [tracks, analysis, opts])
+def tension_curve_from(
+    tracks: Any,
+    analysis: Any,
+    /,
+    *,
+    key: Any = None,
+    keys: Any = None,
+    timeline: Any = None,
+    harmony_tracks: Any = None,
+    min_severity: Any = None,
+    ts: Any = None,
+    meters: Any = None,
+    pickup_beats: Any = None,
+    harmonic_rhythm: Any = None,
+    profile: Any = None,
+    budget: Any = None,
+    step: Any = None,
+) -> Any:
+    return runtime.call(
+        "tensionCurveFrom",
+        [tracks, analysis],
+        {
+            "key": key,
+            "keys": keys,
+            "timeline": timeline,
+            "harmonyTracks": harmony_tracks,
+            "minSeverity": min_severity,
+            "ts": ts,
+            "meters": meters,
+            "pickupBeats": pickup_beats,
+            "harmonicRhythm": harmonic_rhythm,
+            "profile": profile,
+            "budget": budget,
+            "step": step,
+        },
+    )
 
 
 def thin(events: Any, amount: Any, ts: Any, /) -> Any:
@@ -2124,8 +2229,22 @@ def transpose_chord(chord: Any, semitones: Any, /) -> Any:
     return runtime.call("transposeChord", [chord, semitones])
 
 
-def transpose_chord_symbol(text: Any, semitones: Any, opts: Any = UNSET, /) -> Any:
-    return runtime.call("transposeChordSymbol", [text, semitones, opts])
+def transpose_chord_symbol(
+    text: Any,
+    semitones: Any,
+    /,
+    *,
+    system: Any = None,
+    flats: Any = None,
+) -> Any:
+    return runtime.call(
+        "transposeChordSymbol",
+        [text, semitones],
+        {
+            "system": system,
+            "flats": flats,
+        },
+    )
 
 
 def transpose_note(note: Any, semitones: Any, /, *, spelling: Any = None) -> Any:
@@ -2276,8 +2395,39 @@ class Arrangement(Model):
         runtime.construct(self, "Arrangement.constructor", [data])
 
     @staticmethod
-    def of(tracks: Any, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Arrangement.of", [tracks, opts])
+    def of(
+        tracks: Any,
+        /,
+        *,
+        profile: Any = None,
+        budget: Any = None,
+        keys: Any = None,
+        harmony_tracks: Any = None,
+        min_severity: Any = None,
+        ts: Any = None,
+        pickup_beats: Any = None,
+        harmonic_rhythm: Any = None,
+        key: Any = None,
+        meters: Any = None,
+        timeline: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Arrangement.of",
+            [tracks],
+            {
+                "profile": profile,
+                "budget": budget,
+                "keys": keys,
+                "harmonyTracks": harmony_tracks,
+                "minSeverity": min_severity,
+                "ts": ts,
+                "pickupBeats": pickup_beats,
+                "harmonicRhythm": harmonic_rhythm,
+                "key": key,
+                "meters": meters,
+                "timeline": timeline,
+            },
+        )
 
     @staticmethod
     def from_data(data: Any, /) -> Any:
@@ -2305,11 +2455,73 @@ class Arrangement(Model):
     def update(self, edits: Any, /) -> Any:
         return runtime.call("Arrangement#update", [self, edits])
 
-    def tension(self, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Arrangement#tension", [self, opts])
+    def tension(
+        self,
+        *,
+        profile: Any = None,
+        budget: Any = None,
+        keys: Any = None,
+        harmony_tracks: Any = None,
+        min_severity: Any = None,
+        ts: Any = None,
+        pickup_beats: Any = None,
+        harmonic_rhythm: Any = None,
+        key: Any = None,
+        meters: Any = None,
+        timeline: Any = None,
+        step: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Arrangement#tension",
+            [self],
+            {
+                "profile": profile,
+                "budget": budget,
+                "keys": keys,
+                "harmonyTracks": harmony_tracks,
+                "minSeverity": min_severity,
+                "ts": ts,
+                "pickupBeats": pickup_beats,
+                "harmonicRhythm": harmonic_rhythm,
+                "key": key,
+                "meters": meters,
+                "timeline": timeline,
+                "step": step,
+            },
+        )
 
-    def analyze(self, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Arrangement#analyze", [self, opts])
+    def analyze(
+        self,
+        *,
+        profile: Any = None,
+        budget: Any = None,
+        keys: Any = None,
+        harmony_tracks: Any = None,
+        min_severity: Any = None,
+        ts: Any = None,
+        pickup_beats: Any = None,
+        harmonic_rhythm: Any = None,
+        key: Any = None,
+        meters: Any = None,
+        timeline: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Arrangement#analyze",
+            [self],
+            {
+                "profile": profile,
+                "budget": budget,
+                "keys": keys,
+                "harmonyTracks": harmony_tracks,
+                "minSeverity": min_severity,
+                "ts": ts,
+                "pickupBeats": pickup_beats,
+                "harmonicRhythm": harmonic_rhythm,
+                "key": key,
+                "meters": meters,
+                "timeline": timeline,
+            },
+        )
 
     def timeline(self) -> Any:
         return runtime.call("Arrangement#timeline", [self])
@@ -2418,14 +2630,46 @@ class Chord(Model):
             },
         )
 
-    def explain(self, key: Any = UNSET, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Chord#explain", [self, key, opts])
+    def explain(
+        self,
+        key: Any = UNSET,
+        /,
+        *,
+        applied: Any = None,
+        neapolitan: Any = None,
+        alternatives: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Chord#explain",
+            [self, key],
+            {
+                "applied": applied,
+                "neapolitan": neapolitan,
+                "alternatives": alternatives,
+            },
+        )
 
     def function(self, key: Any = UNSET, /) -> Any:
         return runtime.call("Chord#function", [self, key])
 
-    def analyze(self, key: Any = UNSET, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Chord#analyze", [self, key, opts])
+    def analyze(
+        self,
+        key: Any = UNSET,
+        /,
+        *,
+        applied: Any = None,
+        neapolitan: Any = None,
+        alternatives: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Chord#analyze",
+            [self, key],
+            {
+                "applied": applied,
+                "neapolitan": neapolitan,
+                "alternatives": alternatives,
+            },
+        )
 
     def is_borrowed(self, key: Any = UNSET, /) -> Any:
         return runtime.call("Chord#isBorrowed", [self, key])
@@ -2442,8 +2686,8 @@ class Chord(Model):
     def modal_interchange(self, key: Any = UNSET, /) -> Any:
         return runtime.call("Chord#modalInterchange", [self, key])
 
-    def symbol(self, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Chord#symbol", [self, opts])
+    def symbol(self, *, system: Any = None, flats: Any = None) -> Any:
+        return runtime.call("Chord#symbol", [self], {"system": system, "flats": flats})
 
     def voice(
         self,
@@ -2569,11 +2813,57 @@ class Composer(Model):
     def drums(self, opts: Any, /) -> Any:
         return runtime.call("Composer#drums", [self, opts])
 
-    def bass(self, source: Any, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Composer#bass", [self, source, opts])
+    def bass(
+        self,
+        source: Any,
+        /,
+        *,
+        budget: Any = None,
+        style: Any = None,
+        octave: Any = None,
+        instrument: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Composer#bass",
+            [self, source],
+            {
+                "budget": budget,
+                "style": style,
+                "octave": octave,
+                "instrument": instrument,
+            },
+        )
 
-    def counter_melody(self, melody: Any, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Composer#counterMelody", [self, melody, opts])
+    def counter_melody(
+        self,
+        melody: Any,
+        /,
+        *,
+        weights: Any = None,
+        profile: Any = None,
+        chord_at: Any = None,
+        chord_change_beats: Any = None,
+        register: Any = None,
+        rhythm: Any = None,
+        pitch_low: Any = None,
+        pitch_high: Any = None,
+        timeline: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Composer#counterMelody",
+            [self, melody],
+            {
+                "weights": weights,
+                "profile": profile,
+                "chordAt": chord_at,
+                "chordChangeBeats": chord_change_beats,
+                "register": register,
+                "rhythm": rhythm,
+                "pitchLow": pitch_low,
+                "pitchHigh": pitch_high,
+                "timeline": timeline,
+            },
+        )
 
     def harmonize(
         self,
@@ -2638,8 +2928,8 @@ class Composer(Model):
 
 
 class Duration(Model):
-    def __init__(self, value: Any, /) -> None:
-        runtime.construct(self, "Duration.constructor", [value])
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError("Duration has no public constructor; use Duration.of")
 
     @staticmethod
     def of(base: Any, dots: Any = UNSET, tuplet: Any = UNSET, /) -> Any:
@@ -2695,8 +2985,8 @@ class Duration(Model):
 
 
 class Instrument(Model):
-    def __init__(self, profile: Any, /) -> None:
-        runtime.construct(self, "Instrument.constructor", [profile])
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError("Instrument has no public constructor; use Instrument.of")
 
     @staticmethod
     def of(profile: Any, /) -> Any:
@@ -2775,19 +3065,8 @@ class Instrument(Model):
 
 
 class Interval(Model):
-    def __init__(
-        self,
-        number_value: Any,
-        quality: Any,
-        semitones: Any,
-        descending: Any = UNSET,
-        /,
-    ) -> None:
-        runtime.construct(
-            self,
-            "Interval.constructor",
-            [number_value, quality, semitones, descending],
-        )
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError("Interval has no public constructor; use Interval.of")
 
     @staticmethod
     def between(a: Any, b: Any, /) -> Any:
@@ -3101,8 +3380,8 @@ class Key(Model):
 
 
 class Meter(Model):
-    def __init__(self, ts: Any, /) -> None:
-        runtime.construct(self, "Meter.constructor", [ts])
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError("Meter has no public constructor; use Meter.of")
 
     @staticmethod
     def of(numerator: Any, denominator: Any, grouping: Any = UNSET, /) -> Any:
@@ -3435,14 +3714,50 @@ class Progression(Model):
     def functions(self, key: Any = UNSET, /) -> Any:
         return runtime.call("Progression#functions", [self, key])
 
-    def analyze(self, key: Any = UNSET, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Progression#analyze", [self, key, opts])
+    def analyze(
+        self,
+        key: Any = UNSET,
+        /,
+        *,
+        applied: Any = None,
+        neapolitan: Any = None,
+        alternatives: Any = None,
+        approach: Any = None,
+        voicing: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Progression#analyze",
+            [self, key],
+            {
+                "applied": applied,
+                "neapolitan": neapolitan,
+                "alternatives": alternatives,
+                "approach": approach,
+                "voicing": voicing,
+            },
+        )
 
     def scales(self) -> Any:
         return runtime.call("Progression#scales", [self])
 
-    def cadences(self, key: Any = UNSET, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Progression#cadences", [self, key, opts])
+    def cadences(
+        self,
+        key: Any = UNSET,
+        /,
+        *,
+        voicing: Any = None,
+        alternatives: Any = None,
+        approach: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Progression#cadences",
+            [self, key],
+            {
+                "voicing": voicing,
+                "alternatives": alternatives,
+                "approach": approach,
+            },
+        )
 
     def substitute(self, index: Any, type_: Any, /, *, melody_pcs: Any = None) -> Any:
         return runtime.call(
@@ -3537,8 +3852,11 @@ class Rhythm(Model):
     def ornament_by(self, is_ornament: Any, amount: Any, ctx: Any = UNSET, /) -> Any:
         return runtime.call("Rhythm#ornamentBy", [self, is_ornament, amount, ctx])
 
-    def deform(self, opts: Any = UNSET, ctx: Any = UNSET, /) -> Any:
-        return runtime.call("Rhythm#deform", [self, opts, ctx])
+    def deform(self, ctx: Any = UNSET, /, *, rate: Any = None, is_ornament: Any = None) -> Any:
+        return runtime.call(
+            "Rhythm#deform",
+            [self, _options({"rate": rate, "isOrnament": is_ornament}), ctx],
+        )
 
     def within_ceiling(self, ctx: Any = UNSET, /) -> Any:
         return runtime.call("Rhythm#withinCeiling", [self, ctx])
@@ -3906,8 +4224,28 @@ class Score(Model):
     def rhythm(self, *, budget: Any = None, total_beats: Any = None) -> Any:
         return runtime.call("Score#rhythm", [self], {"budget": budget, "totalBeats": total_beats})
 
-    def motif_graph(self, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Score#motifGraph", [self, opts])
+    def motif_graph(
+        self,
+        *,
+        key: Any = None,
+        variation_threshold: Any = None,
+        budget: Any = None,
+        min_notes: Any = None,
+        max_notes: Any = None,
+        min_occurrences: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Score#motifGraph",
+            [self],
+            {
+                "key": key,
+                "variationThreshold": variation_threshold,
+                "budget": budget,
+                "minNotes": min_notes,
+                "maxNotes": max_notes,
+                "minOccurrences": min_occurrences,
+            },
+        )
 
     def evaluate(self, plan: Any, /, *, budget: Any = None) -> Any:
         return runtime.call("Score#evaluate", [self, plan], {"budget": budget})
@@ -3964,8 +4302,8 @@ class Score(Model):
 
 
 class Tempo(Model):
-    def __init__(self, bpm: Any, /) -> None:
-        runtime.construct(self, "Tempo.constructor", [bpm])
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError("Tempo has no public constructor; use Tempo.of")
 
     @staticmethod
     def of(bpm: Any, /) -> Any:
@@ -4162,8 +4500,8 @@ class Timeline(Model):
 
 
 class Tuning(Model):
-    def __init__(self, table: Any, /) -> None:
-        runtime.construct(self, "Tuning.constructor", [table])
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError("Tuning has no public constructor; use Tuning.of")
 
     @staticmethod
     def of(table: Any, /) -> Any:
@@ -4397,8 +4735,26 @@ class Voicing(Model):
             },
         )
 
-    def independence(self, other: Any, opts: Any = UNSET, /) -> Any:
-        return runtime.call("Voicing#independence", [self, other, opts])
+    def independence(
+        self,
+        other: Any,
+        /,
+        *,
+        lead_attacks: Any = None,
+        counter_attacks: Any = None,
+        count_fourths: Any = None,
+        key: Any = None,
+    ) -> Any:
+        return runtime.call(
+            "Voicing#independence",
+            [self, other],
+            {
+                "leadAttacks": lead_attacks,
+                "counterAttacks": counter_attacks,
+                "countFourths": count_fourths,
+                "key": key,
+            },
+        )
 
     def safety_of(
         self,

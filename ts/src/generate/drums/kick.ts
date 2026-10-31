@@ -55,6 +55,16 @@ export type KickSlot = {
   sections?: Section[];
 };
 
+/**
+ * A realised bar of kick, slot by slot: the rhythmic-dial setting above which
+ * the slot sounds (minus infinity for one the figure states outright), or
+ * undefined where it is silent at this setting.
+ *
+ * The setting is what lets a difficulty ceiling settle two strokes too close
+ * together in the order the dial brought them in.
+ */
+export type KickEntries = readonly (number | undefined)[];
+
 /** A style's kick figure: the slots it always plays, plus the ones it may. */
 export type KickFigure = readonly KickSlot[];
 
@@ -149,11 +159,6 @@ export const KICK_FIGURES: Readonly<Record<DrumStyle, KickFigure>> = deepFreeze(
   standard: DEFAULT_FIGURE,
 });
 
-/** An empty bar of the grid. */
-function emptyPattern(): boolean[] {
-  return Array.from({ length: KICK_STEPS }, () => false);
-}
-
 /**
  * Whether a pre-chorus bar sits in the two-bar lift into the chorus.
  *
@@ -175,23 +180,24 @@ export function isInPreChorusLift(
 }
 
 /**
- * Realise a kick figure for one bar.
+ * Realise a kick figure for one bar, with the dial setting each sounding slot
+ * enters at.
  *
  * @param figure The figure to play.
  * @param section Current section, matched against each slot's own sections.
  * @param bar Bar index, which addresses the draws and decides slot parity.
  * @param draw Position-addressed draws for the kick.
  * @param rhythmic Rhythmic dial in [0, 1].
- * @returns The bar's onsets on the sixteenth grid.
+ * @returns The bar's slots on the sixteenth grid; see {@link KickEntries}.
  */
-export function realiseKickFigure(
+export function realiseKickEntries(
   figure: KickFigure,
   section: SectionType,
   bar: number,
   draw: Draw,
   rhythmic: number,
-): KickPattern {
-  const pattern = emptyPattern();
+): (number | undefined)[] {
+  const entries: (number | undefined)[] = Array.from({ length: KICK_STEPS }, () => undefined);
   for (const slot of figure) {
     if (slot.step < 0 || slot.step >= KICK_STEPS) {
       continue;
@@ -203,14 +209,20 @@ export function realiseKickFigure(
       continue;
     }
     if (slot.probability === undefined) {
-      pattern[slot.step] = true;
+      entries[slot.step] = Number.NEGATIVE_INFINITY;
       continue;
     }
-    if (draw.prob(leanedBy(slot.probability, rhythmic), 'kick', bar, slot.slot ?? slot.step)) {
-      pattern[slot.step] = true;
+    // The slot sounds while its draw is under the leaned chance, which is from
+    // the dial setting `draw / probability - 0.5` up.
+    const at = draw.at('kick', bar, slot.slot ?? slot.step);
+    if (at < leanedBy(slot.probability, rhythmic)) {
+      entries[slot.step] = Math.min(
+        entries[slot.step] ?? Number.POSITIVE_INFINITY,
+        at / slot.probability - 0.5,
+      );
     }
   }
-  return pattern;
+  return entries;
 }
 
 /**
@@ -229,7 +241,22 @@ export function getKickPattern(
   draw: Draw,
   rhythmic: number,
 ): KickPattern {
+  return getKickEntries(section, style, bar, draw, rhythmic).map((entry) => entry !== undefined);
+}
+
+/**
+ * {@link getKickPattern}, with the dial setting each sounding slot enters at.
+ *
+ * @returns The bar's slots on the sixteenth grid; see {@link KickEntries}.
+ */
+export function getKickEntries(
+  section: SectionType,
+  style: DrumStyle,
+  bar: number,
+  draw: Draw,
+  rhythmic: number,
+): KickEntries {
   const own = KICK_FIGURES[style] ?? DEFAULT_FIGURE;
   const figure = section === 'outro' ? [...OUTRO_FIGURE, ...statedSlots(own)] : own;
-  return realiseKickFigure(figure, section, bar, draw, rhythmic);
+  return realiseKickEntries(figure, section, bar, draw, rhythmic);
 }

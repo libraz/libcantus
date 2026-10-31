@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include <vector>
 
 #include "analyze/rhythm/internal.h"
@@ -41,14 +42,21 @@ TEST_CASE("four straight quarters read as dense, on grid and unsyncopated", "[rh
 }
 
 TEST_CASE("a span with nothing sounding has no rhythm to place", "[rhythm]") {
-  RhythmAnalysisOptions options;
-  options.totalBeats = std::numeric_limits<double>::quiet_NaN();
-  RhythmAnalysis result = analyze_rhythm({}, options);
+  RhythmAnalysis result = analyze_rhythm({});
   CHECK(result.onsets == 0);
   CHECK(result.onsetLevels.size() == 6);
   CHECK(result.interOnsetShares.size() == rhythm_ioi_bins().size());
   CHECK(result.rationale == "Nothing sounds, so there is no rhythm to place on a grid");
+}
+
+TEST_CASE("totalBeats is checked before it is held to the span start", "[rhythm]") {
+  RhythmAnalysisOptions options;
+  options.totalBeats = std::numeric_limits<double>::quiet_NaN();
+  CHECK_THROWS_AS(analyze_rhythm({}, options), InvalidInputError);
   CHECK_THROWS_AS(analyze_rhythm(quarters(4), options), InvalidInputError);
+  options.totalBeats = -100;
+  CHECK_THROWS_WITH(analyze_rhythm(quarters(4), options),
+                    "rhythm totalBeats must be in [0, 9007199254740991]; received -100");
 }
 
 TEST_CASE("intervals are binned to the half-octave steps", "[rhythm]") {

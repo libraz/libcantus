@@ -62,7 +62,12 @@ describe('a reharmonization is spelled on the key it was asked for', () => {
         }
         const proposed = [
           ...modalInterchangePalette(key).map((borrowed) => borrowed.chord),
-          ...substituteChord(makeChord((pc + 7) % 12, 'dom7'), key).map((sub) => sub.chord),
+          // A chromatic mediant is written a third from its source root, which
+          // may sit off the key's side (G7's mediants in F# major are Bb and Eb);
+          // reharmony-spelling checks that rule.
+          ...substituteChord(makeChord((pc + 7) % 12, 'dom7'), key)
+            .filter((sub) => sub.type !== 'chromaticMediant')
+            .map((sub) => sub.chord),
           negativeHarmonyMirror(makeChord(pc, 'maj'), key),
         ];
         for (const chord of proposed) {

@@ -1,6 +1,7 @@
 import { BEAT_EPS } from '../../analyze/adjacency.js';
 import { assertChordTimeline, type ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
+import { canonicalNoteOrder } from '../../core/event-index/order.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar, meterAt, toMeterData } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
@@ -626,6 +627,12 @@ export function developMotif(
     return inTimeOrder(cell);
   }
 
+  // The cell is walked forwards in time, ties by pitch, so the motion a note
+  // continues and the pitches claimed first do not depend on the listing.
+  const line = canonicalNoteOrder(cellNotes).flatMap((index) => {
+    const note = cellNotes[index];
+    return note === undefined ? [] : [note];
+  });
   // Clamp a degenerate near-zero span so the tile count stays finite, and step
   // the offset multiplicatively so rounding error cannot accumulate over tiles.
   const tileSpan = Math.max(span, MIN_TILE_SPAN);
@@ -638,7 +645,7 @@ export function developMotif(
     // the same cell pitch under the same harmony wants the same answer.
     const taken = new Map<number, number>();
     let previous: number | undefined;
-    for (const n of cellNotes) {
+    for (const n of line) {
       const startBeat = offset + (n.startBeat - origin);
       if (startBeat >= totalBeats) {
         continue;

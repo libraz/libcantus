@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <string>
+#include <variant>
 
 #include "cantus/core/errors.h"
 #include "cantus/core/meter.h"
@@ -45,8 +46,28 @@ Quantized quantize_to_grid(double beat, double bar_beats, double subdivision,
 
 }  // namespace
 
+TimeSignature groove_signature(const MeterData& meter) {
+  const MeterMap* map = std::get_if<MeterMap>(&meter);
+  if (map == nullptr) {
+    return std::get<TimeSignature>(meter);
+  }
+  TimeSignature opening = meter_at(0, MeterArg(*map));
+  for (const MeterChange& change : *map) {
+    if (change.ts.numerator != opening.numerator || change.ts.denominator != opening.denominator) {
+      throw InvalidInputError("groove time signature must be one signature throughout; received " +
+                              js::to_string(change.ts.numerator) + "/" +
+                              js::to_string(change.ts.denominator) + " at beat " +
+                              js::to_string(change.startBeat) + " in a meter that is " +
+                              js::to_string(opening.numerator) + "/" +
+                              js::to_string(opening.denominator) + " at beat 0");
+    }
+  }
+  return opening;
+}
+
 std::vector<NoteEvent> humanize_with(const std::vector<NoteEvent>& sounding,
                                      const HumanizeRequest& request, const Draw& draw) {
+  MeterArg meter(request.ts);
   std::vector<NoteEvent> out;
   for (const NoteEvent& event : sounding) {
     // Addressed by the event rather than by how many events came before it.
@@ -56,7 +77,7 @@ std::vector<NoteEvent> humanize_with(const std::vector<NoteEvent>& sounding,
     // Not clamped at 0: a pickup is written before the downbeat.
     double start_beat = event.startBeat + timing_offset;
 
-    int weight = metric_weight(event.startBeat, request.ts);
+    int weight = metric_weight(event.startBeat, meter);
     double accent_boost = (weight / GROOVE_MAX_METRIC_WEIGHT) * request.accent;
     double velocity_offset =
         draw.float_(-request.velocityJitter, request.velocityJitter,
@@ -78,8 +99,8 @@ std::vector<NoteEvent> humanize_with(const std::vector<NoteEvent>& sounding,
 
 std::vector<NoteEvent> humanize(const std::vector<NoteEvent>& events, const HumanizeOptions& opts) {
   HumanizeRequest request;
-  // The meter is read once, here, and every position below is weighed against it.
-  request.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kGrooveDefaultTs)), "ts"));
+  // The meter is read once, here, and every position below is weighed in the signature in force.
+  request.ts = to_meter_data(opts.ts.value_or(MeterArg(kGrooveDefaultTs)), "ts");
   NoteEventAssertOptions note_options;
   note_options.allowNonPositiveDuration = true;
   assert_note_events(events, "humanize events", note_options);
@@ -99,7 +120,7 @@ std::vector<NoteEvent> humanize(const std::vector<NoteEvent>& events, const Huma
 
 GrooveTemplate extract_groove_template(const std::vector<NoteEvent>& events, const MeterArg& ts,
                                        std::optional<int> subdivision) {
-  TimeSignature meter = meter_at(0, to_meter_data(ts, "ts"));
+  TimeSignature meter = groove_signature(to_meter_data(ts, "ts"));
   NoteEventAssertOptions note_options;
   note_options.allowNonPositiveDuration = true;
   assert_note_events(events, "groove source events", note_options);
@@ -167,7 +188,7 @@ std::vector<GroovedNote> groove_notes(const std::vector<NoteEvent>& sounding,
 std::vector<NoteEvent> apply_groove_template(const std::vector<NoteEvent>& events,
                                              const GrooveTemplate& groove_template,
                                              const MeterArg& ts) {
-  TimeSignature meter = meter_at(0, to_meter_data(ts, "ts"));
+  TimeSignature meter = groove_signature(to_meter_data(ts, "ts"));
   NoteEventAssertOptions note_options;
   note_options.allowNonPositiveDuration = true;
   assert_note_events(events, "groove target events", note_options);

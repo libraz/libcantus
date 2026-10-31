@@ -1,5 +1,6 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { includeAt, type PositionalRng, type SeedPath } from '../../core/random/index.js';
+import { scaleUnitDraw } from '../../core/random/internal.js';
 import {
   assertArray,
   assertFiniteNumber,
@@ -157,7 +158,7 @@ export function drawsFrom(rng: PositionalRng, ...prefix: SeedPath): Draw {
       // would sample outside [lo, hi). `Rng.float` rejects such a pair, and the
       // two samplers promise the same range.
       assertFiniteNumber(hi - lo, 'float span');
-      return lo + at(...path) * (hi - lo);
+      return scaleUnitDraw(at(...path), lo, hi);
     },
   };
 }

@@ -17,7 +17,13 @@ import {
   type PositionalRng,
   resolveAlgorithmVersion,
 } from '../../core/random/index.js';
-import { assertInteger, assertRange, assertRecord } from '../../core/validation/index.js';
+import {
+  assertArray,
+  assertFunction,
+  assertInteger,
+  assertRange,
+  assertRecord,
+} from '../../core/validation/index.js';
 import { assertVocabulary, type Vocabulary } from '../vocabulary/types.js';
 import { assertDifficulty } from './difficulty.js';
 import { type Draw, drawsFrom } from './draw.js';
@@ -150,6 +156,18 @@ export type ResolvedContext = {
 /** The seed a generator uses when the caller names none. */
 export const DEFAULT_SEED = 0;
 
+/** Whether a context field was left out: absent, or explicitly null. */
+function nullish(value: unknown): value is null | undefined {
+  return value === undefined || value === null;
+}
+
+/** A supplied positional source, checked to have the `at` sampler every draw calls. */
+function assertPositionalSource(rng: PositionalRng): PositionalRng {
+  const source = assertRecord<PositionalRng>(rng, 'ctx.rng');
+  assertFunction(source.at, 'ctx.rng.at');
+  return source;
+}
+
 /** Path segment separating one algorithm version's draws from another's. */
 const VERSION_SEGMENT = 'v';
 
@@ -185,7 +203,9 @@ export function resolveContext(input?: GenerationContextInput): ResolvedContext 
   const ctx: GenerationContext =
     typeof input === 'number' ? { seed: input } : (input ?? { seed: DEFAULT_SEED });
   const seed = assertInteger(ctx.seed ?? DEFAULT_SEED, 'seed', 0, 0xffffffff);
-  const complexity = ctx.complexity ?? {};
+  const complexity = nullish(ctx.complexity)
+    ? {}
+    : assertRecord<Complexity>(ctx.complexity, 'ctx.complexity');
   const rhythmic =
     complexity.rhythmic === undefined
       ? undefined
@@ -203,13 +223,18 @@ export function resolveContext(input?: GenerationContextInput): ResolvedContext 
   const bpm =
     ctx.bpm === undefined ? undefined : assertRange(ctx.bpm, Number.MIN_VALUE, 1000, 'bpm');
   const algorithmVersion = resolveAlgorithmVersion(ctx.algorithmVersion);
-  const supplied = ctx.rng;
-  const instruments = ctx.instruments;
+  // A falsy source means none was supplied; anything else has to be one.
+  const supplied = ctx.rng ? assertPositionalSource(ctx.rng) : undefined;
+  const instruments = nullish(ctx.instruments)
+    ? undefined
+    : assertRecord<Record<string, InstrumentProfile>>(ctx.instruments, 'ctx.instruments');
   // Validated on the way in: an entry naming a difficulty of 40 would otherwise
   // clear every ceiling and be chosen for a beginner's part.
-  const vocabulary = (ctx.vocabulary ?? []).map((entry, index) =>
-    assertVocabulary(entry, `vocabulary[${index}]`),
-  );
+  const vocabulary = (
+    nullish(ctx.vocabulary)
+      ? []
+      : assertArray<Vocabulary<unknown>>(ctx.vocabulary, 'ctx.vocabulary')
+  ).map((entry, index) => assertVocabulary(entry, `vocabulary[${index}]`));
 
   return {
     seed,

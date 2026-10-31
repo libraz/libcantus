@@ -3,7 +3,9 @@
 
 #include "core/random/internal.h"
 
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <variant>
 
@@ -73,6 +75,14 @@ std::uint32_t hash_path(std::uint32_t domain, std::uint32_t root, const SeedPath
     hash = absorb_segment(hash, path[index], index);
   }
   return fmix32(hash);
+}
+
+double scale_unit_draw(double unit, double lo, double hi) {
+  double value = lo + unit * (hi - lo);
+  if (value < hi || lo == hi) {
+    return value;
+  }
+  return std::nextafter(hi, -std::numeric_limits<double>::infinity());
 }
 
 }  // namespace cantus

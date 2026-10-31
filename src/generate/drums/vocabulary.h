@@ -60,10 +60,9 @@ struct BoundSampler {
   const Draw& draw;
   SeedPath path;
 
-  bool prob(double p, std::string_view tag, double step) const {
+  bool prob(double p, const SeedPath& key) const {
     SeedPath full = path;
-    full.emplace_back(std::string(tag));
-    full.emplace_back(step);
+    full.insert(full.end(), key.begin(), key.end());
     return draw.prob(p, full);
   }
 };

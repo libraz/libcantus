@@ -196,8 +196,11 @@ bool ends_with(View text, View suffix) {
   return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
 }
 
-/** `Number.parseInt` of a run of units read as an octave. */
-double octave_of(View digits) { return js::parse_int(js::from_utf16(digits), 10); }
+/** `Number.parseInt` of a run of units read as an octave, `-0` read as 0 (`octaveOf`). */
+double octave_of(View digits) {
+  double octave = js::parse_int(js::from_utf16(digits), 10);
+  return octave == 0 ? 0 : octave;
+}
 
 /** Read an English name, or nullopt when the text is not one (`parseEnglish`). */
 std::optional<NoteData> parse_english(View text) {

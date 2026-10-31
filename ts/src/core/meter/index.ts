@@ -36,6 +36,7 @@ import {
   isAdditiveReading,
   isCompoundNumerator,
   isMeterMap,
+  meterSegments,
   pulseBeatsOf,
   pulseCountOf,
   pulseGroupingOf,
@@ -98,6 +99,9 @@ export type MeterChange = {
  * lays its bar lines from beat 0 whatever beat the first entry is written at, so
  * a map opening at the pickup it covers numbers its bars exactly as the bare
  * signature does. Every later entry starts a bar at the beat it takes effect.
+ * Bars are numbered so that the bar containing beat 0 is bar 0, so a pickup
+ * written as an entry of its own before a change at beat 0 is bar -1 all the
+ * same.
  *
  * Pass the whole piece with its map rather than one call per meter span: a
  * split call cannot see a voice move or a key region that crosses the change.
@@ -899,17 +903,19 @@ export function metricGridUnit(meter: MeterLike): number {
   if (!isMeterMap(resolved)) {
     return pulseBeatsOf(resolved);
   }
+  const segments = meterSegments(resolved);
   let unit = 0;
-  for (const change of resolved) {
-    unit = commonStep(unit, pulseBeatsOf(change.ts));
+  for (const segment of segments) {
+    unit = commonStep(unit, pulseBeatsOf(segment.ts));
   }
   if (unit <= 0) {
     return pulseBeatsOf(DEFAULT_TS);
   }
-  const origin = resolved[0]?.startBeat ?? 0;
+  // Bars are laid from beat 0, so each change is measured from there rather than
+  // from wherever the opening entry is written.
   let onChanges = unit;
-  for (const change of resolved) {
-    onChanges = commonStep(onChanges, Math.abs(change.startBeat - origin));
+  for (const segment of segments) {
+    onChanges = commonStep(onChanges, Math.abs(segment.barAnchor));
   }
   // An onset written a hair off a beat divides into a step no coarser than the
   // hair, and a grid that fine costs a slot per step of the piece while landing

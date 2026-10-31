@@ -31,8 +31,8 @@ using Neighbours = std::vector<std::optional<std::size_t>>;
 
 /** Whether a note is a candidate for an ornament of this style. */
 bool eligible(OrnamentStyle style, const NoteEvent& note, const NoteEvent* previous,
-              const NoteEvent* next, const TimeSignature& ts) {
-  bool strong = is_strong_beat(note.startBeat, ts);
+              const NoteEvent* next, const MeterArg& meter) {
+  bool strong = is_strong_beat(note.startBeat, meter);
   switch (style) {
     case OrnamentStyle::kGhost:
       return !strong;
@@ -41,7 +41,7 @@ bool eligible(OrnamentStyle style, const NoteEvent& note, const NoteEvent* previ
       return strong;
     case OrnamentStyle::kDrag:
       // A drag is the weak note before a strong one, so the next onset has to be the strong one.
-      return !strong && next != nullptr && is_strong_beat(next->startBeat, ts);
+      return !strong && next != nullptr && is_strong_beat(next->startBeat, meter);
     case OrnamentStyle::kSlide:
       return previous != nullptr &&
              std::abs(note.pitch - previous->pitch) >= ORNAMENT_SLIDE_MIN_SEMITONES;
@@ -145,7 +145,8 @@ std::vector<std::string_view> ornament_style_names() {
 }
 
 std::vector<NoteEvent> ornament_with(const std::vector<NoteEvent>& sounding, OrnamentStyle style,
-                                     const TimeSignature& ts, const ResolvedContext& ctx) {
+                                     const MeterData& meter, const ResolvedContext& ctx) {
+  MeterArg weighed(meter);
   double amount = ctx.ornament.value_or(ORNAMENT_DEFAULT_AMOUNT);
   Draw draw = ctx.part("ornament");
 
@@ -165,7 +166,7 @@ std::vector<NoteEvent> ornament_with(const std::vector<NoteEvent>& sounding, Orn
     NoteEvent decorated = note;
     const NoteEvent* previous = previous_of[index] ? &sounding[*previous_of[index]] : nullptr;
     const NoteEvent* next = next_of[index] ? &sounding[*next_of[index]] : nullptr;
-    if (note.articulation || !eligible(style, note, previous, next, ts)) {
+    if (note.articulation || !eligible(style, note, previous, next, weighed)) {
       out.push_back(decorated);
       continue;
     }
@@ -193,15 +194,13 @@ std::vector<NoteEvent> ornament(const std::vector<NoteEvent>& notes, const Ornam
   note_options.allowNonPositiveDuration = true;
   assert_note_events(notes, "ornament notes", note_options);
   OrnamentStyle style = opts.style.value_or(OrnamentStyle::kGhost);
-  TimeSignature ts =
-      meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kOrnamentDefaultTs)), "ts"));
-  assert_time_signature(ts);
+  MeterData meter = to_meter_data(opts.ts.value_or(MeterArg(kOrnamentDefaultTs)), "ts");
   if (opts.amount) {
     assert_range(*opts.amount, 0, 1, "ornament amount");
   }
   ResolvedContext ctx = resolve_context_with(opts.ctx, ContextSugar{opts.amount});
   // Zero-length artefacts never sound and are dropped, as humanize and the analysis layer do.
-  return ornament_with(drop_silent_notes(notes), style, ts, ctx);
+  return ornament_with(drop_silent_notes(notes), style, meter, ctx);
 }
 
 }  // namespace cantus

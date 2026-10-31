@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cmath>
 #include <vector>
 
 #include "cantus/core/errors.h"
@@ -72,4 +73,23 @@ TEST_CASE("Rhythm reshapes its onsets on the sixteenth grid", "[model][rhythm]")
   Rhythm sorted = Rhythm::of(onsets({{1, 1}, {0, 1}}), MeterArg("4/4"));
   CHECK(pairs_of(sorted) == std::vector<std::pair<double, double>>{{0, 1}, {1, 1}});
   CHECK_THROWS_WITH(rhythm.thin(2), Catch::Matchers::ContainsSubstring("thin amount"));
+}
+
+TEST_CASE("Rhythm reshapes every pattern it can hold", "[model][rhythm]") {
+  Rhythm empty = Rhythm::of({}, MeterArg("4/4"));
+  CHECK(empty.half_time().events().empty());
+  CHECK(empty.double_time().events().empty());
+  CHECK(empty.deform().events().empty());
+  Rhythm triplet = Rhythm::of(onsets({{0, 1.0 / 3}}), MeterArg("4/4"));
+  CHECK(pairs_of(triplet.half_time()) == std::vector<std::pair<double, double>>{{0, 1.0 / 3}});
+  std::vector<std::pair<double, double>> triplets;
+  for (int index = 0; index < 12; ++index) {
+    triplets.emplace_back(index / 3.0, 1.0 / 3);
+  }
+  std::vector<RhythmEvent> doubled =
+      Rhythm::of(onsets(triplets), MeterArg("4/4")).double_time().events();
+  REQUIRE(doubled.size() == 24);
+  for (std::size_t index = 0; index < doubled.size(); ++index) {
+    CHECK(std::abs(doubled[index].position - static_cast<double>(index) / 6) < 1e-12);
+  }
 }

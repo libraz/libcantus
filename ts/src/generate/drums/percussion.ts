@@ -124,8 +124,10 @@ export function generateAuxPercussionForBar(
       for (let beat = 0; beat < barBeats; beat += 1) {
         for (let sub = 0; sub < 4; sub += 1) {
           // The on-beat and mid-beat shakes carry the pattern; the two between
-          // them are the dial's to add.
-          if (sub % 2 === 1 && !draw.prob(sec.rhythmic, 'shaker16', barStart, beat, sub)) {
+          // them are the dial's to add, from the setting their draw names.
+          const entry =
+            sub % 2 === 1 ? draw.at('shaker16', barStart, beat, sub) : Number.NEGATIVE_INFINITY;
+          if (!(entry < sec.rhythmic)) {
             continue;
           }
           const raw =
@@ -138,6 +140,8 @@ export function generateAuxPercussionForBar(
             swing16(barStart + beat + sub * SIXTEENTH, sec, swingAmount),
             SIXTEENTH,
             Math.max(25, Math.min(85, raw)),
+            undefined,
+            entry,
           );
         }
       }

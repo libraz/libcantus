@@ -3,13 +3,13 @@ import { Instrument, Score } from '@libraz/libcantus/model';
 import { describe, expect, it } from 'vitest';
 
 /**
- * A shift from the open low string to the top of the neck: 24 frets, which is
+ * A shift from the first fret to the top of the neck, which is
  * comfortable over half a beat at 60 bpm and beyond the hand at 480.
  */
 const LONG_SHIFT: NoteEvent[] = [
-  { pitch: 28, startBeat: 0, durationBeat: 0.25 },
+  { pitch: 29, startBeat: 0, durationBeat: 0.25 },
   { pitch: 67, startBeat: 0.5, durationBeat: 0.25 },
-  { pitch: 28, startBeat: 8, durationBeat: 0.25 },
+  { pitch: 29, startBeat: 8, durationBeat: 0.25 },
   { pitch: 67, startBeat: 8.5, durationBeat: 0.25 },
 ];
 

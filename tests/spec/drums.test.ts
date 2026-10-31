@@ -733,3 +733,46 @@ describe('a caller fill is read stroke by stroke', () => {
     expect(() => play(atBeat)).toThrow(message);
   });
 });
+
+describe('the rhythmic dial only adds onsets under a difficulty ceiling', () => {
+  const onsets = (style: GrooveStyle, rhythmic: number, difficulty: number) =>
+    new Set(
+      generateDrums({
+        bars: 2,
+        style,
+        section: 'chorus',
+        ctx: { seed: 2, bpm: 140, complexity: { rhythmic, difficulty } },
+      }).map((hit) => `${hit.pitch}@${hit.startBeat}`),
+    );
+
+  it('keeps the backbeat kick when a syncopated kick is added before it', () => {
+    const kicks = (rhythmic: number) =>
+      [...onsets('funk', rhythmic, 1)].filter((key) => key.startsWith(`${KICK}@`));
+    expect(kicks(0.2)).toEqual(expect.arrayContaining(kicks(0.1)));
+  });
+
+  it('keeps the quarter hats when a swung eighth level comes in', () => {
+    const hats = (rhythmic: number) =>
+      generateDrums({
+        bars: 2,
+        style: 'shuffle',
+        section: 'verse',
+        ctx: { seed: 1, bpm: 90, complexity: { rhythmic, difficulty: 1 } },
+      })
+        .filter((hit) => hit.pitch === CLOSED_HAT)
+        .map((hit) => hit.startBeat);
+    expect(hats(0.05)).toEqual(expect.arrayContaining(hats(0.025)));
+  });
+
+  it.each([1, 2])('never removes an onset as the dial rises at difficulty %i', (difficulty) => {
+    for (const style of ['funk', 'shuffle', 'standard'] as const) {
+      let previous = onsets(style, 0, difficulty);
+      for (let step = 1; step <= 20; step += 1) {
+        const current = onsets(style, step / 20, difficulty);
+        const lost = [...previous].filter((key) => !current.has(key));
+        expect(lost, `${style} at rhythmic ${step / 20}`).toEqual([]);
+        previous = current;
+      }
+    }
+  });
+});

@@ -69,8 +69,11 @@ double default_harmonic_rhythm(const TimeSignature& ts);
 /** Whether a pitch belongs to the key, counting the raised seventh of a minor key. */
 bool is_key_tone(double pitch, const KeyScale& key);
 
-/** Estimate the best-fit key from a melody's pitch-class weighting. */
+/** Estimate the best-fit key from a melody's pitch-class weighting, read in onset order. */
 KeyScale infer_key(const std::vector<NoteEvent>& melody);
+
+/** The melody in onset order, ties by pitch: the order every stage reads it in (`inOnsetOrder`). */
+std::vector<NoteEvent> in_onset_order(const std::vector<NoteEvent>& melody);
 
 }  // namespace cantus
 

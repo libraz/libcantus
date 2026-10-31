@@ -117,8 +117,9 @@ MelodicContour contour_of(const std::vector<NoteEvent>& ordered) {
   out.range = range;
   if (directness >= DIRECTIONAL_SHARE) {
     out.shape = net > 0 ? MelodicContourShape::kAscending : MelodicContourShape::kDescending;
-    out.rationale = js::to_string(share) + "% of the motion runs " + (net > 0 ? "up" : "down") +
-                    ", so the line is " + std::string(to_string(out.shape));
+    out.rationale = std::string("The net ") + (net > 0 ? "rise" : "fall") + " is " +
+                    js::to_string(share) + "% of the motion, so the line is " +
+                    std::string(to_string(out.shape));
     return out;
   }
 
@@ -133,8 +134,8 @@ MelodicContour contour_of(const std::vector<NoteEvent>& ordered) {
     return out;
   }
   out.shape = MelodicContourShape::kWave;
-  out.rationale = "Changes direction without settling either way (" + js::to_string(share) +
-                  "% of the motion nets out), so the line is a wave";
+  out.rationale = "Changes direction without settling either way (the net movement is " +
+                  js::to_string(share) + "% of the motion), so the line is a wave";
   return out;
 }
 

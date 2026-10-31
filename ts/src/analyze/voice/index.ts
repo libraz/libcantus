@@ -1,3 +1,5 @@
+import { soundingIndices } from '../../core/event-index/order.js';
+import { isConsonantInterval } from '../../core/interval/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import { assertFunction, assertNoteEvents } from '../../core/validation/index.js';
@@ -10,7 +12,7 @@ import {
 import type { VoiceSnapshot } from '../../theory/safety/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
 import { toKeyScale } from '../../theory/scale/index.js';
-import { adjacent } from '../adjacency.js';
+import { adjacent, sameInstant } from '../adjacency.js';
 
 /**
  * A suspension figure, named by the interval above the bass and the interval it
@@ -229,9 +231,28 @@ export const LEAP_SEMITONES = 3;
 
 /**
  * Classify a suspension figure from the interval class above the sounding bass
- * (`ic`) and the resolution direction (`delta`, positive when resolving upward).
+ * (`ic`), the resolution direction (`delta`, positive when resolving upward)
+ * and the interval class the resolution lands on above the same bass
+ * (`resolvedIc`).
  */
-function suspensionType(ic: number, delta: number): SuspensionFigure | null {
+function suspensionType(ic: number, delta: number, resolvedIc: number): SuspensionFigure | null {
+  const figure = suspendedFigure(ic, delta);
+  // A figure names both intervals: B over C falling to B flat is a seventh
+  // going to a seventh, not the 7-6 its first interval would suggest.
+  return figure !== null && SUSPENSION_RESOLUTIONS[figure].includes(resolvedIc) ? figure : null;
+}
+
+/** The interval classes above the bass each figure resolves to. */
+const SUSPENSION_RESOLUTIONS: Readonly<Record<SuspensionFigure, readonly number[]>> = {
+  'sus4-3': [3, 4],
+  'sus6-5': [7],
+  'sus7-6': [8, 9],
+  'sus9-8': [0],
+  'sus2-3': [3, 4],
+};
+
+/** The figure a suspended interval class names, from its first interval alone. */
+function suspendedFigure(ic: number, delta: number): SuspensionFigure | null {
   if (delta > 0) {
     // Resolving upward is the 2-3 only from a second above the bass. A seventh
     // above it rising to the octave is a retardation, and the figure 2-3 would
@@ -254,6 +275,24 @@ function suspensionType(ic: number, delta: number): SuspensionFigure | null {
   // no standard figure; a catch-all `sus4-3` would name it after an interval it
   // does not form.
   return null;
+}
+
+/**
+ * Whether a pitch clashes with the chord sounding under it, as a solo line is
+ * heard against its harmony: a dissonance above the bass, the fourth included,
+ * or a second, seventh or tritone against any chord tone.
+ */
+function clashesWithChord(pitch: number, chord: Chord): boolean {
+  if (!isConsonantInterval(intervalAboveBass(pitch, [], chord), true)) {
+    return true;
+  }
+  const tones = chord.intervals.map((interval) => chord.rootPc + interval);
+  if (chord.bassPc !== undefined) {
+    tones.push(chord.bassPc);
+  }
+  return tones.some(
+    (tone) => !isConsonantInterval((((pitchClass(pitch) - tone) % 12) + 12) % 12, false),
+  );
 }
 
 /** Widest interval, in semitones, a resolution by step may cover. */
@@ -308,7 +347,9 @@ function nearestChordTone(pitch: number, chord: Chord, maxDistance: number): num
  * onset are treated as simultaneous cluster members, not melodic neighbors, so
  * they receive no melodic labels (suspension, passing, neighbor, anticipation,
  * escape) — only harmonic ones. Callers with truly polyphonic material should
- * split it into monophonic sub-voices first, as `analyzeArrangement` does.
+ * split it into monophonic sub-voices first, as `analyzeArrangement` does. A
+ * note of zero length sounds nothing: it gets no melodic labels and is no other
+ * note's neighbour.
  *
  * @param voice The monophonic voice, in time order. A note without an `id` is
  *   identified by its position, so plain note events can be passed straight in.
@@ -317,7 +358,8 @@ function nearestChordTone(pitch: number, chord: Chord, maxDistance: number): num
  *   covering the whole voice, or a callback giving the key in force at a given
  *   beat, for music that modulates.
  * @param otherVoicesAtBeat Other sounding voices at a given beat; defaults to
- *   none, which is the whole story for a solo line.
+ *   none, which is the whole story for a solo line: a suspension's dissonance
+ *   is then judged against the chord.
  * @returns One annotation per input note.
  * @example
  * ```ts
@@ -346,25 +388,36 @@ export function analyzeVoice(
   assertFunction(otherVoicesAtBeat, 'otherVoicesAtBeat');
   const keyAt = keyScaleAt(key);
   const result: AnalyzedNote[] = [];
+  // Melodic neighbours are read along the notes that sound: a zero-length note
+  // has none and is no one's.
+  const sounding = soundingIndices(voice);
+  const line = new Map(sounding.map((index, position) => [index, position]));
 
   for (let i = 0; i < voice.length; i += 1) {
     const note = voice[i];
     if (!note) {
       continue;
     }
-    const prevNote = i > 0 ? voice[i - 1] : undefined;
-    const nextNote = i + 1 < voice.length ? voice[i + 1] : undefined;
+    const position = line.get(i);
+    const prevIndex = position === undefined ? undefined : sounding[position - 1];
+    const nextIndex = position === undefined ? undefined : sounding[position + 1];
+    const prevNote = prevIndex === undefined ? undefined : voice[prevIndex];
+    const nextNote = nextIndex === undefined ? undefined : voice[nextIndex];
     // A neighboring note sharing this note's onset is a simultaneous cluster
     // member, not a melodic predecessor/successor; treating it as one would
     // fabricate passing/suspension figures, so it is dropped here.
-    const prevEnd =
-      prevNote === undefined
-        ? Number.NEGATIVE_INFINITY
-        : prevNote.startBeat + prevNote.durationBeat;
-    const noteEnd = note.startBeat + note.durationBeat;
-    const prev = prevNote !== undefined && adjacent(prevEnd, note.startBeat) ? prevNote : undefined;
+    const prev =
+      prevNote !== undefined &&
+      !sameInstant(prevNote.startBeat, note.startBeat) &&
+      adjacent(prevNote.startBeat + prevNote.durationBeat, note.startBeat)
+        ? prevNote
+        : undefined;
     const next =
-      nextNote !== undefined && adjacent(noteEnd, nextNote.startBeat) ? nextNote : undefined;
+      nextNote !== undefined &&
+      !sameInstant(nextNote.startBeat, note.startBeat) &&
+      adjacent(note.startBeat + note.durationBeat, nextNote.startBeat)
+        ? nextNote
+        : undefined;
     const chord = chordAtBeat(note.startBeat);
     const labels: TheoryLabel[] = [];
     const member = isChordMember(note.pitch, chord);
@@ -400,12 +453,16 @@ export function analyzeVoice(
       const prepared = prev.pitch === note.pitch && isChordMember(prev.pitch, prevChord);
       const resolves = isStep(next.pitch, note.pitch);
       const others = otherVoicesAtBeat(note.startBeat);
-      const verticallyDissonant = others.some((ov) =>
-        createsVerticalDissonance(note.pitch, ov.pitch, true),
-      );
+      // A solo line has no other voice to clash with, so the chord it is heard
+      // against stands in for them.
+      const verticallyDissonant =
+        others.length > 0
+          ? others.some((ov) => createsVerticalDissonance(note.pitch, ov.pitch, true))
+          : clashesWithChord(note.pitch, chord);
       if (prepared && verticallyDissonant && resolves) {
         const ic = intervalAboveBass(note.pitch, others, chord);
-        const type = suspensionType(ic, next.pitch - note.pitch);
+        const resolvedIc = intervalAboveBass(next.pitch, others, chord);
+        const type = suspensionType(ic, next.pitch - note.pitch, resolvedIc);
         if (type !== null) {
           labels.push({ kind: 'suspension', type, resolveTo: next.pitch });
           handled = true;

@@ -126,7 +126,8 @@ HarmonyMisfits plan_harmony_misfits(const CompositionPlan& plan, const ChordTime
         out.push_back(std::nullopt);
         continue;
       }
-      if (position == PositionClass::kWeak && is_scale_tone(note.pitch, scale_at(note.startBeat))) {
+      bool lenient = position == PositionClass::kWeak || !held->at(note.startBeat);
+      if (lenient && is_scale_tone(note.pitch, scale_at(note.startBeat))) {
         out.push_back(std::nullopt);
         continue;
       }

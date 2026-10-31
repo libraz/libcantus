@@ -184,9 +184,25 @@ export type VocabularyQuery = {
   articulations?: readonly Articulation[];
 };
 
-/** Whether two time signatures name the same bar. */
+/**
+ * Whether two time signatures name the same bar, grouping included.
+ *
+ * 7/8 grouped 3+2+2 and 2+2+3 put the felt beats in different places, so a
+ * figure written for one is not offered for the other; a grouping stated on
+ * one side only is a different reading as well.
+ */
 function sameTs(a: TimeSignature, b: TimeSignature): boolean {
-  return a.numerator === b.numerator && a.denominator === b.denominator;
+  const grouping: unknown = a.grouping;
+  const theirs = b.grouping;
+  return (
+    a.numerator === b.numerator &&
+    a.denominator === b.denominator &&
+    (grouping === undefined || theirs === undefined
+      ? grouping === theirs
+      : Array.isArray(grouping) &&
+        grouping.length === theirs.length &&
+        grouping.every((entry, index) => entry === theirs[index]))
+  );
 }
 
 /**

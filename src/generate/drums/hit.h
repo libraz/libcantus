@@ -8,6 +8,7 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <map>
 #include <optional>
 #include <set>
@@ -62,13 +63,22 @@ class HitList {
 
   /**
    * Append a hit, clamping velocity and moving a negative position to 0; a voice already struck
-   * at this instant is left as it stands.
+   * at this instant is left as it stands. `entry` is the rhythmic-dial setting above which the
+   * stroke sounds; a stroke asked for twice sounds from the lower one.
    */
   void add(int pitch, double start_beat, Duration duration, double velocity,
-           Mark articulation = Mark()) {
+           Mark articulation = Mark(), double entry = -std::numeric_limits<double>::infinity()) {
     double beat = js::max(0, start_beat);
+    std::pair<double, int> key{beat_slot(beat), pitch};
+    auto held = entries_.find(key);
     if (has_onset(pitch, beat)) {
+      if (held != entries_.end() && entry < held->second) {
+        held->second = entry;
+      }
       return;
+    }
+    if (entry != -std::numeric_limits<double>::infinity()) {
+      entries_[key] = entry;
     }
     Hit hit{};
     hit.pitch = pitch;
@@ -78,6 +88,12 @@ class HitList {
     hit.articulation = std::move(articulation);
     hits_.push_back(std::move(hit));
     onsets_[beat_slot(beat)].insert(pitch);
+  }
+
+  /** The rhythmic-dial setting above which a written stroke sounds (`entryOf`). */
+  double entry_of(int pitch, double start_beat) const {
+    auto held = entries_.find({beat_slot(start_beat), pitch});
+    return held == entries_.end() ? -std::numeric_limits<double>::infinity() : held->second;
   }
 
   /** Whether a hit of this pitch already starts exactly at `start_beat`. */
@@ -101,6 +117,8 @@ class HitList {
   std::vector<Hit> hits_;
   /** Voices already struck at each quantized beat. */
   std::map<double, std::set<int>> onsets_;
+  /** The dial setting each onset enters at, by quantized beat and pitch; absent is always. */
+  std::map<std::pair<double, int>, double> entries_;
 };
 
 }  // namespace cantus

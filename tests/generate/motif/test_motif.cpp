@@ -83,3 +83,16 @@ TEST_CASE("a developed motif follows the harmony", "[motif]") {
   CHECK(text(developed) == call("developMotif", wire));
   CHECK(motif_to_note_events(cell()).size() == 3);
 }
+
+TEST_CASE("a developed motif does not depend on the listing of its cell", "[motif]") {
+  ChordTimeline timeline{{ChordSegment{0, 4, make_chord(0, ChordQuality::kMaj)},
+                          ChordSegment{4, 8, make_chord(7, ChordQuality::kDom7)}}};
+  MotifCell forwards{{NoteEvent{60, 0, 1, std::nullopt, std::nullopt},
+                      NoteEvent{61, 1, 2, std::nullopt, std::nullopt},
+                      NoteEvent{63, 3, 1, std::nullopt, std::nullopt},
+                      NoteEvent{66, 3, 1, std::nullopt, std::nullopt}}};
+  MotifCell backwards{{forwards.notes.rbegin(), forwards.notes.rend()}};
+  KeyArg key(KeyScale{0, 2741});
+  CHECK(text(develop_motif(backwards, timeline, key, 2, MeterArg("4/4"))) ==
+        text(develop_motif(forwards, timeline, key, 2, MeterArg("4/4"))));
+}

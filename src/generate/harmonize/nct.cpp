@@ -8,6 +8,7 @@
 #include "analyze/limits.gen.h"
 #include "cantus/core/validation.h"
 #include "cantus/generate/harmonize.h"
+#include "core/event_index/order.h"
 #include "generate/harmonize/limits.gen.h"
 #include "js/math.h"
 
@@ -31,14 +32,13 @@ bool same_direction(double prev, double note, double next) {
 }
 
 /** Classify one note against the neighbours that immediately frame it. */
-MelodyToneRole role_of_note(const std::vector<NoteEvent>& melody, std::size_t index,
-                            const TimeSignature& ts, double pulse) {
-  if (index == 0 || index + 1 >= melody.size()) {
+MelodyToneRole role_of_note(const NoteEvent* prev_note, const NoteEvent& note,
+                            const NoteEvent* next_note, const TimeSignature& ts, double pulse) {
+  if (prev_note == nullptr || next_note == nullptr) {
     return MelodyToneRole::kStructural;
   }
-  const NoteEvent& note = melody[index];
-  const NoteEvent& prev = melody[index - 1];
-  const NoteEvent& next = melody[index + 1];
+  const NoteEvent& prev = *prev_note;
+  const NoteEvent& next = *next_note;
   // A note separated from its neighbour by a rest is not led into or out of it, and simultaneous
   // onsets are cluster members rather than melodic neighbours.
   double into_note = std::abs(prev.startBeat + prev.durationBeat - note.startBeat);
@@ -111,10 +111,28 @@ std::vector<ClassifiedMelodyTone> classify_melody_tones(const std::vector<NoteEv
   options.allowNonPositiveDuration = true;
   assert_note_events(melody, "melody notes", options);
   double pulse = pulse_beats(meter);
+  // The sounding notes in onset order, whatever the listing; a silent note stays structural.
+  std::vector<std::size_t> sounding_list = sounding_indices(melody);
+  std::vector<bool> sounding(melody.size(), false);
+  for (std::size_t index : sounding_list) {
+    sounding[index] = true;
+  }
+  std::vector<std::size_t> line;
+  for (std::size_t index : canonical_note_order(melody)) {
+    if (sounding[index]) {
+      line.push_back(index);
+    }
+  }
+  std::vector<MelodyToneRole> roles(melody.size(), MelodyToneRole::kStructural);
+  for (std::size_t position = 0; position < line.size(); ++position) {
+    const NoteEvent* before = position > 0 ? &melody[line[position - 1]] : nullptr;
+    const NoteEvent* after = position + 1 < line.size() ? &melody[line[position + 1]] : nullptr;
+    roles[line[position]] = role_of_note(before, melody[line[position]], after, meter, pulse);
+  }
   std::vector<ClassifiedMelodyTone> out;
   for (std::size_t index = 0; index < melody.size(); ++index) {
-    MelodyToneRole role = role_of_note(melody, index, meter, pulse);
-    out.push_back(ClassifiedMelodyTone{index, role, role != MelodyToneRole::kStructural});
+    out.push_back(
+        ClassifiedMelodyTone{index, roles[index], roles[index] != MelodyToneRole::kStructural});
   }
   return out;
 }

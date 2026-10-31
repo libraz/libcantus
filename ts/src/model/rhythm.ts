@@ -9,10 +9,7 @@ import type {
   RhythmOptions,
 } from '../generate/index.js';
 import {
-  deform,
-  doubleTime,
   generateRhythm,
-  halfTime,
   ornamentBy,
   resolveContext,
   rhythmDensity,
@@ -22,6 +19,12 @@ import {
   thin,
   withinCeiling,
 } from '../generate/index.js';
+import {
+  deformFigure,
+  doubleTimeFigure,
+  halfTimeFigure,
+  resolveDials,
+} from '../generate/vocabulary/transform.js';
 import { Score } from './score.js';
 import {
   assertDataArray,
@@ -319,7 +322,7 @@ export class Rhythm {
    * @returns The compressed pattern.
    */
   doubleTime(): Rhythm {
-    return this.#withGrid(doubleTime(toGrid(this.#data.events), this.#spanSteps()));
+    return this.#withGrid(doubleTimeFigure(toGrid(this.#data.events), this.#spanSteps()));
   }
 
   /**
@@ -331,7 +334,7 @@ export class Rhythm {
    * @returns The stretched pattern.
    */
   halfTime(): Rhythm {
-    return this.#withGrid(halfTime(toGrid(this.#data.events), this.#spanSteps()));
+    return this.#withGrid(halfTimeFigure(toGrid(this.#data.events), this.#spanSteps()));
   }
 
   /**
@@ -384,7 +387,6 @@ export class Rhythm {
       rhythmic: resolved.rhythmic,
       ornament: resolved.ornament,
       rate: opts?.rate,
-      spanSteps: this.#spanSteps(),
       ts: this.#data.ts,
       // The transform hands the predicate the events it was given, which carry
       // the onset each was built from; the parameter is declared over the bare
@@ -394,7 +396,10 @@ export class Rhythm {
           ? undefined
           : (grid) => isOrnament((grid as SourcedGridEvent).source),
     };
-    return this.#withGrid(deform(toGrid(this.#data.events), options, resolved.part(PART)));
+    const dials = resolveDials(options);
+    return this.#withGrid(
+      deformFigure(toGrid(this.#data.events), this.#spanSteps(), dials, resolved.part(PART), []),
+    );
   }
 
   /**
@@ -464,7 +469,11 @@ export class Rhythm {
     return this.data;
   }
 
-  /** The pattern's span as a count of sixteenths, for the transforms. */
+  /**
+   * The pattern's span as a count of sixteenths, for the transforms: whatever
+   * span the pattern covers, an empty one or one ending off the straight grid
+   * included.
+   */
   #spanSteps(): number {
     return spanOf(this.#data.events) / STEP_BEATS;
   }

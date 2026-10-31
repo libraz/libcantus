@@ -11,8 +11,9 @@ import type { MelodicPhrase } from './internal.js';
 import { intervalsOf, orderedNotes, phraseNotes } from './internal.js';
 
 /**
- * Share of a line's total motion that has to run one way before the line is
- * called ascending, descending, or an arch.
+ * Share of a line's total motion that its net rise or fall has to reach before
+ * the line is called ascending or descending, and that the climb to and fall
+ * from its peak has to reach before it is called an arch.
  *
  * A melody that climbs an octave with one dip on the way is heard as ascending,
  * so the classification is a dominance test rather than a strict-monotonicity
@@ -165,7 +166,7 @@ export function melodicContour(notes: MelodicPhrase): MelodicContour {
       peakIndex: peak,
       troughIndex: trough,
       range,
-      rationale: `${share}% of the motion runs ${net > 0 ? 'up' : 'down'}, so the line is ${shape}`,
+      rationale: `The net ${net > 0 ? 'rise' : 'fall'} is ${share}% of the motion, so the line is ${shape}`,
     };
   }
 
@@ -187,6 +188,6 @@ export function melodicContour(notes: MelodicPhrase): MelodicContour {
     peakIndex: peak,
     troughIndex: trough,
     range,
-    rationale: `Changes direction without settling either way (${share}% of the motion nets out), so the line is a wave`,
+    rationale: `Changes direction without settling either way (the net movement is ${share}% of the motion), so the line is a wave`,
   };
 }

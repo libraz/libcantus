@@ -37,8 +37,9 @@ export function tessituraCost(melody: readonly MelodyNote[]): number {
  *
  * This is what makes a transposition search mean "move the melody into this
  * key": a shift is judged by the melody's own key membership, not by how many
- * chord tones a chord path can be talked into covering. The winning shift
- * therefore always agrees with the key the result reports.
+ * chord tones a chord path can be talked into covering. The search ranks shifts
+ * by this cost before any other, so the winning shift agrees with the key the
+ * result reports as far as any shift can.
  */
 export function keyFitCost(melody: readonly MelodyNote[], key: KeyScale): number {
   let cost = 0;

@@ -32,7 +32,7 @@ TEST_CASE("note names parse and format in every system", "[pitch]") {
   CHECK(parse_note("B").letter == 6);
   CHECK(parse_note("B").alter == 0);
   CHECK(parse_note("B", in(NoteNameSystem::kGerman)).alter == -1);
-  CHECK(std::signbit(*parse_note("C-0").octave));
+  CHECK_FALSE(std::signbit(*parse_note("C-0").octave));
 }
 
 TEST_CASE("a failed parse is a value", "[pitch]") {
@@ -69,6 +69,25 @@ TEST_CASE("notes transpose keeping their spelling", "[pitch]") {
   CHECK(note_to_midi({0, 0, 4.0}) == 60);
   CHECK(note_to_pitch_class({1, -1, std::nullopt}) == 1);
   CHECK_THROWS_WITH(note_to_midi({0, 0, std::nullopt}), "noteToMidi requires an octave");
+}
+
+TEST_CASE("octave-less notes keep their letter arithmetic", "[pitch]") {
+  NoteData same = transpose_note({0, -6, std::nullopt}, 0);
+  CHECK(same.letter == 0);
+  CHECK(same.alter == -6);
+  CHECK_THROWS_AS(transpose_by_interval(NoteData{0, 6, std::nullopt}, "A1"), InvalidInputError);
+  SpelledInterval third = spelled_interval({0, 0, std::nullopt}, {2, -6, std::nullopt});
+  CHECK(third.quality == "ddddd");
+  CHECK(third.semitones == -2);
+  SpelledInterval unison = spelled_interval({0, 3, std::nullopt}, {0, -3, std::nullopt});
+  CHECK(unison.quality == "AAAAAA");
+  CHECK(unison.semitones == -6);
+  CHECK(unison.descending);
+}
+
+TEST_CASE("a parsed octave of -0 is octave 0", "[pitch]") {
+  CHECK_FALSE(std::signbit(*parse_note("C-0").octave));
+  CHECK_FALSE(std::signbit(*parse_note("gis-0").octave));
 }
 
 TEST_CASE("intervals are spelled from their notes and names", "[pitch]") {

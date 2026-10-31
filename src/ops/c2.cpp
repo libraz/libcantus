@@ -37,16 +37,9 @@ namespace cantus::ops {
 
 namespace {
 
-constexpr double kSeedMax = 4294967295.0;
-
 /** `Number.MIN_VALUE` and `Number.MAX_VALUE`. */
 constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 constexpr double kMaxValue = std::numeric_limits<double>::max();
-
-/** A seed read as `assertInteger(seed, name, 0, 0xffffffff)` reads it. */
-std::uint32_t read_seed(const json::Value& value, std::string_view name) {
-  return static_cast<std::uint32_t>(assert_integer(value, name, 0, kSeedMax));
-}
 
 //--------------------------------------------------------------------------------------------
 // core/random

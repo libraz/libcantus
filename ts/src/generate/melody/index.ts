@@ -4,7 +4,8 @@
  * The plan is a hard constraint where the generator is free: every root, every
  * span no motif covers and every closing note keeps its phrase's register and
  * offers only the pitches its position class admits — a chord tone on a strong
- * pulse, a scale tone on a weak one, anything in the register off the pulses.
+ * pulse, a scale tone on a weak one or on a strong one where no chord is
+ * planned, anything in the register off the pulses.
  * A derived statement is its source replayed through the named relation at the
  * pitch level that suits its phrase best; there the transformation outranks
  * the harmony, and the register outranks both. A root takes its plan's onset
@@ -41,7 +42,7 @@ import {
 } from '../context/index.js';
 import { type MotifNote, motifToNoteEvents } from '../motif/index.js';
 import { cadencePitchClasses, planHarmonyMisfits } from '../plan/harmony.js';
-import { positionClass } from '../plan/internal.js';
+import { finalDownbeat, positionClass } from '../plan/internal.js';
 import { planChordTimeline } from '../plan/timeline.js';
 import type { CompositionPlan, PlannedChord, PlannedMotif, PlannedPhrase } from '../plan/types.js';
 import { plannedContourAt } from '../plan/types.js';
@@ -450,17 +451,6 @@ function lineBefore(scene: Scene, index: number, beat: number): MotifNote[] {
   return line.sort((a, b) => a.startBeat - b.startBeat);
 }
 
-/** The downbeat of a phrase's final bar, or the phrase start when that comes later. */
-function finalDownbeat(scene: Scene, index: number): number {
-  const phrase = scene.plan.phrases[index] as PlannedPhrase;
-  const { meters } = scene.plan;
-  let downbeat = barStartBeat(phrase.startBeat, meters);
-  while (downbeat + beatsPerBarAt(downbeat, meters) < phrase.endBeat - BEAT_EPS) {
-    downbeat += beatsPerBarAt(downbeat, meters);
-  }
-  return Math.max(downbeat, phrase.startBeat);
-}
-
 /**
  * The note a phrase closes on: the one sounding at its final bar's downbeat,
  * else the first onset after that downbeat; -1 when the final bar is silent.
@@ -693,7 +683,7 @@ export function generateMelody(plan: CompositionPlan, opts?: MelodyOptions): Not
   const melody: MotifNote[] = [];
   plan.phrases.forEach((_, index) => {
     const line = phraseLine(scene, index);
-    const downbeat = finalDownbeat(scene, index);
+    const downbeat = finalDownbeat(plan.phrases[index] as PlannedPhrase, plan.meters);
     let held = heldNoteIndex(scene, index, line, downbeat);
     if (held >= 0) {
       line.length = held + 1;

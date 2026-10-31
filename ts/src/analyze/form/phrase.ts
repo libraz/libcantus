@@ -35,14 +35,21 @@ import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import type { CadenceResult } from '../functional/index.js';
 import { barGridStart, latestSoundingEnd } from '../grid.js';
-import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
+import { detectModulations, keyLookup, prevailingKeyOf } from '../keys/index.js';
 import { melodicSimilarity } from '../melody/index.js';
 import type { CadenceHit, ChordTimeline } from '../timeline/index.js';
-import { assertChordTimeline, detectCadences, segmentStartingAt } from '../timeline/index.js';
+import { assertChordTimeline, detectCadences } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
-import type { Hypermeter } from './hypermeter.js';
-import { hypermeter } from './hypermeter.js';
-import { barSpanOf, clamp01, combineEvidence, sliceBars } from './internal.js';
+import type { CadenceSpan, Hypermeter } from './hypermeter.js';
+import { cadenceSpans, hypermeterOver } from './hypermeter.js';
+import {
+  barSpanOf,
+  clamp01,
+  combineEvidence,
+  firstSoundingBeat,
+  resolveSpanEnd,
+  sliceBars,
+} from './internal.js';
 
 /**
  * A reason a phrase boundary was placed where it was.
@@ -326,15 +333,36 @@ function addSignal(
   boundaries.set(key, boundary);
 }
 
+/** What a boundary is worth, with and without the cadence it carries. */
+type BoundaryReading = {
+  /** Total strength of every signal. */
+  strength: number;
+  /** Total strength of the signals other than the cadence. */
+  uncredited: number;
+  /** The signals, strongest first. */
+  signals: PhraseSignal[];
+};
+
 /** Total strength of a boundary, and its signals strongest first. */
-function readBoundary(boundary: Boundary): { strength: number; signals: PhraseSignal[] } {
+function readBoundary(boundary: Boundary): BoundaryReading {
   const signals = [...boundary.strengths.entries()].sort(
     (a, b) => b[1] - a[1] || SIGNAL_ORDER.indexOf(a[0]) - SIGNAL_ORDER.indexOf(b[0]),
   );
   return {
     strength: combineEvidence(signals.map(([, strength]) => strength)),
+    uncredited: combineEvidence(
+      signals.filter(([signal]) => signal !== 'cadence').map(([, strength]) => strength),
+    ),
     signals: signals.map(([signal]) => signal),
   };
+}
+
+/**
+ * Whether a phrase from `startBeat` to `endBeat` is closed by a cadence
+ * arriving at `atBeat`: only one that arrived inside it is.
+ */
+function closesPhrase(atBeat: number, startBeat: number, endBeat: number): boolean {
+  return atBeat >= startBeat - BEAT_EPS && atBeat < endBeat - BEAT_EPS;
 }
 
 /**
@@ -370,11 +398,16 @@ function lengthFit(length: number, expected: number): number {
  * pass already derived, so exposing it would invite callers to pair the two by
  * hand.
  *
+ * A stop whose cadence arrived before the phrase that would end there began is
+ * worth only its other evidence: the cadence closes the phrase it arrived in.
+ *
  * @param beats Beat of each stop, ascending; index 0 is the span's start and
  *   the last is its end.
  * @param strengths Boundary evidence at each stop, in the same order.
  * @param minPhraseBeats Shortest phrase the search may report.
  * @param expected Length a phrase is expected to run, in beats.
+ * @param held Per stop, the beat its cadence arrived on and the evidence left
+ *   without that cadence; omitted, every stop is worth its full strength.
  * @returns The chosen stop indices after the start, in time order.
  */
 export function choosePhrasePath(
@@ -382,6 +415,7 @@ export function choosePhrasePath(
   strengths: readonly number[],
   minPhraseBeats: number,
   expected: number,
+  held?: { arrivals: readonly number[]; uncredited: readonly number[] },
 ): number[] {
   const value = new Array<number>(beats.length).fill(Number.NEGATIVE_INFINITY);
   const cameFrom = new Array<number>(beats.length).fill(-1);
@@ -396,8 +430,10 @@ export function choosePhrasePath(
       if (length < minPhraseBeats - BEAT_EPS) {
         continue;
       }
-      const gain =
-        (value[i] ?? 0) + (strengths[j] ?? 0) + lengthFit(length, expected) - PHRASE_CUT_COST;
+      const credited =
+        held === undefined || closesPhrase(held.arrivals[j] ?? endBeat, beats[i] ?? 0, endBeat);
+      const strength = credited ? (strengths[j] ?? 0) : (held.uncredited[j] ?? 0);
+      const gain = (value[i] ?? 0) + strength + lengthFit(length, expected) - PHRASE_CUT_COST;
       if (gain > (value[j] ?? Number.NEGATIVE_INFINITY)) {
         value[j] = gain;
         cameFrom[j] = i;
@@ -420,30 +456,94 @@ export function choosePhrasePath(
   return path;
 }
 
-/** The beat at which the chord arriving at `atBeat` gives way to the next. */
-function arrivalEnd(timeline: ChordTimeline, atBeat: number): number {
-  return segmentStartingAt(timeline.segments, atBeat)?.endBeat ?? atBeat;
+/**
+ * The cadences of a timeline that mark a boundary, each once, with the span its
+ * arrival chord sounds through and the strength its type marks a boundary with.
+ *
+ * Phrase boundaries and the hyperbar ends the phrases are fitted against are
+ * both read from these spans, so a held arrival is credited alike by both.
+ *
+ * Not part of the public surface.
+ *
+ * @param timeline The chord timeline the cadences are read from.
+ * @param key The key context to read them against.
+ * @returns The cadences and their spans, index for index, in time order.
+ */
+export function boundaryCadences(
+  timeline: ChordTimeline,
+  key: KeyContext,
+): { hits: CadenceHit[]; spans: CadenceSpan[] } {
+  const hits = detectCadences(timeline, key).filter((hit) => hit.cadence.type !== null);
+  const spans = cadenceSpans(
+    hits.map((hit) => ({
+      atBeat: hit.atBeat,
+      strength: CADENCE_BOUNDARY_STRENGTH[hit.cadence.type as NonNullable<CadenceResult['type']>],
+    })),
+    timeline.segments,
+  );
+  return { hits, spans };
 }
 
-/** The key context cadence detection is to be read against. */
-function keyContextFor(
-  opts: PhraseOptions,
-  notes: NoteEvent[],
-  meters: MeterMap,
-  totalBeats: number,
+/**
+ * The key context cadences are read against: `key` when one is given,
+ * otherwise the keys the timeline's chords modulate through.
+ *
+ * Not part of the public surface.
+ *
+ * @param key The key the caller gave, if any.
+ * @param timeline The chord timeline the cadences are read from.
+ * @param meters The meter map the span is read in.
+ * @param totalBeats End of the analysed span; omitted, the end of the last chord.
+ * @param budget Upper bound on the work this may do.
+ * @returns The key context.
+ */
+export function keyContextFor(
+  key: KeyContext | undefined,
+  timeline: ChordTimeline,
+  meters: MeterLike,
+  totalBeats: number | undefined,
+  budget: number | undefined,
 ): KeyContext {
-  if (opts.key !== undefined) {
-    return opts.key;
+  if (key !== undefined) {
+    return key;
   }
-  const regions = keyTimelineFromNotes(notes, {
-    meters,
-    totalBeats,
-    budget: opts.budget,
-  });
+  // Read from the chords the cadences are formed of, as the timeline's own
+  // modulations are: a dominant passed through on the way to a cadence is not a
+  // key of its own, and reading it as one would turn its V-I into no cadence.
+  const regions = detectModulations(timeline.segments, { meters, totalBeats, budget });
   // The pitch classes alone: a phrase boundary is argued from cadences and
   // scale membership, neither of which reads how the key is written.
   const keyAt = keyLookup(regions, prevailingKeyOf(regions) ?? resolveKey(majorKey(0)));
   return (beat) => scaleOf(keyAt(beat));
+}
+
+/**
+ * Boundaries argued for by a cadence's arrival chord held across bar lines.
+ *
+ * A chord held past a bar line closes its phrase at that line as well as where
+ * it stops sounding: the tonic a period's consequent opens on is the same tonic
+ * the antecedent cadenced to, and reading the arrival only at the end of the
+ * held chord would leave the seam between the two with no cadence on it. Every
+ * bar line the chord sounds across is such a seam, however many bars separate
+ * it from the arrival.
+ */
+function heldCadenceBoundaries(
+  boundaries: Map<number, Boundary>,
+  hit: CadenceHit,
+  span: CadenceSpan,
+  meters: MeterMap,
+  spanEnd: number,
+): void {
+  // Bar lines past the end of the span bound no phrase.
+  const firstLine = barIndexAt(span.atBeat, meters) + 1;
+  const lastLine = barIndexAt(Math.min(span.endBeat, spanEnd), meters);
+  // The lines lie inside the span, whose bar count the form bars check has bounded.
+  for (let bar = firstLine; bar <= lastLine; bar += 1) {
+    const line = barPositionToBeat({ bar, beat: 0 }, meters);
+    if (line < span.endBeat - BEAT_EPS) {
+      addSignal(boundaries, line, 'cadence', span.strength, hit);
+    }
+  }
 }
 
 /** Boundaries argued for by silence in the melody. */
@@ -560,8 +660,8 @@ function describeCadence(cadence: CadenceHit | null): string {
  *
  * Three kinds of evidence are gathered independently and then reconciled. The
  * harmony contributes its cadences, each closing at the end of the chord it
- * arrives on, and at the bar line where that chord is held across one — a tonic
- * still sounding into the next phrase closed this one at the bar line. The
+ * arrives on, and at every bar line that chord is held across — a tonic still
+ * sounding into the next phrase closed this one at the bar line. The
  * cadence reported for a phrase is always one that arrived inside it. The
  * melody contributes the rests it breathes at and the notes it
  * holds long enough to read as arrivals. Repetition contributes the beats where
@@ -631,10 +731,12 @@ export function phrasesFromTimeline(
   const segments = timeline.segments;
   const firstSegment = segments[0];
   const lastSegment = segments[segments.length - 1];
-  const firstOnset = sounding.reduce(
-    (first, n) => Math.min(first, n.startBeat),
-    firstSegment?.startBeat ?? 0,
+  // Whichever starts first, the notes or the chords; with neither, beat 0.
+  const earliest = Math.min(
+    firstSoundingBeat(sounding, Number.POSITIVE_INFINITY),
+    firstSegment?.startBeat ?? Number.POSITIVE_INFINITY,
   );
+  const firstOnset = Number.isFinite(earliest) ? earliest : 0;
   // The pickup rule the whole analysis shares, so the first beat this reports
   // is the one sections and hypermeter report for the same notes.
   const spanStart = barGridStart(firstOnset, meters);
@@ -643,8 +745,7 @@ export function phrasesFromTimeline(
     latestSoundingEnd(sounding, Number.NEGATIVE_INFINITY),
   );
   const notesEnd = Number.isFinite(latestEnd) ? latestEnd : 0;
-  const spanEnd = Math.max(spanStart, opts.totalBeats ?? notesEnd);
-  assertRange(spanEnd, Math.min(0, spanStart), Number.MAX_SAFE_INTEGER, 'phrase totalBeats');
+  const spanEnd = resolveSpanEnd(opts.totalBeats, spanStart, notesEnd, 'phrase totalBeats');
   if (spanEnd <= spanStart + BEAT_EPS) {
     // Nothing sounds, so there is no material to hear a phrase in — the answer
     // `sectionsFromNotes` gives an empty span. A phrase of no length, closed by
@@ -660,15 +761,11 @@ export function phrasesFromTimeline(
   const minPhraseBeats = opts.minPhraseBeats ?? barBeats;
   assertRange(minPhraseBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'phrase minPhraseBeats');
 
-  const key = keyContextFor(opts, sounding, meters, spanEnd);
-  const cadences = detectCadences(timeline, key);
+  const key = keyContextFor(opts.key, timeline, meters, spanEnd, opts.budget);
+  const { hits: cadences, spans } = boundaryCadences(timeline, key);
   const grouping =
     opts.hypermeter ??
-    hypermeter(sounding, meters, {
-      totalBeats: spanEnd,
-      cadenceBeats: cadences.map((hit) => hit.atBeat),
-      budget: opts.budget,
-    });
+    hypermeterOver(sounding, meters, { totalBeats: spanEnd, budget: opts.budget }, () => spans);
   // The hyperbar the span opens in, not the one the piece opens in. Bar 0 is
   // always the bar beginning at beat 0 of the meter map, so measuring the group
   // from there hands an excerpt starting after a change of meter the bar length
@@ -685,24 +782,11 @@ export function phrasesFromTimeline(
   assertRange(expected, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'phrase expectedPhraseBeats');
 
   const boundaries = new Map<number, Boundary>();
-  for (const hit of cadences) {
-    const type = hit.cadence.type;
-    if (type === null) {
-      continue;
-    }
-    const strength = CADENCE_BOUNDARY_STRENGTH[type];
-    const chordEnd = arrivalEnd(timeline, hit.atBeat);
-    addSignal(boundaries, chordEnd, 'cadence', strength, hit);
-    // A chord held past the bar line closes its phrase at that line as well as
-    // where it stops sounding: the tonic a period's consequent opens on is the
-    // same tonic the antecedent cadenced to, and reading the arrival only at
-    // the end of the held chord would leave the seam between the two with no
-    // cadence on it and hand the cadence to the phrase that follows it.
-    const barEnd = barPositionToBeat({ bar: barIndexAt(hit.atBeat, meters) + 1, beat: 0 }, meters);
-    if (chordEnd > barEnd + BEAT_EPS) {
-      addSignal(boundaries, barEnd, 'cadence', strength, hit);
-    }
-  }
+  cadences.forEach((hit, index) => {
+    const span = spans[index] as CadenceSpan;
+    addSignal(boundaries, span.endBeat, 'cadence', span.strength, hit);
+    heldCadenceBoundaries(boundaries, hit, span, meters, spanEnd);
+  });
   restBoundaries(boundaries, sounding, meters, restBeats);
   for (const note of sounding) {
     if (note.durationBeat >= longNoteBeats - BEAT_EPS) {
@@ -747,6 +831,10 @@ export function phrasesFromTimeline(
     readings.map((reading) => reading.strength),
     minPhraseBeats,
     expected,
+    {
+      arrivals: stops.map((stop) => stop.cadence?.atBeat ?? stop.beat),
+      uncredited: readings.map((reading) => reading.uncredited),
+    },
   );
 
   const downbeatKeys = new Set(
@@ -759,12 +847,8 @@ export function phrasesFromTimeline(
     const startBeat = stops[from]?.beat ?? spanStart;
     const stop = stops[to];
     const endBeat = stop?.beat ?? spanEnd;
-    const reading = readings[to] ?? { strength: 0, signals: [] as PhraseSignal[] };
+    const reading = readings[to] ?? { strength: 0, uncredited: 0, signals: [] as PhraseSignal[] };
     const length = endBeat - startBeat;
-    const confidence = clamp01(
-      CLOSING_SHARE * reading.strength +
-        (1 - CLOSING_SHARE) * Math.max(0, lengthFit(length, expected)),
-    );
     const isLast = n === path.length - 1;
     // A cadence that arrived before this phrase began cannot be the one closing
     // it: its chord was still sounding at the boundary, which is a held arrival
@@ -772,11 +856,13 @@ export function phrasesFromTimeline(
     // a reported `cadence.atBeat` always lies inside `[startBeat, endBeat)`.
     const closing = stop?.cadence ?? null;
     const cadence =
-      closing !== null &&
-      closing.atBeat >= startBeat - BEAT_EPS &&
-      closing.atBeat < endBeat - BEAT_EPS
-        ? closing
-        : null;
+      closing !== null && closesPhrase(closing.atBeat, startBeat, endBeat) ? closing : null;
+    // Read from the signals the phrase reports, so a dropped cadence adds nothing.
+    const closingStrength = cadence === null ? reading.uncredited : reading.strength;
+    const confidence = clamp01(
+      CLOSING_SHARE * closingStrength +
+        (1 - CLOSING_SHARE) * Math.max(0, lengthFit(length, expected)),
+    );
     const structuralWeight = structuralWeightOf(
       cadence,
       confidence,

@@ -69,7 +69,11 @@ function copyProfile(profile: InstrumentProfile): InstrumentProfile {
   }
   const reach: Record<number, readonly Limb[]> = {};
   for (const [pitch, limbs] of Object.entries(profile.reach)) {
-    reach[Number(pitch)] = [...limbs];
+    // The function API reads `reach[pitch]`, so a key that is not the canonical
+    // spelling of its pitch (`036`) names no voice there and none here.
+    if (String(Number(pitch)) === pitch) {
+      reach[Number(pitch)] = [...limbs];
+    }
   }
   const percussion: PercussionProfile = {
     kind: 'percussion',

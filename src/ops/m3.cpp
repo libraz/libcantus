@@ -217,6 +217,7 @@ void register_motif() {
   def_class_method("Motif.fromJSON", from_cell);
   def_class_method("Motif.generate", [](Args& a) -> json::Value {
     // `{ ...opts, chord: chordFrom(opts.chord) }`
+    assert_record(a[0], "motif options");
     json::Object bag = spread(a[0]);
     json::Value chord = member_or_throw(a[0], "chord");
     if (!is_null_or_undefined(chord)) {
@@ -228,7 +229,7 @@ void register_motif() {
   });
   def_class_method("Motif.fromNotes", [](Args& a) -> json::Value {
     json::Object cell;
-    cell.set("notes", json::Value(spread_iterable(a[0], "notes")));
+    cell.set("notes", json::Value(assert_array(a[0], "motif notes")));
     return motif_wire(motif_data(json::Value(std::move(cell))));
   });
 
@@ -314,6 +315,13 @@ json::Value rhythm_grid(const json::Value& data) {
     out.push_back(json::Value(std::move(grid)));
   }
   return json::Value(std::move(out));
+}
+
+/** `toGrid(events)` as the list the transforms take. */
+std::vector<json::Value> rhythm_grid_events(const json::Value& data) {
+  json::Array grid = rhythm_grid(data).as_array();
+  return std::vector<json::Value>(std::make_move_iterator(grid.begin()),
+                                  std::make_move_iterator(grid.end()));
 }
 
 /** `#spanSteps()`. */
@@ -449,16 +457,18 @@ void register_rhythm() {
         forward(a, "syncopate", json::Array{grid, json::Value(std::move(amount)), draw});
     return rhythm_with_grid(self, events);
   });
+  // The class's own grid and span go to the transforms unchecked: a span off the sixteenth grid
+  // and an empty pattern are both patterns the class holds.
   def_class_method("Rhythm#doubleTime", [](Args& a) -> json::Value {
     json::Value self = read_rhythm_instance(a, 0);
-    json::Value events =
-        forward(a, "doubleTime", json::Array{rhythm_grid(self), rhythm_span_steps(self)});
+    json::Value events = events_json(double_time_figure<WireGridModel>(
+        rhythm_grid_events(self), *number_of(rhythm_span_steps(self))));
     return rhythm_with_grid(self, events);
   });
   def_class_method("Rhythm#halfTime", [](Args& a) -> json::Value {
     json::Value self = read_rhythm_instance(a, 0);
-    json::Value events =
-        forward(a, "halfTime", json::Array{rhythm_grid(self), rhythm_span_steps(self)});
+    json::Value events = events_json(half_time_figure<WireGridModel>(
+        rhythm_grid_events(self), *number_of(rhythm_span_steps(self))));
     return rhythm_with_grid(self, events);
   });
   def_class_method("Rhythm#ornamentBy", [](Args& a) -> json::Value {
@@ -478,15 +488,20 @@ void register_rhythm() {
     set_defined(options, "rhythmic", get(resolved, "rhythmic"));
     set_defined(options, "ornament", get(resolved, "ornament"));
     set_defined(options, "rate", optional_property(a[1], "rate"));
-    options.set("spanSteps", rhythm_span_steps(self));
     options.set("ts", get(self, "ts"));
     if (!is_undefined(is_ornament)) {
       options.set("isOrnament", SourcePredicate::placeholder());
     }
     json::Value draw = rhythm_draw(a, resolved);
     SourcePredicate wrapped(a, is_ornament);
-    json::Array args{rhythm_grid(self), json::Value(std::move(options)), draw};
-    json::Value events = call_op(wrapped.context(), "deform", std::move(args));
+    // `deformFigure` under the predicate's host, so the placeholder answers through it.
+    json::Array inner_values{json::Value(std::move(options)), draw};
+    Args inner(inner_values, wrapped.context());
+    WireDraw sampler = assert_wire_draw(inner, inner_values[1]);
+    WireDeformPlan plan{inner, inner_values[0], opt_null_default(inner_values[0], "ts")};
+    json::Value events = events_json(
+        deform_figure<WireGridModel>(rhythm_grid_events(self), *number_of(rhythm_span_steps(self)),
+                                     plan, WireSampler{sampler, json::Array()}));
     return rhythm_with_grid(self, events);
   });
   def_class_method("Rhythm#withinCeiling", [](Args& a) -> json::Value {
@@ -861,18 +876,13 @@ const json::Value& composer_key(const json::Value& held, const char* part) {
   return key;
 }
 
-/** `#openingMeter()`: the signature the parts are written against. */
-json::Value opening_meter(const Args& a, const json::Value& held) {
-  return forward(a, "meterAt", json::Array{0.0, get(held, "meters")});
-}
-
 /** `#unchangingMeter(part)`: the one signature a part laid out in bars is written against. */
 json::Value unchanging_meter(const Args& a, const json::Value& held, const char* part) {
   if (get(held, "meters").as_array().size() > 1) {
     throw InvalidInputError(std::string("composer ") + part +
                             " needs one meter for the whole part; the composer changes meter");
   }
-  return opening_meter(a, held);
+  return forward(a, "meterAt", json::Array{0.0, get(held, "meters")});
 }
 
 /** `#scoreOptions(key)`: the context every score a composer hands back is read against. */
@@ -976,7 +986,7 @@ void register_composer() {
     }
     bag.set("segments", segments);
     bag.set("key", key);
-    bag.set("ts", opening_meter(a, held));
+    bag.set("ts", get(held, "meters"));
     bag.set("ctx", composer_context(held, a.context()));
     json::Value notes = forward(a, "generateBassLine", json::Array{json::Value(std::move(bag))});
     return forward(a, "Score.of", json::Array{notes, composer_score_options(held, key)});
@@ -995,7 +1005,7 @@ void register_composer() {
     }
     bag.set("melody", member_or_throw(a[1], "notes"));
     bag.set("key", key);
-    bag.set("ts", opening_meter(a, held));
+    bag.set("ts", get(held, "meters"));
     bag.set("ctx", composer_context(held, a.context()));
     json::Value notes =
         forward(a, "generateCounterMelody", json::Array{json::Value(std::move(bag))});
@@ -1006,13 +1016,14 @@ void register_composer() {
     json::Object bag = spread(a[2]);
     bag.set("melody", member_or_throw(a[1], "notes"));
     set_defined(bag, "key", get(held, "key"));
-    json::Value ts = opening_meter(a, held);
-    bag.set("ts", ts);
+    bag.set("ts", get(held, "meters"));
     bag.set("ctx", composer_context(held, a.context()));
     json::Value result = forward(a, "harmonizeMelody", json::Array{json::Value(std::move(bag))});
     const json::Value& semitones = get(result, "transposeSemitones");
     json::Value moved = transpose_melody(a, a[1], semitones);
-    json::Value bar = forward(a, "beatsPerBar", json::Array{ts});
+    const json::Array& chords = get(result, "chords").as_array();
+    json::Value last = chords.empty() ? json::Value(0.0) : get(chords.back(), "startBeat");
+    json::Value bar = forward(a, "beatsPerBarAt", json::Array{last, get(held, "meters")});
     double total = harmonized_span(js::to_math_number(member_or_throw(moved, "totalBeats")),
                                    get(result, "chords"), *number_of(bar));
     json::Object out;

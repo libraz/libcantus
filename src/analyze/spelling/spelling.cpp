@@ -14,6 +14,7 @@
 #include "cantus/theory/spelling.h"
 #include "js/math.h"
 #include "theory/spelling/spelling.h"
+#include "theory/tendency/tendency.h"
 
 namespace cantus {
 
@@ -91,11 +92,28 @@ std::optional<NoteData> chord_spelling_of(int pc, const Chord& chord, const Note
   return spell_pitch_class(pc, tonic, key);
 }
 
+/**
+ * The key's spelling of a pitch class it counts as its own: a scale tone, or in a minor key the
+ * raised sixth and seventh of its melodic and harmonic forms; nullopt for a chromatic one
+ * (`keyToneSpelling`).
+ */
+std::optional<NoteData> key_tone_spelling(int pc, const NoteData& tonic, const KeyScale& key) {
+  bool own =
+      is_scale_tone(pc, key) || (cadences_through_raised_seventh(key) &&
+                                 is_scale_tone(pc, KeyScale{key.rootPc, MELODIC_MINOR_MASK}));
+  if (!own) {
+    return std::nullopt;
+  }
+  return spell_pitch_class(pc, tonic, key);
+}
+
 /** One note of the line, with the spellings open to it and what each costs (`LineState`). */
 struct LineState {
   int pitch = 0;
   /** True when the key does not already spell this pitch, so direction may decide. */
   bool chromatic = false;
+  /** The key's spelling of the pitch when it is one of the key's own tones. */
+  std::optional<NoteData> key_tone;
   std::vector<NoteData> candidates;
   std::vector<double> emissions;
   /** The spelling the note-by-note path would have chosen, used as the fallback. */
@@ -110,12 +128,15 @@ LineState state_for(int pitch, const std::optional<Chord>& chord, const NoteData
   if (chord) {
     from_chord = chord_spelling_of(pc, *chord, tonic, key);
   }
-  bool scale_tone = is_scale_tone(pc, key);
-  NoteData reference = from_chord ? *from_chord : spell_pitch_class(pc, tonic, key);
-  double mismatch = from_chord ? CHORD_MISMATCH : (scale_tone ? SCALE_TONE_MISMATCH : KEY_MISMATCH);
+  std::optional<NoteData> key_tone = key_tone_spelling(pc, tonic, key);
+  NoteData reference = from_chord ? *from_chord
+                       : key_tone ? *key_tone
+                                  : spell_pitch_class(pc, tonic, key);
+  double mismatch = from_chord ? CHORD_MISMATCH : (key_tone ? SCALE_TONE_MISMATCH : KEY_MISMATCH);
   LineState state;
   state.pitch = pitch;
-  state.chromatic = !scale_tone;
+  state.chromatic = !key_tone;
+  state.key_tone = key_tone;
   state.candidates = candidates_for(pitch, reference);
   for (const NoteData& candidate : state.candidates) {
     state.emissions.push_back((same_spelling(candidate, reference) ? 0 : mismatch) +
@@ -155,11 +176,16 @@ double direction_cost(const NoteData& note, bool chromatic, int semitones) {
   return (rising && note.alter < 0) || (!rising && note.alter > 0) ? AGAINST_DIRECTION : 0;
 }
 
-/** The cost of following one spelling with another (`transitionCost`). */
+/**
+ * The cost of following one spelling with another (`transitionCost`); two of the key's own tones
+ * spelled as the key spells them cost nothing for their letters.
+ */
 double transition_cost(const LineState& from, const NoteData& source, const LineState& to,
                        const NoteData& target) {
   int semitones = to.pitch - from.pitch;
-  return letter_step_cost(source, target, semitones) +
+  bool key_interval = from.key_tone && to.key_tone && same_spelling(source, *from.key_tone) &&
+                      same_spelling(target, *to.key_tone);
+  return (key_interval ? 0 : letter_step_cost(source, target, semitones)) +
          direction_cost(target, to.chromatic, semitones) +
          direction_cost(source, from.chromatic, semitones);
 }

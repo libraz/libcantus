@@ -215,8 +215,6 @@ class Composer {
 
   /** The key a pitched part is written in. @throws InvalidInputError if there is none. */
   ResolvedKey require_key(const char* part) const;
-  /** The signature the parts are written against. */
-  TimeSignature opening_meter() const;
   /** The one signature a part laid out in bars is written against. */
   TimeSignature unchanging_meter(const char* part) const;
   /** The context every score a composer hands back is read against. */

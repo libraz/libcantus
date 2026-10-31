@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "analyze/arrange/tracks.h"
+#include "analyze/keys/keys.h"
 
 namespace cantus {
 
@@ -25,13 +26,14 @@ struct TensionGrid {
 };
 
 /**
- * Sample the tension of prepared tracks against a harmony at regular beats; the sampling budget
- * is checked before the first sample is taken.
+ * Sample the tension of prepared tracks against a harmony at regular beats, each chord's function
+ * read against the whole key `key_at` gives for its beat; the sampling budget is checked before
+ * the first sample is taken.
  */
 std::vector<TensionPoint> sample_tension(const std::vector<PreparedTrack>& prepared,
-                                         const ArrangementHarmony& harmony, SafetyProfile profile,
-                                         const MeterMap& meters, const TensionGrid& grid,
-                                         std::optional<double> budget);
+                                         const ArrangementHarmony& harmony, const KeyLookup& key_at,
+                                         SafetyProfile profile, const MeterMap& meters,
+                                         const TensionGrid& grid, std::optional<double> budget);
 
 }  // namespace cantus
 

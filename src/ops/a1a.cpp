@@ -242,11 +242,8 @@ void register_functional() {
     KeyArg key = read_key_arg(a[1]);
     ResolvedKey resolved = resolve_key(key);
     if (!a[0].is_string()) {
-      throw js::TypeError(is_undefined(a[0]) || a[0].is_null()
-                              ? "Cannot read properties of " +
-                                    std::string(a[0].is_null() ? "null" : "undefined") +
-                                    " (reading 'trim')"
-                              : "text.trim is not a function");
+      throw InvalidInputError("Roman numeral must be a string; received " +
+                              describe_rejected(a[0]));
     }
     return to_json(roman_to_chord(a[0].as_string(), resolved));
   });

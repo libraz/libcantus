@@ -273,7 +273,42 @@ double chord_confidence(const Chord& chord, const std::array<double, 12>& weight
   return exact ? confidence : confidence * INEXACT_CONFIDENCE_FACTOR;
 }
 
-/** Infer the chord sounding in one window from the notes overlapping it (`analyzeWindow`). */
+/** What chord detection makes of one choice of a window's pitch classes (`WindowDetection`). */
+struct WindowDetection {
+  std::vector<int> selected;
+  bool has_bass = false;
+  std::optional<int> pedal_pc;
+  std::vector<ChordMatch> matches;
+};
+
+/** Detect the chords a window's selected pitch classes name over its bass (`detectWindow`). */
+WindowDetection detect_window(std::vector<int> selected, int bass_pc,
+                              const std::vector<NoteEvent>& all,
+                              const std::vector<std::size_t>& selection, double window_start,
+                              double window_end) {
+  WindowDetection out;
+  // The window's true bass is the lowest pitch, so inversion detection works; if that pitch class
+  // was removed as noise, detection becomes unordered instead.
+  out.has_bass = std::find(selected.begin(), selected.end(), bass_pc) != selected.end();
+  std::vector<int> detection_pitches;
+  for (int pc : selected) {
+    detection_pitches.push_back(out.has_bass && pc != bass_pc ? pc + 12 : pc);
+  }
+  // A bass heard nowhere above the harmony is a bass, whatever pitch class it carries.
+  if (out.has_bass && bass_sounds_only_below(all, selection, window_start, window_end, bass_pc)) {
+    out.pedal_pc = bass_pc;
+  }
+  DetectChordOptions detect;
+  detect.input = out.has_bass ? ChordInputKind::kMidi : ChordInputKind::kPitchClass;
+  out.matches = detect_chord(detection_pitches, detect);
+  out.selected = std::move(selected);
+  return out;
+}
+
+/**
+ * Infer the chord sounding in one window from the notes overlapping it (`analyzeWindow`). Noise is
+ * set aside only while the rest still names a chord; otherwise every sounding pitch class is read.
+ */
 std::optional<WindowChord> analyze_window(const std::vector<NoteEvent>& all,
                                           const std::vector<std::size_t>& selection,
                                           double window_start, double window_end,
@@ -303,33 +338,29 @@ std::optional<WindowChord> analyze_window(const std::vector<NoteEvent>& all,
     double order = by_weight != 0 && !std::isnan(by_weight) ? by_weight : a.pc - b.pc;
     return order < 0;
   });
-  std::vector<int> selected;
-  for (const Ranked& entry : ranked) {
-    if (entry.weight >= window.maxWeight * NOISE_THRESHOLD_RATIO &&
-        selected.size() < static_cast<std::size_t>(MAX_DETECTION_PCS)) {
-      selected.push_back(entry.pc);
-    }
-  }
-
-  // The window's true bass is the lowest pitch, so inversion detection works; if that pitch class
-  // was removed as noise, detection becomes unordered instead.
   int bass_pc = pitch_class_of(
       window_bass(all, selection, window_start, window_end, meters, harmonic_rhythm));
-  bool has_bass = std::find(selected.begin(), selected.end(), bass_pc) != selected.end();
-  std::vector<int> detection_pitches;
-  for (int pc : selected) {
-    detection_pitches.push_back(has_bass && pc != bass_pc ? pc + 12 : pc);
+  std::vector<int> sounding;
+  std::vector<int> significant;
+  for (const Ranked& entry : ranked) {
+    if (sounding.size() < static_cast<std::size_t>(MAX_DETECTION_PCS)) {
+      sounding.push_back(entry.pc);
+    }
+    if (entry.weight >= window.maxWeight * NOISE_THRESHOLD_RATIO &&
+        significant.size() < static_cast<std::size_t>(MAX_DETECTION_PCS)) {
+      significant.push_back(entry.pc);
+    }
   }
-
-  // A bass heard nowhere above the harmony is a bass, whatever pitch class it carries.
-  std::optional<int> pedal_pc;
-  if (has_bass && bass_sounds_only_below(all, selection, window_start, window_end, bass_pc)) {
-    pedal_pc = bass_pc;
+  bool narrowed = significant.size() < sounding.size();
+  WindowDetection detection =
+      detect_window(std::move(significant), bass_pc, all, selection, window_start, window_end);
+  if (detection.matches.empty() && narrowed) {
+    detection = detect_window(sounding, bass_pc, all, selection, window_start, window_end);
   }
-
-  DetectChordOptions detect;
-  detect.input = has_bass ? ChordInputKind::kMidi : ChordInputKind::kPitchClass;
-  std::vector<ChordMatch> matches = detect_chord(detection_pitches, detect);
+  const std::vector<int>& selected = detection.selected;
+  bool has_bass = detection.has_bass;
+  const std::optional<int>& pedal_pc = detection.pedal_pc;
+  const std::vector<ChordMatch>& matches = detection.matches;
   const ChordMatch* best_match = nullptr;
   double best_score = -std::numeric_limits<double>::infinity();
   KeyScale scale = scale_of(key);

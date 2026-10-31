@@ -38,7 +38,7 @@ import { scaleOf } from '../../theory/scale/index.js';
 import { clipStatement, relationLevels, replayAt } from '../melody/derive.js';
 import type { MotifNote } from '../motif/index.js';
 import { cadencePitchClasses, planHarmonyMisfits, planKeyAt } from './harmony.js';
-import { positionClass } from './internal.js';
+import { finalDownbeat, positionClass } from './internal.js';
 import { planChordTimeline } from './timeline.js';
 import {
   type CompositionPlan,
@@ -285,7 +285,10 @@ function harmonyViolations(
           note.startBeat >= motif.startBeat - BEAT_EPS &&
           note.startBeat < motif.endBeat - BEAT_EPS,
       );
-      const strong = positionClass(note.startBeat, plan.meters) === 'strong';
+      // A chord tone is asked for only on a strong pulse where the plan names a chord.
+      const strong =
+        positionClass(note.startBeat, plan.meters) === 'strong' &&
+        timeline.at(note.startBeat) !== null;
       violations.push({
         kind: 'harmony',
         severity: derived ? 'warning' : 'error',
@@ -314,13 +317,30 @@ function notesInRange(
   );
 }
 
+/**
+ * Where a statement's notes stop counting as its own: the final downbeat of
+ * the phrase it sits in when that phrase closes on a hold (a single onset from
+ * there on), which drops every later onset; otherwise the statement's end.
+ */
+function keptEnd(statement: PlannedMotif, melody: readonly NoteEvent[], plan: CompositionPlan) {
+  const phrase = phraseAt(plan, statement.startBeat);
+  if (phrase === undefined) {
+    return statement.endBeat;
+  }
+  const downbeat = finalDownbeat(phrase, plan.meters);
+  const held = notesInRange(melody, downbeat, phrase.endBeat).length === 1;
+  return held ? Math.min(statement.endBeat, downbeat) : statement.endBeat;
+}
+
 /** A pitch level a derived statement replays its source at, and how many of its notes that leaves excused. */
 type Replay = { level: number; forced: number };
 
 /**
  * The pitch level nearest the planned one at which a derived statement's own
- * notes replay its source, or null when none does. At a level, the replay must
- * have as many notes and the same onset intervals, and every pitch must match
+ * notes replay its source, or null when none does. Both are read up to where
+ * their phrases' closing holds begin; when the source lost notes there, only
+ * the derived notes replaying what is left of it are compared. At a level, the
+ * replay must have as many notes and the same onset intervals, and every pitch must match
  * unless it is excused: the derived phrase's closing note, a note replaying the
  * source phrase's closing note, or — at a level leaving the fewest replayed
  * pitches outside the derived phrase's register, the only levels a generator
@@ -332,6 +352,8 @@ function replayLevel(
   derived: readonly NoteEvent[],
   statement: PlannedMotif,
   sourceEnd: number,
+  derivedEnd: number,
+  sourceCut: boolean,
   plan: CompositionPlan,
   key: KeyScale,
   closing: ReadonlySet<NoteEvent>,
@@ -353,23 +375,24 @@ function replayLevel(
   const replays = relationLevels(relation.kind).map((level) => {
     const notes = clipStatement(
       replayAt(cell, relation, level, statement.startBeat, key),
-      statement.endBeat,
+      derivedEnd,
     );
     return { level, notes, outside: notes.filter((note) => outside(note.pitch)).length };
   });
   const fewestOutside = Math.min(...replays.map((replay) => replay.outside));
   let best: Replay | null = null;
   for (const { level, notes: expected, outside: away } of replays) {
-    if (expected.length !== derived.length) {
+    const compared = sourceCut ? derived.slice(0, expected.length) : derived;
+    if (expected.length !== compared.length) {
       continue;
     }
     let forced = 0;
     let holds = true;
     for (let i = 0; holds && i < expected.length; i += 1) {
       const want = expected[i] as MotifNote;
-      const got = derived[i] as NoteEvent;
+      const got = compared[i] as NoteEvent;
       if (i > 0) {
-        const gap = got.startBeat - (derived[i - 1] as NoteEvent).startBeat;
+        const gap = got.startBeat - (compared[i - 1] as NoteEvent).startBeat;
         holds =
           Math.abs(gap - (want.startBeat - (expected[i - 1] as MotifNote).startBeat)) <= BEAT_EPS;
       }
@@ -399,7 +422,8 @@ function replayLevel(
  * Every planned derivation the candidate's own notes do not carry out, as an
  * error, and every one carried out at another pitch level than planned or with
  * excused notes, as a `motifDisplaced` warning. A variation must be alike
- * enough to its source to count as one.
+ * enough to its source to count as one. Onsets a phrase's closing hold
+ * dropped are read in neither statement.
  */
 function motifDerivationViolations(
   melody: readonly NoteEvent[],
@@ -418,6 +442,15 @@ function motifDerivationViolations(
     const derivedNotes = notesInRange(melody, statement.startBeat, statement.endBeat);
     const relation = statement.relation;
     const rationale = `the statement at beat ${statement.startBeat} does not derive from its source the way the plan names`;
+    const sourceKept = keptEnd(source, melody, plan);
+    const derivedKept = keptEnd(statement, melody, plan);
+    // A statement a closing hold dropped whole leaves nothing to compare.
+    if (
+      sourceKept <= source.startBeat + BEAT_EPS ||
+      derivedKept <= statement.startBeat + BEAT_EPS
+    ) {
+      continue;
+    }
     if (sourceNotes.length === 0 || derivedNotes.length === 0) {
       errors.push({
         kind: 'motifDerivation',
@@ -429,8 +462,22 @@ function motifDerivationViolations(
       });
       continue;
     }
+    const sourceCut = sourceKept < source.endBeat - BEAT_EPS;
+    const derivedCut = derivedKept < statement.endBeat - BEAT_EPS;
     if (relation === null) {
-      const similarity = melodicSimilarity(sourceNotes, derivedNotes);
+      // A variation keeps its source's onsets, so a span one hold dropped is read in neither.
+      const sourceEnd = derivedCut
+        ? Math.min(sourceKept, source.startBeat + derivedKept - statement.startBeat)
+        : sourceKept;
+      const derivedEnd = sourceCut
+        ? Math.min(derivedKept, statement.startBeat + sourceKept - source.startBeat)
+        : derivedKept;
+      const sourceLine = notesInRange(melody, source.startBeat, sourceEnd);
+      const derivedLine = notesInRange(melody, statement.startBeat, derivedEnd);
+      if (sourceLine.length === 0 || derivedLine.length === 0) {
+        continue;
+      }
+      const similarity = melodicSimilarity(sourceLine, derivedLine);
       if (similarity < DEFAULT_VARIATION_THRESHOLD) {
         errors.push({
           kind: 'motifDerivation',
@@ -443,11 +490,19 @@ function motifDerivationViolations(
       }
       continue;
     }
+    const kept = notesInRange(melody, source.startBeat, sourceKept);
+    const backward = relation.kind === 'retrograde' || relation.kind === 'retrogradeInversion';
+    // Nothing of the source is left to replay, or a retrograde would replay the dropped tail first.
+    if (kept.length === 0 || (sourceCut && backward)) {
+      continue;
+    }
     const replay = replayLevel(
-      sourceNotes,
-      derivedNotes,
+      kept,
+      notesInRange(melody, statement.startBeat, derivedKept),
       statement,
-      source.endBeat,
+      sourceKept,
+      derivedKept,
+      sourceCut,
       plan,
       scaleOf(keyAt(statement.startBeat)),
       closing,

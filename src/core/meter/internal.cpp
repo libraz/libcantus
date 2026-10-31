@@ -24,27 +24,14 @@ struct MeterIndex {
   std::vector<double> barsBefore;
 };
 
-/** A meter change starts a new bar, so a span ending in a partial bar still counts it whole. */
+/** The index arrays of meter_segments(). */
 MeterIndex build_meter_index(const MeterMap& map) {
   MeterIndex index;
-  std::size_t n = map.size();
-  index.startBeats.resize(n);
-  index.barAnchors.resize(n);
-  index.barBeats.resize(n);
-  index.barsBefore.resize(n);
-  double bars = 0;
-  for (std::size_t i = 0; i < n; ++i) {
-    double start_beat = map[i].startBeat;
-    double bar_len = bar_beats_of(map[i].ts);
-    // The opening signature counts its bars from beat 0, wherever the map starts.
-    double anchor = i == 0 ? 0 : start_beat;
-    index.startBeats[i] = start_beat;
-    index.barAnchors[i] = anchor;
-    index.barBeats[i] = bar_len;
-    index.barsBefore[i] = bars;
-    if (i + 1 < n && bar_len > 0) {
-      bars += js::max(1, std::ceil((map[i + 1].startBeat - anchor) / bar_len - BEAT_EPS));
-    }
+  for (const MeterSegment& segment : meter_segments(map)) {
+    index.startBeats.push_back(segment.startBeat);
+    index.barAnchors.push_back(segment.barAnchor);
+    index.barBeats.push_back(segment.barBeats);
+    index.barsBefore.push_back(segment.barsBefore);
   }
   return index;
 }
@@ -67,6 +54,37 @@ std::size_t last_at_or_before(const std::vector<double>& keys, double value) {
 }
 
 }  // namespace
+
+std::vector<MeterSegment> meter_segments(const MeterMap& map) {
+  std::vector<MeterSegment> segments;
+  segments.reserve(map.size());
+  double bars = 0;
+  std::size_t at_zero = 0;
+  for (std::size_t i = 0; i < map.size(); ++i) {
+    double start_beat = map[i].startBeat;
+    double bar_len = bar_beats_of(map[i].ts);
+    double bar_anchor = i == 0 ? 0 : start_beat;
+    segments.push_back(MeterSegment{start_beat, map[i].ts, bar_anchor, bar_len, bars});
+    if (i > 0 && start_beat <= BEAT_EPS) {
+      at_zero = i;
+    }
+    if (i + 1 < map.size() && bar_len > 0) {
+      // The opening span may end at or before beat 0; every later span holds the bar it starts.
+      double span = std::ceil((map[i + 1].startBeat - bar_anchor) / bar_len - BEAT_EPS);
+      bars += i == 0 ? span : js::max(1, span);
+    }
+  }
+  if (at_zero > 0 && segments[at_zero].barBeats > 0) {
+    const MeterSegment& zero = segments[at_zero];
+    double shift = zero.barsBefore + std::floor(-zero.barAnchor / zero.barBeats + BEAT_EPS);
+    if (shift != 0) {
+      for (MeterSegment& segment : segments) {
+        segment.barsBefore -= shift;
+      }
+    }
+  }
+  return segments;
+}
 
 double unit_beats_of(const TimeSignature& ts) { return 4.0 / ts.denominator; }
 

@@ -33,6 +33,7 @@ import {
   defaultHarmonicRhythm,
   FALLBACK,
   inferKey,
+  inOnsetOrder,
   TIE_BREAK_JITTER,
 } from './internal.js';
 import { keyFitCost, tessituraCost } from './key-fit.js';
@@ -67,7 +68,9 @@ import { segmentIndexAt } from './segments.js';
  * the grid.
  *
  * With `placement.transposeSearch` the melody is moved into the key it is
- * harmonized in, and `transposeSemitones` reports how far; with
+ * harmonized in, and `transposeSemitones` reports how far: the shifts that
+ * leave the fewest beats of the melody outside the key are kept, and the
+ * harmonization cost and the register choose among them; with
  * `placement.octaveSearch` it is moved by octaves into a comfortable register,
  * which leaves the key and the chords untouched. Both may be set, and the
  * reported shift is their sum.
@@ -105,7 +108,8 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   for (const end of phraseEnds) {
     assertFiniteNumber(end, 'harmonize phrase end');
   }
-  const soundingMelody = soundingNotesOnly(opts.melody);
+  // Read in onset order whatever the listing, so a reordered melody is the same melody.
+  const soundingMelody = inOnsetOrder(soundingNotesOnly(opts.melody));
   const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_METER, 'ts'));
   assertTimeSignature(ts);
   const requestedKey = opts.key ?? 'infer';
@@ -223,6 +227,7 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     opts.budget,
   );
 
+  let bestFit = Number.POSITIVE_INFINITY;
   let bestCost = Number.POSITIVE_INFINITY;
   let bestTs = 0;
   let bestPath: number[] = [];
@@ -237,8 +242,11 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
       closingSegments,
       articulatedSegments,
     );
-    const total = cost + keyFitCost(shifted, key) + tessituraCost(shifted);
-    if (total < bestCost) {
+    // Key fit comes first: no cadence reward buys a melody note out of the key.
+    const fit = keyFitCost(shifted, key);
+    const total = cost + tessituraCost(shifted);
+    if (fit < bestFit || (fit === bestFit && total < bestCost)) {
+      bestFit = fit;
       bestCost = total;
       bestTs = shift;
       bestPath = path;

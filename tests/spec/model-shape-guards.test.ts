@@ -367,9 +367,9 @@ describe('model classes read a value they are handed through its public surface'
   });
 
   it('rebuilds every progression member from its own data', () => {
-    expect(() => new Progression([cMajorTriad] as never)).toThrow(TypeError);
+    expect(() => new Progression([cMajorTriad] as never)).toThrow(InvalidInputError);
     expect(() => new Progression([cMajorTriad] as never, 'C major')).toThrow(
-      'chord.toJSON is not a function',
+      'progression chords[0] must be a Chord; received object',
     );
     expect(() => new Progression([Score.of([])] as never, 'C major')).toThrow(
       'Unknown chord quality: undefined',
@@ -405,7 +405,9 @@ describe('model classes read a value they are handed through its public surface'
       "Cannot read properties of undefined (reading 'rootPc')",
     );
     const timeline = Timeline.fromChords([{ rootPc: 0, quality: 'maj', startBeat: 0 }], 4);
-    expect(() => progression.concat(timeline as never)).toThrow('chord.toJSON is not a function');
+    expect(() => progression.concat(timeline as never)).toThrow(
+      'progression chords[2] must be a Chord; received object',
+    );
     expect(() => Key.major('C').spellPitchClasses(timeline as never)).toThrow(
       'pcs[0] must be finite; received [object Object]',
     );

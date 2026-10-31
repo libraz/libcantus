@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <string>
+#include <vector>
 
 #include "cantus/analyze/functional.h"
 #include "cantus/core/errors.h"
@@ -172,4 +173,15 @@ TEST_CASE("function, numbering and pivots read a respelled key as written", "[fu
     found = found || (pivot.romanFrom == "viio" && pivot.romanTo == "iio");
   }
   CHECK(found);
+}
+
+TEST_CASE("a diatonic root keeps its degree numeral however it is spelled", "[functional]") {
+  CHECK(chord_to_roman("Abm", "E major") == "iii");
+  CHECK(chord_to_roman("Ab7", "E major") == "III7");
+  CHECK(chord_to_roman("F#", "Db major") == "IV");
+  std::vector<std::string> pivots;
+  for (const PivotChord& pivot : pivot_chords("F# major", "Db major")) {
+    pivots.push_back(pivot.romanFrom + "=" + pivot.romanTo);
+  }
+  CHECK(pivots == std::vector<std::string>{"I=IV", "iii=vi", "V=I", "vi=ii"});
 }

@@ -142,6 +142,34 @@ TEST_CASE("generating drums matches the op layer", "[drums]") {
   CHECK_THROWS_AS(generate_drums(euclid), InvalidInputError);
 }
 
+TEST_CASE("the rhythmic dial only adds onsets under a difficulty ceiling", "[drums]") {
+  for (double difficulty : {1.0, 2.0}) {
+    for (GrooveStyle style : {GrooveStyle::kFunk, GrooveStyle::kShuffle}) {
+      std::vector<DrumHit> previous;
+      for (int step = 0; step <= 20; ++step) {
+        DrumsOptions opts;
+        opts.bars = 2;
+        opts.style = style;
+        opts.section = Section::kChorus;
+        GenerationContext ctx;
+        ctx.seed = 2;
+        ctx.bpm = 140;
+        ctx.complexity = Complexity{step / 20.0, std::nullopt, std::nullopt, difficulty};
+        opts.ctx = GenerationContextInput(ctx);
+        std::vector<DrumHit> current = generate_drums(opts);
+        for (const DrumHit& hit : previous) {
+          bool kept = false;
+          for (const DrumHit& now : current) {
+            kept = kept || (now.pitch == hit.pitch && now.startBeat == hit.startBeat);
+          }
+          CHECK(kept);
+        }
+        previous = current;
+      }
+    }
+  }
+}
+
 TEST_CASE("the kit and the voice table cover every voice the generators emit", "[drums]") {
   for (DrumVoice voice : DRUM_VOICES) {
     CHECK(drum_voice_of(drum_note(voice)) == voice);

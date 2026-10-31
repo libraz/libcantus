@@ -116,6 +116,65 @@ TEST_CASE("the ornament dial keeps decoration on its own draw", "[vocabulary]") 
   CHECK_THROWS_AS(ornament_by(f, OrnamentTest(), 0.5, draw), InvalidInputError);
 }
 
+TEST_CASE("doubling and drawing keep each stream to itself", "[vocabulary]") {
+  std::vector<GridEvent> backbeat;
+  for (double step = 0; step < 16; step += 2) {
+    backbeat.push_back(event(step, 0.7, std::nullopt, "hat"));
+  }
+  backbeat.push_back(event(0, 1, std::nullopt, "kick"));
+  backbeat.push_back(event(4, 1, std::nullopt, "snare"));
+  backbeat.push_back(event(8, 1, std::nullopt, "kick"));
+  backbeat.push_back(event(12, 1, std::nullopt, "snare"));
+  auto steps_of = [](const std::vector<GridEvent>& events, const std::string& limb) {
+    std::vector<double> out;
+    for (const GridEvent& e : events) {
+      if (e.limb == limb) {
+        out.push_back(e.step);
+      }
+    }
+    return out;
+  };
+  std::vector<GridEvent> doubled = double_(backbeat);
+  CHECK(steps_of(doubled, "hat").size() == 16);
+  CHECK(steps_of(doubled, "kick") == std::vector<double>{0, 4, 8, 12});
+  CHECK(steps_of(doubled, "snare") == std::vector<double>{4, 8, 12, 14});
+
+  std::vector<GridEvent> ghosts = {event(6, 0.3, std::nullopt, "snare"),
+                                   event(6, 0.3, std::nullopt, "hat")};
+  OrnamentTest all = [](const GridEvent&) { return true; };
+  bool apart = false;
+  for (unsigned seed = 0; seed < 40 && !apart; ++seed) {
+    Draw draw = resolve_context(GenerationContextInput(seed)).part("test");
+    apart = ornament_by(ghosts, all, 0.5, draw).size() == 1;
+  }
+  CHECK(apart);
+}
+
+TEST_CASE("deform reads every dial it is given", "[vocabulary]") {
+  Draw draw = resolve_context(GenerationContextInput(7U)).part("test");
+  std::vector<GridEvent> one = {event(0, 1, std::nullopt, std::nullopt)};
+  DeformOptions ornament;
+  ornament.ornament = 7;
+  CHECK_THROWS_AS(deform(one, ornament, draw), InvalidInputError);
+  DeformOptions meter;
+  meter.ts = MeterArg("banana");
+  CHECK_THROWS_AS(deform(one, meter, draw), InvalidInputError);
+}
+
+TEST_CASE("a query matches the grouping of a meter", "[vocabulary]") {
+  Vocabulary<int> written;
+  written.ts = TimeSignature{7, 8, std::vector<int>{3, 2, 2}};
+  VocabularyQuery same;
+  same.ts = MeterArg("3+2+2/8");
+  VocabularyQuery other;
+  other.ts = MeterArg("2+2+3/8");
+  VocabularyQuery plain;
+  plain.ts = MeterArg(TimeSignature{7, 8, std::nullopt});
+  CHECK(fits_query(written, same));
+  CHECK_FALSE(fits_query(written, other));
+  CHECK_FALSE(fits_query(written, plain));
+}
+
 TEST_CASE("selection and merging match the op layer", "[vocabulary]") {
   std::string patterns = call("$const:DRUM_PATTERNS", "[]");
   for (const char* genre : {"funk", "samba", "jazz"}) {

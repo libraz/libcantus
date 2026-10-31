@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <vector>
 
 #include "generate/drums/ghost.h"
@@ -98,7 +99,7 @@ double swing16(double tick, const SectionCtx& sec, double swing_amount) {
   return quantize_swing(tick, section_swing(sec, swing_amount), SwingResolution::kSixteenth);
 }
 
-void generate_kick_for_beat(const BeatCtx& ctx, const SectionCtx& sec, const KickPattern& kick) {
+void generate_kick_for_beat(const BeatCtx& ctx, const SectionCtx& sec, const KickEntries& kick) {
   if (ctx.inPrechorusLift) {
     return;
   }
@@ -109,8 +110,9 @@ void generate_kick_for_beat(const BeatCtx& ctx, const SectionCtx& sec, const Kic
           kick[static_cast<std::size_t>(index)])) {
       continue;
     }
+    double entry = *kick[static_cast<std::size_t>(index)];
     if (step == 0) {
-      ctx.track.add(kGm.BD, ctx.beatTick, DRUM_EIGHTH, ctx.velocity);
+      ctx.track.add(kGm.BD, ctx.beatTick, DRUM_EIGHTH, ctx.velocity, {}, entry);
       continue;
     }
     bool off_beat = std::fmod(step, 2) == 1;
@@ -118,7 +120,8 @@ void generate_kick_for_beat(const BeatCtx& ctx, const SectionCtx& sec, const Kic
       continue;
     }
     double tick = swing16(ctx.beatTick + step * DRUM_SIXTEENTH, sec, ctx.swingAmount);
-    ctx.track.add(kGm.BD, tick, off_beat ? DRUM_SIXTEENTH : DRUM_EIGHTH, ctx.velocity * 0.85);
+    ctx.track.add(kGm.BD, tick, off_beat ? DRUM_SIXTEENTH : DRUM_EIGHTH, ctx.velocity * 0.85, {},
+                  entry);
   }
 }
 
@@ -154,8 +157,8 @@ void generate_ghost_notes_for_beat(const BeatCtx& ctx, const SectionCtx& sec) {
     return;
   }
   std::vector<GhostPosition> positions = select_ghost_positions(sec.ghostMood);
-  double ghost_prob =
-      leaned_by(get_ghost_density(sec.ghostMood, ctx.section, ctx.bpm), sec.ornament);
+  double ghost_density = get_ghost_density(sec.ghostMood, ctx.section, ctx.bpm);
+  double ghost_prob = leaned_by(ghost_density, sec.ornament);
   if (sec.ghostBoost) {
     ghost_prob = js::min(1, ghost_prob * 1.4);
   }
@@ -163,9 +166,15 @@ void generate_ghost_notes_for_beat(const BeatCtx& ctx, const SectionCtx& sec) {
     int sixteenth_in_beat = pos == GhostPosition::kE ? 1 : 3;
     double pos_prob = get_ghost_probability_at_position(ctx.beat, sixteenth_in_beat, lead_ins);
     std::string name(to_string(pos));
-    if (!ctx.draw.prob(ghost_prob * pos_prob, {"ghost", ctx.bar, ctx.beat, name})) {
+    double at = ctx.draw.at({"ghost", ctx.bar, ctx.beat, name});
+    if (!(at < ghost_prob * pos_prob)) {
       continue;
     }
+    // Leaned by the rhythmic dial in its stand-in role, the ghost sounds from where the leaned
+    // chance passes its draw.
+    double entry = sec.ornamentFollowsRhythmic
+                       ? at / (pos_prob * (sec.ghostBoost ? 1.4 : 1) * ghost_density) - 0.5
+                       : -std::numeric_limits<double>::infinity();
     double variation = ctx.draw.float_(0.85, 1.15, {"ghostVelocity", ctx.bar, ctx.beat, name});
     double ghost_base = get_ghost_velocity(ctx.section, ctx.beat / 2);
     double ghost_vel = ctx.velocity * ghost_base * variation;
@@ -174,7 +183,7 @@ void generate_ghost_notes_for_beat(const BeatCtx& ctx, const SectionCtx& sec) {
     }
     double offset = pos == GhostPosition::kE ? DRUM_SIXTEENTH : 3 * DRUM_SIXTEENTH;
     double tick = swing16(ctx.beatTick + offset, sec, ctx.swingAmount);
-    ctx.track.add(kGm.SD, tick, DRUM_SIXTEENTH, ghost_vel);
+    ctx.track.add(kGm.SD, tick, DRUM_SIXTEENTH, ghost_vel, {}, entry);
   }
 }
 
@@ -219,6 +228,11 @@ void generate_hi_hat_for_beat(const BeatCtx& ctx, const SectionCtx& sec) {
   bool is_dynamic_open =
       ctx.barHasOpenHh && ctx.beat == ctx.openHhBeat && !uses_offbeat_open_hi_hat(sec.style);
   double dm = sec.densityMult;
+  auto entry_of = [&ctx](HiHatLevel grid) { return ctx.hhEntries[static_cast<std::size_t>(grid)]; };
+  // The downbeats the intro's quarter grid rests on are filled in from the eighth grid up.
+  double beat_entry = ctx.section == SectionType::kIntro && ctx.beat != 0
+                          ? entry_of(HiHatLevel::kEighth)
+                          : entry_of(HiHatLevel::kQuarter);
 
   if (ctx.hhLevel == HiHatLevel::kQuarter) {
     // The intro's quarter grid rests between its downbeats.
@@ -227,12 +241,12 @@ void generate_hi_hat_for_beat(const BeatCtx& ctx, const SectionCtx& sec) {
     }
     double hh_vel = js::max(20, ctx.velocity * dm * 0.75 * type_mult);
     if (allows_open_hi_hat && is_dynamic_open) {
-      ctx.track.add(kGm.OHH, ctx.beatTick, DRUM_EIGHTH, hh_vel + OHH_VEL_BOOST);
+      ctx.track.add(kGm.OHH, ctx.beatTick, DRUM_EIGHTH, hh_vel + OHH_VEL_BOOST, {}, beat_entry);
     } else if (allows_open_hi_hat && opens_on_downbeat(ctx, sec)) {
       ctx.track.add(hi_hat_note(HiHatType::kOpen), ctx.beatTick, DRUM_EIGHTH,
-                    js::max(20, hh_vel * 1.1));
+                    js::max(20, hh_vel * 1.1), {}, beat_entry);
     } else {
-      ctx.track.add(hh_instrument, ctx.beatTick, DRUM_EIGHTH, hh_vel);
+      ctx.track.add(hh_instrument, ctx.beatTick, DRUM_EIGHTH, hh_vel, {}, beat_entry);
     }
     return;
   }
@@ -243,24 +257,25 @@ void generate_hi_hat_for_beat(const BeatCtx& ctx, const SectionCtx& sec) {
       if (eighth == 1) {
         hh_tick = swing16(hh_tick, sec, ctx.swingAmount);
       }
+      double entry = eighth == 0 ? beat_entry : entry_of(HiHatLevel::kEighth);
       if (ctx.section == SectionType::kIntro && eighth == 1) {
         if (sec.useFootHh && std::fmod(ctx.beat, 2) == 0) {
           ctx.track.add(kGm.FHH, hh_tick, DRUM_EIGHTH,
-                        foot_hi_hat_velocity(ctx.draw, ctx.bar, ctx.beat));
+                        foot_hi_hat_velocity(ctx.draw, ctx.bar, ctx.beat), {}, entry);
         }
         continue;
       }
       double hh_vel = js::max(20, ctx.velocity * dm * type_mult * (eighth == 0 ? 0.9 : 0.65));
       if (is_dynamic_open && allows_open_hi_hat && eighth == 0) {
-        ctx.track.add(kGm.OHH, hh_tick, DRUM_EIGHTH, hh_vel + OHH_VEL_BOOST);
+        ctx.track.add(kGm.OHH, hh_tick, DRUM_EIGHTH, hh_vel + OHH_VEL_BOOST, {}, entry);
         continue;
       }
       bool use_open = eighth == 0 ? opens_on_downbeat(ctx, sec) : opens_offbeat(ctx, sec);
       if (use_open && allows_open_hi_hat) {
         ctx.track.add(hi_hat_note(HiHatType::kOpen), hh_tick, DRUM_EIGHTH,
-                      js::max(20, hh_vel * 1.1));
+                      js::max(20, hh_vel * 1.1), {}, entry);
       } else {
-        ctx.track.add(hh_instrument, hh_tick, DRUM_EIGHTH / 2, hh_vel);
+        ctx.track.add(hh_instrument, hh_tick, DRUM_EIGHTH / 2, hh_vel, {}, entry);
       }
     }
     return;
@@ -276,29 +291,32 @@ void generate_hi_hat_for_beat(const BeatCtx& ctx, const SectionCtx& sec) {
         static_cast<int>(sixteenth),
         ctx.draw.float_(0.95, 1.05, {"hatVelocity", ctx.bar, ctx.beat, sixteenth}));
     double hh_vel = js::max(20, ctx.velocity * dm * type_mult * metric_vel);
+    double entry = sixteenth == 0   ? beat_entry
+                   : sixteenth == 2 ? entry_of(HiHatLevel::kEighth)
+                                    : entry_of(HiHatLevel::kSixteenth);
     if (is_dynamic_open && allows_open_hi_hat && sixteenth == 0) {
-      ctx.track.add(kGm.OHH, hh_tick, DRUM_SIXTEENTH, hh_vel + OHH_VEL_BOOST);
+      ctx.track.add(kGm.OHH, hh_tick, DRUM_SIXTEENTH, hh_vel + OHH_VEL_BOOST, {}, entry);
       continue;
     }
     // The accents of the coarser grids are taken here too, at the positions they write them on.
     if (allows_open_hi_hat && sixteenth == 0 && opens_on_downbeat(ctx, sec)) {
       ctx.track.add(hi_hat_note(HiHatType::kOpen), hh_tick, DRUM_SIXTEENTH,
-                    js::max(20, hh_vel * 1.1));
+                    js::max(20, hh_vel * 1.1), {}, entry);
       continue;
     }
     if (allows_open_hi_hat && sixteenth == 2 && opens_offbeat(ctx, sec)) {
       ctx.track.add(hi_hat_note(HiHatType::kOpen), hh_tick, DRUM_SIXTEENTH,
-                    js::max(20, hh_vel * 1.1));
+                    js::max(20, hh_vel * 1.1), {}, entry);
       continue;
     }
     if (allows_open_hi_hat && ctx.beat == 3 && sixteenth == 3) {
       double open_prob = js::max(0.1, js::min(0.4, 30 / ctx.bpm));
       if (ctx.draw.prob(open_prob, {"openHat", ctx.bar, ctx.beat, sixteenth})) {
-        ctx.track.add(kGm.OHH, hh_tick, DRUM_SIXTEENTH, js::max(20, hh_vel * 1.2));
+        ctx.track.add(kGm.OHH, hh_tick, DRUM_SIXTEENTH, js::max(20, hh_vel * 1.2), {}, entry);
         continue;
       }
     }
-    ctx.track.add(hh_instrument, hh_tick, DRUM_SIXTEENTH / 2, hh_vel);
+    ctx.track.add(hh_instrument, hh_tick, DRUM_SIXTEENTH / 2, hh_vel, {}, entry);
   }
 }
 

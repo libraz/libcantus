@@ -43,7 +43,10 @@ struct OrnamentOptions {
   std::optional<OrnamentStyle> style;
   /** How much of the eligible material is decorated, in [0, 1]; the context's, else 0.5. */
   std::optional<double> amount;
-  /** Time signature telling strong positions from weak ones; 4/4 when absent. */
+  /**
+   * Time signature telling strong positions from weak ones, a meter map read bar by bar; 4/4 when
+   * absent.
+   */
   std::optional<MeterArg> ts;
   /** The generation context; `{ seed: 0 }` when absent. */
   std::optional<GenerationContextInput> ctx;

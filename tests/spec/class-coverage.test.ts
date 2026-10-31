@@ -112,7 +112,6 @@ const NOT_A_CLASS_METHOD: Readonly<Record<string, string>> = {
   noteNames: 'shortcut over mapping Note.format across an array',
   barIndexAt: 'the bar number of Score.barAt',
   barStartBeat: 'a beat less the in-bar offset Score.barAt reports for it',
-  beatsPerBarAt: 'Meter.beatsPerBar asked at the signature Score.meterAt finds',
   spellAugmentedSixth: 'the spelled table Key.augmentedSixth builds its chord from',
 
   // The single-line reader under a class surface that reads more than one line.
@@ -211,6 +210,16 @@ const NOT_PUBLISHED: Readonly<Record<string, string>> = {
   // conversions a caller holds — `beatsToSeconds` and the rest — validate the
   // map they are given each time, which is what makes them safe to publish.
   tempoReader: 'holds a validated tempo map for one pass; the conversions themselves are published',
+
+  // The checks a method runs on its own arguments on the way in. The class is
+  // the boundary, so the check belongs to it rather than to a caller's reach.
+  assertArray: 'checks a method argument on the way in',
+  assertRecord: 'checks a method argument on the way in',
+  describeRejected: 'names a rejected argument in the error a method raises',
+
+  // The dials `Rhythm.deform` reads, checked in one place for the transforms;
+  // `deform` itself is published.
+  resolveDials: 'reads the dials deform takes; deform itself is published',
 };
 
 /** The `src` files that define the class API, `index.ts` aside. */

@@ -475,17 +475,6 @@ Statement line_before(Scene& scene, int index, double beat) {
   return line;
 }
 
-/** The downbeat of a phrase's final bar, or the phrase start when that comes later. */
-double final_downbeat(const Scene& scene, int index) {
-  const PlannedPhrase& phrase = phrase_of(scene, index);
-  const MeterMap& meters = scene.plan->meters;
-  double downbeat = bar_start_beat(phrase.startBeat, meters);
-  while (downbeat + beats_per_bar_at(downbeat, meters) < phrase.endBeat - BEAT_EPS) {
-    downbeat += beats_per_bar_at(downbeat, meters);
-  }
-  return js::max(downbeat, phrase.startBeat);
-}
-
 /** The note a phrase closes on: the one sounding at its final bar's downbeat, else the first after.
  */
 int held_note_index(const Scene& scene, int index, const Statement& line, double downbeat) {
@@ -684,7 +673,7 @@ std::vector<NoteEvent> generate_melody_with(const CompositionPlan& plan,
   for (std::size_t phrase_index = 0; phrase_index < plan.phrases.size(); ++phrase_index) {
     int index = static_cast<int>(phrase_index);
     Statement line = phrase_line(scene, index);
-    double downbeat = final_downbeat(scene, index);
+    double downbeat = final_downbeat(phrase_of(scene, index), plan.meters);
     int held = held_note_index(scene, index, line, downbeat);
     if (held >= 0) {
       line.resize(static_cast<std::size_t>(held) + 1);

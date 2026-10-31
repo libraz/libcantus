@@ -120,3 +120,40 @@ TEST_CASE("a search larger than the budget is refused", "[harmonize]") {
   opts.budget = 10;
   CHECK_THROWS_AS(harmonize_melody(opts), BudgetExceededError);
 }
+
+TEST_CASE("a relisted melody is read in onset order", "[harmonize]") {
+  std::vector<NoteEvent> melody = melody_of({60, 62, 64, 60, 65, 67, 69, 67, 65, 64, 62, 60});
+  std::vector<NoteEvent> reversed(melody.rbegin(), melody.rend());
+  std::vector<ClassifiedMelodyTone> forwards = classify_melody_tones(melody, "4/4");
+  std::vector<ClassifiedMelodyTone> backwards = classify_melody_tones(reversed, "4/4");
+  REQUIRE(forwards.size() == backwards.size());
+  for (std::size_t i = 0; i < forwards.size(); ++i) {
+    CHECK(backwards[forwards.size() - 1 - i].role == forwards[i].role);
+  }
+  HarmonizeOptions in_order(melody);
+  in_order.key = KeyArg("C major");
+  HarmonizeOptions relisted(reversed);
+  relisted.key = KeyArg("C major");
+  CHECK(ops::stringify(ops::to_json(harmonize_melody(relisted).chords)) ==
+        ops::stringify(ops::to_json(harmonize_melody(in_order).chords)));
+}
+
+TEST_CASE("a zero-length note is structural and no one's neighbour", "[harmonize]") {
+  std::vector<NoteEvent> melody = melody_of({60, 62, 64, 67});
+  NoteEvent silent;
+  silent.pitch = 70;
+  silent.startBeat = 1;
+  silent.durationBeat = 0;
+  melody.insert(melody.begin() + 2, silent);
+  std::vector<ClassifiedMelodyTone> tones = classify_melody_tones(melody, "4/4");
+  REQUIRE(tones.size() == 5);
+  CHECK(tones[1].role == MelodyToneRole::kPassing);
+  CHECK(tones[2].role == MelodyToneRole::kStructural);
+}
+
+TEST_CASE("the transposition search keeps the melody in the key", "[harmonize]") {
+  HarmonizeOptions opts(melody_of({60, 62, 64, 65, 67}));
+  opts.key = KeyArg("E major");
+  opts.placement = HarmonizePlacement{true, false};
+  CHECK(harmonize_melody(opts).transposeSemitones == 4);
+}

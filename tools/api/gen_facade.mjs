@@ -18,6 +18,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { factoryOf } from './factory.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const OUT = path.join(REPO, 'bindings/js/src/generated');
@@ -100,8 +101,16 @@ function metaModule(manifest, annotations) {
 
 function classBlock(e) {
   const lines = [`export class ${e.id} {`];
-  lines.push('  constructor(...args: unknown[]) {');
-  lines.push(`    runtime.construct(this, ${q(`${e.id}.constructor`)}, args);`);
+  if (e.constructor.private) {
+    // No constructor op is registered; instances come from the factory.
+    lines.push('  constructor() {');
+    lines.push(
+      `    throw new TypeError(${q(`${e.id} has no public constructor; use ${factoryOf(e)}`)});`,
+    );
+  } else {
+    lines.push('  constructor(...args: unknown[]) {');
+    lines.push(`    runtime.construct(this, ${q(`${e.id}.constructor`)}, args);`);
+  }
   lines.push('  }');
   for (const m of e.members) {
     if (!IDENT.test(m.name)) fail(`${e.id}.${m.name}: member name is not an identifier`);

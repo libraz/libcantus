@@ -1423,7 +1423,7 @@ describe('Note and Interval read another instance through its public surface', (
     expect(() => c4.compareTo(null as unknown as Note)).toThrow(/reading 'data'/);
     expect(() => c4.compareTo(5 as unknown as Note)).toThrow(/reading 'octave'/);
     expect(() => Interval.between(undefined as unknown as Note, c4)).toThrow(
-      /reading 'intervalTo'/,
+      'interval a must be a Note; received undefined',
     );
     expect(() => Interval.parse('P5').equals(null as unknown as Interval)).toThrow(TypeError);
   });

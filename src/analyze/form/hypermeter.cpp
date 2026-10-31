@@ -4,13 +4,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
-#include <set>
+#include <map>
 #include <string>
 
 #include "analyze/adjacency.h"
 #include "analyze/form/internal.h"
 #include "analyze/grid.h"
+#include "analyze/timeline/timeline.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/validation.h"
@@ -81,26 +83,66 @@ double accent_contrast(const std::vector<double>& novelty, const std::vector<Bar
   return head_sum / head_count - other_sum / other_count;
 }
 
+/** A cadence read in bars: where it arrives, and the last bar its chord sounds in. */
+struct CadenceBar {
+  double arrival;
+  double last;
+  double strength;
+};
+
+/** The cadences as bars, in the meters the search resolved. */
+using CadenceBarsOf = std::function<std::vector<CadenceBar>(const MeterArg&)>;
+
+/** How well a reading's group ends meet the cadences (`CadenceFit`). */
+struct CadenceFit {
+  /** Share of the group ends a cadence closes, whatever its type. */
+  double closed = 0;
+  /** The same share with each end weighed by the strongest cadence closing it. */
+  double weighted = 0;
+};
+
+/** `bars.set(bar, Math.max(bars.get(bar) ?? 0, strength))`. */
+void credit(std::map<double, double>& bars, double bar, double strength) {
+  auto held = bars.find(bar);
+  bars[bar] = js::max(held != bars.end() ? held->second : 0, strength);
+}
+
 /** Share of the hyperbar ends the reading predicts that a cadence closes (`cadenceFitOf`). */
-double cadence_fit_of(const std::set<double>& cadence_bars, const std::vector<BarSlice>& slices,
-                      int group_bars, int phase) {
+CadenceFit cadence_fit_of(const std::vector<CadenceBar>& cadences,
+                          const std::vector<BarSlice>& slices, int group_bars, int phase) {
   double last_bar = slices.empty() ? -1 : slices.back().index;
+  // Each cadence counts once: it closes the first group end at or after its arrival while its
+  // chord still sounds there; failing that, one arriving on a group head is elided into it.
+  std::map<double, double> closing;
+  std::map<double, double> eliding;
+  for (const CadenceBar& cadence : cadences) {
+    double end = cadence.arrival + floor_mod(group_bars - 1 + phase - cadence.arrival, group_bars);
+    if (end <= cadence.last) {
+      credit(closing, end, cadence.strength);
+    } else if (floor_mod(cadence.arrival - phase, group_bars) == 0 &&
+               // Elision needs a next group to arrive into.
+               cadence.arrival <= last_bar) {
+      credit(eliding, cadence.arrival - 1, cadence.strength);
+    }
+  }
   double ends = 0;
-  double fit = 0;
+  double closed = 0;
+  double weighted = 0;
   for (const BarSlice& slice : slices) {
     // A pickup heads no group, so it ends none either.
     if (slice.index < 0 || floor_mod(slice.index - phase, group_bars) != group_bars - 1) {
       continue;
     }
     ends += 1;
-    if (cadence_bars.count(slice.index) > 0) {
-      fit += GROUP_FINAL_FIT;
-    } else if (slice.index < last_bar && cadence_bars.count(slice.index + 1) > 0) {
-      // Elision needs a next group to arrive into.
-      fit += ELIDED_FIT;
-    }
+    auto final_found = closing.find(slice.index);
+    auto elided_found = eliding.find(slice.index);
+    bool has_final = final_found != closing.end();
+    bool has_elided = elided_found != eliding.end();
+    closed += js::max(has_final ? GROUP_FINAL_FIT : 0, has_elided ? ELIDED_FIT : 0);
+    weighted += js::max(GROUP_FINAL_FIT * (has_final ? final_found->second : 0),
+                        ELIDED_FIT * (has_elided ? elided_found->second : 0));
   }
-  return ends == 0 ? 0 : clamp01(fit / ends);
+  return ends == 0 ? CadenceFit{} : CadenceFit{clamp01(closed / ends), clamp01(weighted / ends)};
 }
 
 /** The reading a span too short to hold two of any candidate grouping gets. */
@@ -125,11 +167,10 @@ Hypermeter undecided_reading(const std::vector<BarSlice>& slices) {
 /** `a || b` over two sort keys: b where a is 0 or NaN. */
 double or_else(double a, double b) { return a != 0 && !std::isnan(a) ? a : b; }
 
-}  // namespace
-
-Hypermeter hypermeter_with(const std::vector<NoteEvent>& notes,
+/** The search behind hypermeter_with() and hypermeter_over(), over cadences read as bars. */
+Hypermeter hypermeter_core(const std::vector<NoteEvent>& notes,
                            const std::optional<MeterArg>& meter, const HypermeterOptions& opts,
-                           const CadenceBars& cadence_bars) {
+                           const CadenceBarsOf& cadence_bars) {
   // Read once, here: every bar question below is asked of the resolved map.
   ResolveMetersOptions meter_options;
   meter_options.meters = meter;
@@ -146,10 +187,14 @@ Hypermeter hypermeter_with(const std::vector<NoteEvent>& notes,
     }
   }
   double first_onset = first_sounding_beat(sounding);
-  double span_end = opts.totalBeats.value_or(latest_sounding_end(sounding));
-  assert_range(span_end, js::min(0, first_onset), kMaxSafeInteger, "hypermeter totalBeats");
+  double span_end = resolve_span_end(opts.totalBeats, first_onset, latest_sounding_end(sounding),
+                                     "hypermeter totalBeats");
   // Whether the music starts before the downbeat is the analysis-wide pickup question.
   double span_start = bar_grid_start(first_onset, meters);
+  if (sounding.empty() || span_end <= span_start + BEAT_EPS) {
+    // Nothing sounds, so there is no bar to group, as sections report no section for it.
+    return undecided_reading({});
+  }
   std::vector<BarSlice> slices = slice_bars(sounding, meters, span_start, span_end, opts.budget);
 
   // Counted over the bars a grouping can actually occupy: a pickup leads into the first hyperbar
@@ -179,10 +224,7 @@ Hypermeter hypermeter_with(const std::vector<NoteEvent>& notes,
   for (std::size_t index = 0; index < slices.size(); ++index) {
     novelty.push_back(harmonic_novelty(slices, index));
   }
-  std::set<double> bars;
-  for (double bar : cadence_bars(meters)) {
-    bars.insert(bar);
-  }
+  std::vector<CadenceBar> bars = cadence_bars(meters);
   bool has_cadences = !bars.empty();
 
   std::vector<Reading> readings;
@@ -190,27 +232,29 @@ Hypermeter hypermeter_with(const std::vector<NoteEvent>& notes,
     struct Phase {
       int phase;
       double contrast;
-      double cadence_fit;
+      CadenceFit fit;
     };
     std::vector<Phase> phases;
     for (int phase = 0; phase < group_bars; ++phase) {
       phases.push_back(Phase{phase, accent_contrast(novelty, slices, group_bars, phase),
                              cadence_fit_of(bars, slices, group_bars, phase)});
     }
-    // Where the cadences are known, they decide the phase.
+    // Where the cadences are known, they decide the phase on the weighted fit; across the
+    // groupings it is the share of ends closed that counts.
     double best_fit = 0;
     for (const Phase& reading : phases) {
-      best_fit = js::max(best_fit, reading.cadence_fit);
+      best_fit = js::max(best_fit, reading.fit.weighted);
     }
     for (const Phase& entry : phases) {
-      if (has_cadences && entry.cadence_fit < best_fit - BEAT_EPS) {
+      if (has_cadences && entry.fit.weighted < best_fit - BEAT_EPS) {
         continue;
       }
+      double cadence_fit = entry.fit.closed;
       double evidence = clamp01(has_cadences ? CONTRAST_SHARE * clamp01(entry.contrast) +
-                                                   CADENCE_SHARE * entry.cadence_fit
+                                                   CADENCE_SHARE * cadence_fit
                                              : entry.contrast);
-      readings.push_back(Reading{group_bars, entry.phase, entry.contrast, entry.cadence_fit,
-                                 evidence, evidence * prior_of(group_bars)});
+      readings.push_back(Reading{group_bars, entry.phase, entry.contrast, cadence_fit, evidence,
+                                 evidence * prior_of(group_bars)});
     }
   }
   // Ties keep the commoner grouping, then the shorter one, then the earlier phase.
@@ -254,16 +298,55 @@ Hypermeter hypermeter_with(const std::vector<NoteEvent>& notes,
   return out;
 }
 
-Hypermeter hypermeter(const std::vector<NoteEvent>& notes, const std::optional<MeterArg>& meter,
-                      const HypermeterOptions& opts) {
-  return hypermeter_with(notes, meter, opts, [&](const MeterArg& meters) {
-    std::vector<double> bars;
-    if (opts.cadenceBeats) {
-      for (double beat : *opts.cadenceBeats) {
-        bars.push_back(bar_index_at(beat, meters));
-      }
+}  // namespace
+
+std::vector<CadenceSpan> cadence_spans(const std::vector<CadenceArrival>& arrivals,
+                                       const std::vector<SegmentSpan>& segments) {
+  std::vector<CadenceSpan> spans;
+  for (const CadenceArrival& arrival : arrivals) {
+    const SegmentSpan* arriving = segment_span_starting_at(segments, arrival.atBeat);
+    spans.push_back(CadenceSpan{arrival.atBeat,
+                                arriving != nullptr ? arriving->endBeat : arrival.atBeat,
+                                arrival.strength});
+  }
+  return spans;
+}
+
+Hypermeter hypermeter_with(const std::vector<NoteEvent>& notes,
+                           const std::optional<MeterArg>& meter, const HypermeterOptions& opts,
+                           const CadenceBars& cadence_bars) {
+  return hypermeter_core(notes, meter, opts, [&](const MeterArg& meters) {
+    std::vector<CadenceBar> bars;
+    for (double bar : cadence_bars(meters)) {
+      bars.push_back(CadenceBar{bar, bar, 1});
     }
     return bars;
+  });
+}
+
+Hypermeter hypermeter_over(const std::vector<NoteEvent>& notes,
+                           const std::optional<MeterArg>& meter, const HypermeterOptions& opts,
+                           const CadenceSpans& spans) {
+  return hypermeter_core(notes, meter, opts, [&](const MeterArg& meters) {
+    std::vector<CadenceBar> bars;
+    for (const CadenceSpan& span : spans()) {
+      bars.push_back(CadenceBar{bar_index_at(span.atBeat, meters),
+                                last_bar_of(meters, span.atBeat, span.endBeat), span.strength});
+    }
+    return bars;
+  });
+}
+
+Hypermeter hypermeter(const std::vector<NoteEvent>& notes, const std::optional<MeterArg>& meter,
+                      const HypermeterOptions& opts) {
+  return hypermeter_over(notes, meter, opts, [&] {
+    std::vector<CadenceArrival> arrivals;
+    if (opts.cadenceBeats) {
+      for (double beat : *opts.cadenceBeats) {
+        arrivals.push_back(CadenceArrival{beat, 1});
+      }
+    }
+    return cadence_spans(arrivals, {});
   });
 }
 

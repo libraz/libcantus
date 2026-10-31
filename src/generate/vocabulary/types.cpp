@@ -50,7 +50,9 @@ namespace detail {
 
 bool same_time_signature(const TimeSignature& entry, const MeterArg& query) {
   TimeSignature asked = meter_at(0, to_meter_data(query, "ts"));
-  return entry.numerator == asked.numerator && entry.denominator == asked.denominator;
+  // A grouping stated on one side only is a different reading as well.
+  return entry.numerator == asked.numerator && entry.denominator == asked.denominator &&
+         entry.grouping == asked.grouping;
 }
 
 void check_pick(const Draw&, const SeedPath& path) { assert_seed_path(path); }

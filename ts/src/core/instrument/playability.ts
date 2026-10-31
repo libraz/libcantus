@@ -1,3 +1,4 @@
+import { canonicalNoteOrder, soundingIndices } from '../event-index/order.js';
 import { BEAT_EPS } from '../meter/internal.js';
 import type { NoteEvent } from '../types.js';
 import { assertNoteEvents, assertRange } from '../validation/index.js';
@@ -113,6 +114,12 @@ export const MAX_DIFFICULTY = 5;
 export const STRING_CROSSING_COST = 2;
 /** Onsets no further apart than this many beats count as simultaneous. */
 export const SIMULTANEITY_BEATS = 1 / 128;
+/**
+ * Longest overlap, in beats, of a note past a later onset that still releases
+ * it: a sixty-fourth note, which covers a legato or humanized line overlapping
+ * its successor without reading it as a note held under the next one.
+ */
+export const LEGATO_OVERLAP_BEATS = 1 / 16;
 
 /** Working state shared by both instrument families. */
 type Analysis = {
@@ -168,40 +175,30 @@ export function playability(
   // passage happens to hold a note that would have exposed it.
   const instrument = toInstrumentProfile(profile, 'playability profile');
 
-  const order = notes
-    .map((_, index) => index)
-    .sort((a, b) => {
-      const left = notes[a];
-      const right = notes[b];
-      if (!left || !right) {
-        return a - b;
-      }
-      return left.startBeat - right.startBeat || left.pitch - right.pitch || a - b;
-    });
-
   const state: Analysis = {
     notes,
-    order,
+    order: canonicalNoteOrder(notes),
     placements: notes.map((_, index) => ({ note: index })),
     issues: [],
     movement: 0,
     secondsPerBeat: bpm === undefined ? undefined : 60 / bpm,
   };
 
+  const attacks = timelineOf(state);
   if (instrument.kind === 'stringed') {
     checkExistence(state, instrument, (pitch) => soundsIn(instrument, pitch));
-    placeOnNeck(state, instrument);
+    placeOnNeck(state, instrument, attacks);
   } else {
     // The kit is read here rather than inside the note-by-note stages, which is
     // what makes the reading below a lookup: asking the profile per note walked
     // the reach table for every stroke of the track.
     const kit = readKit(instrument);
     checkExistence(state, instrument, (pitch) => limbsFor(kit, pitch).length > 0);
-    placeOnKit(state, kit);
+    placeOnKit(state, kit, attacks);
   }
 
   return {
-    difficulty: difficultyOf(state, bpm),
+    difficulty: difficultyOf(state, attacks, bpm),
     issues: state.issues,
     placements: state.placements,
   };
@@ -252,55 +249,76 @@ function checkExistence(
   }
 }
 
+/** One sounding note as every layer-2 and layer-3 check reads it. */
+type TimedNote = {
+  index: number;
+  startBeat: number;
+  endBeat: number;
+  /** Onset of the attack the note is struck in. */
+  attackBeat: number;
+};
+
+/** The sounding notes struck together, and the earlier ones still held under them. */
+type Attack = {
+  startBeat: number;
+  /** The notes struck, by pitch and then by index. */
+  members: TimedNote[];
+  /** Notes of earlier attacks not yet released when this one lands. */
+  held: TimedNote[];
+};
+
 /**
- * Whether an onset falls inside the simultaneity window opened by an earlier one.
+ * Whether a note ending at `endBeat` has let go by `beat`.
  *
- * Simultaneity is the distance between two onsets, never the cell each of them
- * rounds into: two strokes a ten-thousandth of a beat apart are one attack
- * wherever a fixed grid would happen to cut between them, and a part played by
- * hand lands on no grid at all.
+ * A line played legato or humanized overlaps its successor by a few hundredths
+ * of a beat; that overlap frees the string and the hand rather than holding the
+ * note under the next one.
  */
-function isSimultaneous(anchorBeat: number, startBeat: number): boolean {
-  return startBeat - anchorBeat <= SIMULTANEITY_BEATS + BEAT_EPS;
+function isReleased(endBeat: number, beat: number): boolean {
+  return endBeat <= beat + LEGATO_OVERLAP_BEATS + BEAT_EPS;
 }
 
-/** Note indices sounding at each distinct onset, in onset order. */
-function soundingGroups(state: Analysis): { startBeat: number; members: number[] }[] {
-  const groups: { startBeat: number; members: number[] }[] = [];
-  let active: number[] = [];
-  let cursor = 0;
-  let anchor: number | undefined;
+/**
+ * The passage as a timeline of attacks, built once for every check.
+ *
+ * Silent notes are left out, since they strike nothing. Simultaneity is the
+ * distance between two onsets, never the cell each of them rounds into: two
+ * strokes a ten-thousandth of a beat apart are one attack wherever a fixed grid
+ * would happen to cut between them, and a part played by hand lands on no grid.
+ */
+function timelineOf(state: Analysis): Attack[] {
+  const sounding = new Set(soundingIndices(state.notes));
+  const attacks: Attack[] = [];
+  let active: TimedNote[] = [];
+  let current: Attack | undefined;
   for (const index of state.order) {
     const note = state.notes[index];
-    if (!note) {
+    if (!note || !sounding.has(index)) {
       continue;
     }
-    if (anchor !== undefined && isSimultaneous(anchor, note.startBeat)) {
-      continue;
+    if (!current || note.startBeat - current.startBeat > SIMULTANEITY_BEATS + BEAT_EPS) {
+      const at = note.startBeat;
+      active = active.filter((held) => !isReleased(held.endBeat, at));
+      current = { startBeat: at, members: [], held: [...active] };
+      attacks.push(current);
     }
-    const at = note.startBeat;
-    anchor = at;
-    active = active.filter((member) => {
-      const held = state.notes[member];
-      return held !== undefined && held.startBeat + held.durationBeat > at + BEAT_EPS;
-    });
-    while (cursor < state.order.length) {
-      const candidateIndex = state.order[cursor];
-      const candidate = candidateIndex === undefined ? undefined : state.notes[candidateIndex];
-      if (!candidate || !isSimultaneous(at, candidate.startBeat)) {
-        break;
-      }
-      if (
-        candidateIndex !== undefined &&
-        candidate.startBeat + candidate.durationBeat > at + BEAT_EPS
-      ) {
-        active.push(candidateIndex);
-      }
-      cursor += 1;
-    }
-    groups.push({ startBeat: at, members: [...active] });
+    const timed: TimedNote = {
+      index,
+      startBeat: note.startBeat,
+      endBeat: note.startBeat + note.durationBeat,
+      attackBeat: current.startBeat,
+    };
+    current.members.push(timed);
+    active.push(timed);
   }
-  return groups;
+  for (const attack of attacks) {
+    attack.members.sort(
+      (a, b) =>
+        (state.notes[a.index]?.pitch ?? 0) - (state.notes[b.index]?.pitch ?? 0) ||
+        a.index - b.index,
+    );
+  }
+  return attacks;
 }
 
 /** Most notes of one attack that are placed jointly; a larger group keeps its greedy picks. */
@@ -309,14 +327,7 @@ const MAX_JOINT_PLACEMENT_NOTES = 12;
 const MAX_PLACEMENT_SEARCH_NODES = 20000;
 
 /** One note of an attack waiting for a string. */
-type NeckMember = {
-  index: number;
-  startBeat: number;
-  endBeat: number;
-  /** Whether the note is still sounding once the attack has landed. */
-  sounding: boolean;
-  candidates: StringFingering[];
-};
+type NeckMember = TimedNote & { candidates: StringFingering[] };
 
 /** Whether the fretted notes of a hand fit one maxStretch. */
 function fitsHand(frets: readonly number[], maxStretch: number): boolean {
@@ -333,10 +344,14 @@ function fitsHand(frets: readonly number[], maxStretch: number): boolean {
   return count < 2 || high - low <= maxStretch;
 }
 
-/** Each member takes the cheapest free string in turn; strings with no free one are reported. */
+/**
+ * Each member takes the cheapest free string in turn; strings with no free one
+ * are reported. `freeAt` is the beat each string is released at; a string taken
+ * inside the attack stays taken until it ends.
+ */
 function placeGreedily(
   members: readonly NeckMember[],
-  previous: StringFingering | undefined,
+  previous: Origin,
   freeAt: readonly number[],
   heldBy: readonly (number | undefined)[],
 ): { picks: StringFingering[]; conflicts: { member: NeckMember; blocked: number[] }[] } {
@@ -346,8 +361,8 @@ function placeGreedily(
   const conflicts: { member: NeckMember; blocked: number[] }[] = [];
   let from = previous;
   for (const member of members) {
-    const open = member.candidates.filter(
-      (candidate) => (free[candidate.string] ?? 0) <= member.startBeat + BEAT_EPS,
+    const open = member.candidates.filter((candidate) =>
+      isReleased(free[candidate.string] ?? Number.NEGATIVE_INFINITY, member.attackBeat),
     );
     if (open.length === 0) {
       conflicts.push({
@@ -363,9 +378,9 @@ function placeGreedily(
       fingeringCost(candidate, origin) < fingeringCost(best, origin) ? candidate : best,
     );
     picks.push(chosen);
-    free[chosen.string] = member.endBeat;
+    free[chosen.string] = Number.POSITIVE_INFINITY;
     held[chosen.string] = member.index;
-    from = chosen;
+    from = movedTo(from, chosen);
   }
   return { picks, conflicts };
 }
@@ -377,7 +392,7 @@ function placeGreedily(
  */
 function searchPlacement(
   members: readonly NeckMember[],
-  previous: StringFingering | undefined,
+  previous: Origin,
   freeAt: readonly number[],
   heldFrets: readonly number[] | undefined,
   maxStretch: number,
@@ -388,7 +403,7 @@ function searchPlacement(
   let best: StringFingering[] | undefined;
   let bestCost = Number.POSITIVE_INFINITY;
   let nodes = 0;
-  const visit = (depth: number, from: StringFingering | undefined, cost: number): void => {
+  const visit = (depth: number, from: Origin, cost: number): void => {
     if (cost >= bestCost || nodes >= MAX_PLACEMENT_SEARCH_NODES) {
       return;
     }
@@ -399,25 +414,24 @@ function searchPlacement(
       return;
     }
     for (const candidate of member.candidates) {
-      if ((free[candidate.string] ?? 0) > member.startBeat + BEAT_EPS) {
+      const previousFree = free[candidate.string] ?? Number.NEGATIVE_INFINITY;
+      if (!isReleased(previousFree, member.attackBeat)) {
         continue;
       }
       nodes += 1;
-      const fretted = frets !== undefined && member.sounding;
-      if (fretted) {
+      if (frets !== undefined) {
         frets.push(candidate.fret);
         if (!fitsHand(frets, maxStretch)) {
           frets.pop();
           continue;
         }
       }
-      const previousFree = free[candidate.string];
-      free[candidate.string] = member.endBeat;
+      free[candidate.string] = Number.POSITIVE_INFINITY;
       picks.push(candidate);
-      visit(depth + 1, candidate, cost + fingeringCost(candidate, from));
+      visit(depth + 1, movedTo(from, candidate), cost + fingeringCost(candidate, from));
       picks.pop();
-      free[candidate.string] = previousFree ?? Number.NEGATIVE_INFINITY;
-      if (fretted) {
+      free[candidate.string] = previousFree;
+      if (frets !== undefined) {
         frets.pop();
       }
     }
@@ -436,18 +450,15 @@ function searchPlacement(
  */
 function placeAttack(
   members: readonly NeckMember[],
-  previous: StringFingering | undefined,
+  previous: Origin,
   freeAt: readonly number[],
   heldBy: readonly (number | undefined)[],
   heldFrets: readonly number[],
   maxStretch: number,
 ): { picks: StringFingering[]; conflicts: { member: NeckMember; blocked: number[] }[] } {
   const greedy = placeGreedily(members, previous, freeAt, heldBy);
-  const soundingFrets = (picks: readonly StringFingering[]): number[] => [
-    ...heldFrets,
-    ...picks.filter((_, k) => members[k]?.sounding).map((pick) => pick.fret),
-  ];
-  if (greedy.conflicts.length === 0 && fitsHand(soundingFrets(greedy.picks), maxStretch)) {
+  const soundingFrets = [...heldFrets, ...greedy.picks.map((pick) => pick.fret)];
+  if (greedy.conflicts.length === 0 && fitsHand(soundingFrets, maxStretch)) {
     return greedy;
   }
   if (members.length > MAX_JOINT_PLACEMENT_NOTES) {
@@ -466,61 +477,48 @@ function placeAttack(
   return greedy;
 }
 
-/** Layers 2 and 3 for a string instrument, and the fingering that goes with them. */
-function placeOnNeck(state: Analysis, profile: ValidatedStringedProfile): void {
-  /** Beat each string becomes free again. */
+/** Where the fretting hand stands: the last note stopped at a fret. */
+type HandPosition = { note: TimedNote; fingering: StringFingering };
+
+/**
+ * Layers 2 and 3 for a string instrument, and the fingering that goes with them.
+ *
+ * The fretting hand moves once per attack, between stopped notes: an open
+ * string leaves it where it was, and the notes of one attack are one hand shape.
+ */
+function placeOnNeck(
+  state: Analysis,
+  profile: ValidatedStringedProfile,
+  attacks: readonly Attack[],
+): void {
+  /** Beat each string is released at. */
   const stringFreeAt = profile.tuning.map(() => Number.NEGATIVE_INFINITY);
   /** Note currently holding each string. */
   const stringHeldBy = profile.tuning.map<number | undefined>(() => undefined);
-  let previous: StringFingering | undefined;
-  let previousIndex: number | undefined;
-  /** Placed notes still sounding at the current attack. */
-  let held: number[] = [];
+  let origin: Origin = {};
+  let hand: HandPosition | undefined;
 
-  let cursor = 0;
-  while (cursor < state.order.length) {
-    const firstIndex = state.order[cursor];
-    const first = firstIndex === undefined ? undefined : state.notes[firstIndex];
-    if (first === undefined) {
-      cursor += 1;
-      continue;
-    }
-    const anchor = first.startBeat;
+  for (const attack of attacks) {
     const members: NeckMember[] = [];
-    while (cursor < state.order.length) {
-      const index = state.order[cursor];
-      const note = index === undefined ? undefined : state.notes[index];
-      if (index === undefined || note === undefined || !isSimultaneous(anchor, note.startBeat)) {
-        break;
-      }
-      cursor += 1;
-      const candidates = fingeringsIn(profile, note.pitch);
+    for (const timed of attack.members) {
+      const note = state.notes[timed.index];
+      const candidates = note === undefined ? [] : fingeringsIn(profile, note.pitch);
       if (candidates.length > 0) {
-        const endBeat = note.startBeat + note.durationBeat;
-        members.push({
-          index,
-          startBeat: note.startBeat,
-          endBeat,
-          sounding: endBeat > anchor + BEAT_EPS,
-          candidates,
-        });
+        members.push({ ...timed, candidates });
       }
     }
-    held = held.filter((member) => {
-      const note = state.notes[member];
-      return note !== undefined && note.startBeat + note.durationBeat > anchor + BEAT_EPS;
-    });
-    const heldFrets = held
-      .map((member) => state.placements[member]?.fingering?.fret)
+    const heldFrets = attack.held
+      .map((held) => state.placements[held.index]?.fingering?.fret)
       .filter((fret): fret is number => fret !== undefined);
     const { picks, conflicts } = placeAttack(
       members,
-      previous,
+      origin,
       stringFreeAt,
       stringHeldBy,
       heldFrets,
       profile.maxStretch,
     );
+    let shifted = hand;
     members.forEach((member, k) => {
       const chosen = picks[k];
       const placement = state.placements[member.index];
@@ -534,7 +532,7 @@ function placeOnNeck(state: Analysis, profile: ValidatedStringedProfile): void {
           type: 'stringConflict',
           layer: 2,
           notes: [...new Set([...conflict.blocked, member.index])].sort((a, b) => a - b),
-          startBeat: note.startBeat,
+          startBeat: member.startBeat,
           impossible: true,
           message: `MIDI ${note.pitch} needs a string already sounding on ${profile.name}`,
         });
@@ -542,60 +540,70 @@ function placeOnNeck(state: Analysis, profile: ValidatedStringedProfile): void {
       placement.fingering = chosen;
       stringFreeAt[chosen.string] = member.endBeat;
       stringHeldBy[chosen.string] = member.index;
-      if (member.sounding) {
-        held.push(member.index);
-      }
 
       state.movement += 1;
-      if (previous) {
-        state.movement +=
-          Math.abs(chosen.fret - previous.fret) + Math.abs(chosen.string - previous.string);
-        checkShiftSpeed(state, profile, previousIndex, member.index, previous, chosen);
+      if (origin.string !== undefined) {
+        state.movement += Math.abs(chosen.string - origin.string);
       }
-      previous = chosen;
-      previousIndex = member.index;
+      origin = movedTo(origin, chosen);
+      if (chosen.fret > 0) {
+        shifted = { note: member, fingering: chosen };
+      }
     });
+    if (hand && shifted && shifted !== hand) {
+      state.movement += Math.abs(shifted.fingering.fret - hand.fingering.fret);
+      checkShiftSpeed(state, profile, hand, shifted);
+    }
+    hand = shifted;
   }
 
-  for (const group of soundingGroups(state)) {
-    checkStretch(state, profile, group);
-    checkPolyphony(state, profile, group);
+  for (const attack of attacks) {
+    checkStretch(state, profile, attack);
+    checkPolyphony(state, profile, { startBeat: attack.startBeat, members: soundingAt(attack) });
   }
+}
+
+/**
+ * Where the hands are before a note: the string last played, and the fret the
+ * fretting hand last stopped. An open string moves the picking hand only.
+ */
+type Origin = { string?: number; fret?: number };
+
+/** The origin after playing `chosen`. */
+function movedTo(origin: Origin, chosen: StringFingering): Origin {
+  return { string: chosen.string, fret: chosen.fret > 0 ? chosen.fret : origin.fret };
 }
 
 /** Cost of taking a position, counting a string crossing as several frets. */
-function fingeringCost(candidate: StringFingering, previous: StringFingering | undefined): number {
-  if (!previous) {
-    // With nothing to move from, the low frets are the resting position.
-    return candidate.fret + candidate.string / 100;
-  }
-  return (
-    Math.abs(candidate.fret - previous.fret) +
-    STRING_CROSSING_COST * Math.abs(candidate.string - previous.string) +
-    candidate.string / 100
-  );
+function fingeringCost(candidate: StringFingering, origin: Origin): number {
+  // With no fret stopped yet, the low frets are the resting position; an open
+  // string asks nothing of the fretting hand.
+  const stopped =
+    candidate.fret === 0
+      ? 0
+      : origin.fret === undefined
+        ? candidate.fret
+        : Math.abs(candidate.fret - origin.fret);
+  const crossing =
+    origin.string === undefined
+      ? 0
+      : STRING_CROSSING_COST * Math.abs(candidate.string - origin.string);
+  return stopped + crossing + candidate.string / 100;
 }
 
-/** Layer 3: the fretting hand cannot travel that far in the time available. */
+/** Layer 3: the fretting hand cannot travel that far between two attacks. */
 function checkShiftSpeed(
   state: Analysis,
   profile: ValidatedProfile,
-  fromIndex: number | undefined,
-  toIndex: number,
-  from: StringFingering,
-  to: StringFingering,
+  from: HandPosition,
+  to: HandPosition,
 ): void {
   const secondsPerBeat = state.secondsPerBeat;
-  if (secondsPerBeat === undefined || fromIndex === undefined) {
+  if (secondsPerBeat === undefined) {
     return;
   }
-  const previousNote = state.notes[fromIndex];
-  const note = state.notes[toIndex];
-  if (!previousNote || !note) {
-    return;
-  }
-  const seconds = (note.startBeat - previousNote.startBeat) * secondsPerBeat;
-  const shift = Math.abs(to.fret - from.fret);
+  const seconds = (to.note.attackBeat - from.note.attackBeat) * secondsPerBeat;
+  const shift = Math.abs(to.fingering.fret - from.fingering.fret);
   if (seconds <= BEAT_EPS || shift === 0) {
     return;
   }
@@ -603,21 +611,23 @@ function checkShiftSpeed(
     state.issues.push({
       type: 'tooFast',
       layer: 3,
-      notes: [fromIndex, toIndex].sort((a, b) => a - b),
-      startBeat: note.startBeat,
+      notes: [from.note.index, to.note.index].sort((a, b) => a - b),
+      startBeat: to.note.startBeat,
       impossible: false,
       message: `a ${shift}-fret shift in ${seconds.toFixed(3)}s is beyond ${profile.name}`,
     });
   }
 }
 
+/** Every note sounding once an attack has landed: the held ones and the struck ones. */
+function soundingAt(attack: Attack): number[] {
+  return [...attack.held, ...attack.members].map((timed) => timed.index);
+}
+
 /** Layer 2: one hand cannot span that many frets at once. */
-function checkStretch(
-  state: Analysis,
-  profile: ValidatedStringedProfile,
-  group: { startBeat: number; members: number[] },
-): void {
-  const frets = group.members
+function checkStretch(state: Analysis, profile: ValidatedStringedProfile, attack: Attack): void {
+  const sounding = soundingAt(attack);
+  const frets = sounding
     .map((member) => state.placements[member]?.fingering)
     .filter(
       (fingering): fingering is StringFingering => fingering !== undefined && fingering.fret > 0,
@@ -631,8 +641,8 @@ function checkStretch(
     state.issues.push({
       type: 'stretchTooWide',
       layer: 2,
-      notes: [...group.members].sort((a, b) => a - b),
-      startBeat: group.startBeat,
+      notes: sounding.sort((a, b) => a - b),
+      startBeat: attack.startBeat,
       impossible: true,
       message: `a ${span}-fret stretch exceeds the ${profile.maxStretch} frets one hand spans on ${profile.name}`,
     });
@@ -643,7 +653,7 @@ function checkStretch(
 function checkPolyphony(
   state: Analysis,
   profile: ValidatedProfile,
-  group: { startBeat: number; members: number[] },
+  group: { startBeat: number; members: readonly number[] },
 ): void {
   if (group.members.length <= profile.polyphony) {
     return;
@@ -662,8 +672,8 @@ function checkPolyphony(
 type KitPass = {
   /** Identity of the pass, so no two of them share a limb's history. */
   id: string;
-  /** Note indices struck on this pass at one onset. */
-  members: number[];
+  /** The notes struck on this pass at one attack. */
+  members: TimedNote[];
 };
 
 /**
@@ -708,8 +718,8 @@ function limbsFor(kit: Kit, pitch: number | undefined): readonly Limb[] {
 type KitMemory = {
   /** Limb that last struck each voice, so a voice keeps its stick. */
   limbForVoice: Map<number, Limb>;
-  /** Last stroke of each limb on each pass, as a note index. */
-  lastStroke: Map<string, number>;
+  /** Last stroke of each limb on each pass. */
+  lastStroke: Map<string, TimedNote>;
 };
 
 /**
@@ -721,13 +731,13 @@ type KitMemory = {
  * snare is already in one hand and a hi-hat in the other — a player does not
  * grow a third arm for it, the part is recorded twice.
  */
-function passesAt(state: Analysis, kit: Kit, members: readonly number[]): KitPass[] {
+function passesAt(state: Analysis, kit: Kit, members: readonly TimedNote[]): KitPass[] {
   const played: KitPass = { id: 'kit', members: [] };
   const overdubs = new Map<number, KitPass>();
-  for (const index of members) {
-    const pitch = state.notes[index]?.pitch;
+  for (const member of members) {
+    const pitch = state.notes[member.index]?.pitch;
     if (pitch === undefined || !kit.overdub.has(pitch)) {
-      played.members.push(index);
+      played.members.push(member);
       continue;
     }
     let pass = overdubs.get(pitch);
@@ -735,7 +745,7 @@ function passesAt(state: Analysis, kit: Kit, members: readonly number[]): KitPas
       pass = { id: `overdub ${pitch}`, members: [] };
       overdubs.set(pitch, pass);
     }
-    pass.members.push(index);
+    pass.members.push(member);
   }
   return [played, ...overdubs.values()];
 }
@@ -751,13 +761,13 @@ function placePass(state: Analysis, kit: Kit, pass: KitPass, memory: KitMemory):
   // The most constrained voice picks first: a kick only the right foot
   // reaches must not lose it to a snare that either hand could have taken.
   const members = [...pass.members].sort((a, b) => {
-    const left = limbsFor(kit, state.notes[a]?.pitch);
-    const right = limbsFor(kit, state.notes[b]?.pitch);
-    return left.length - right.length || a - b;
+    const left = limbsFor(kit, state.notes[a.index]?.pitch);
+    const right = limbsFor(kit, state.notes[b.index]?.pitch);
+    return left.length - right.length || a.index - b.index;
   });
-  for (const index of members) {
-    const note = state.notes[index];
-    const placement = state.placements[index];
+  for (const member of members) {
+    const note = state.notes[member.index];
+    const placement = state.placements[member.index];
     if (!note || !placement) {
       continue;
     }
@@ -785,27 +795,28 @@ function placePass(state: Analysis, kit: Kit, pass: KitPass, memory: KitMemory):
 
     state.movement += 1;
     const strokeKey = `${pass.id} ${chosen}`;
-    const previousIndex = memory.lastStroke.get(strokeKey);
-    if (previousIndex !== undefined) {
-      const previousNote = state.notes[previousIndex];
+    const previousStroke = memory.lastStroke.get(strokeKey);
+    if (previousStroke !== undefined) {
+      const previousNote = state.notes[previousStroke.index];
       if (previousNote && previousNote.pitch !== note.pitch) {
         // The limb had to travel across the kit rather than repeat a voice.
         state.movement += 1;
       }
-      checkStrokeSpeed(state, kit.profile, previousIndex, index, chosen);
+      checkStrokeSpeed(state, kit.profile, previousStroke, member, chosen);
     }
-    memory.lastStroke.set(strokeKey, index);
+    memory.lastStroke.set(strokeKey, member);
   }
   return conflicted;
 }
 
 /** Layers 2 and 3 for a kit, and the limb assignment that goes with them. */
-function placeOnKit(state: Analysis, kit: Kit): void {
+function placeOnKit(state: Analysis, kit: Kit, attacks: readonly Attack[]): void {
   const memory: KitMemory = { limbForVoice: new Map(), lastStroke: new Map() };
 
-  for (const group of onsetGroups(state)) {
+  for (const attack of attacks) {
+    const strokes = attack.members.map((member) => member.index);
     let conflicted = false;
-    for (const pass of passesAt(state, kit, group.members)) {
+    for (const pass of passesAt(state, kit, attack.members)) {
       if (!placePass(state, kit, pass, memory)) {
         continue;
       }
@@ -813,14 +824,14 @@ function placeOnKit(state: Analysis, kit: Kit): void {
       state.issues.push({
         type: 'limbConflict',
         layer: 2,
-        notes: [...pass.members].sort((a, b) => a - b),
-        startBeat: group.startBeat,
+        notes: pass.members.map((member) => member.index).sort((a, b) => a - b),
+        startBeat: attack.startBeat,
         impossible: true,
         message: `${pass.members.length} simultaneous strokes cannot be shared among the limbs of ${kit.profile.name}`,
       });
     }
     if (!conflicted) {
-      checkPolyphony(state, kit.profile, group);
+      checkPolyphony(state, kit.profile, { startBeat: attack.startBeat, members: strokes });
     }
   }
 }
@@ -829,52 +840,26 @@ function placeOnKit(state: Analysis, kit: Kit): void {
 function checkStrokeSpeed(
   state: Analysis,
   profile: ValidatedProfile,
-  fromIndex: number,
-  toIndex: number,
+  from: TimedNote,
+  to: TimedNote,
   limb: Limb,
 ): void {
   const secondsPerBeat = state.secondsPerBeat;
   if (secondsPerBeat === undefined) {
     return;
   }
-  const previousNote = state.notes[fromIndex];
-  const note = state.notes[toIndex];
-  if (!previousNote || !note) {
-    return;
-  }
-  const seconds = (note.startBeat - previousNote.startBeat) * secondsPerBeat;
+  const seconds = (to.attackBeat - from.attackBeat) * secondsPerBeat;
   if (seconds <= BEAT_EPS || seconds >= MIN_LIMB_STROKE_SECONDS) {
     return;
   }
   state.issues.push({
     type: 'tooFast',
     layer: 3,
-    notes: [fromIndex, toIndex].sort((a, b) => a - b),
-    startBeat: note.startBeat,
+    notes: [from.index, to.index].sort((a, b) => a - b),
+    startBeat: to.startBeat,
     impossible: false,
     message: `${limb} strikes twice ${seconds.toFixed(3)}s apart on ${profile.name}`,
   });
-}
-
-/** Note indices sharing each distinct onset, in onset order. */
-function onsetGroups(state: Analysis): { startBeat: number; members: number[] }[] {
-  const groups: { startBeat: number; members: number[] }[] = [];
-  let current: { startBeat: number; members: number[] } | undefined;
-  for (const index of state.order) {
-    const note = state.notes[index];
-    // A note of no length never sounds, so no limb strikes it: it neither takes
-    // a hand from the stroke it lands on nor counts among the voices at once,
-    // which is how a neck reads the same note.
-    if (!note || note.durationBeat <= 0) {
-      continue;
-    }
-    if (!current || !isSimultaneous(current.startBeat, note.startBeat)) {
-      current = { startBeat: note.startBeat, members: [] };
-      groups.push(current);
-    }
-    current.members.push(index);
-  }
-  return groups;
 }
 
 /**
@@ -886,15 +871,18 @@ function onsetGroups(state: Analysis): { startBeat: number; members: number[] }[
  * over the same notes never reads easier, and 5 is reached only where the
  * passage has already left what the instrument allows.
  */
-function difficultyOf(state: Analysis, bpm: number | undefined): number {
+function difficultyOf(
+  state: Analysis,
+  attacks: readonly Attack[],
+  bpm: number | undefined,
+): number {
   let first = Number.POSITIVE_INFINITY;
   let last = Number.NEGATIVE_INFINITY;
-  for (const note of state.notes) {
-    if (!note) {
-      continue;
+  for (const attack of attacks) {
+    for (const member of attack.members) {
+      first = Math.min(first, member.startBeat);
+      last = Math.max(last, member.endBeat);
     }
-    first = Math.min(first, note.startBeat);
-    last = Math.max(last, note.startBeat + Math.max(0, note.durationBeat));
   }
   const spanBeats = last - first;
   if (!Number.isFinite(spanBeats) || spanBeats <= BEAT_EPS) {

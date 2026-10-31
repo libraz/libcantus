@@ -947,22 +947,30 @@ json::Value timeline_from_chords(const Args& a, const json::Value& spans, const 
 /** `Timeline.fromProgression(progression, beatsEach)`. */
 json::Value timeline_from_progression(const Args& a, const json::Value& progression,
                                       const json::Value& beats) {
+  bool is_class = is_class_value(progression, "Progression");
+  // Anything with a `chords` list is read as a progression.
+  json::Value chords =
+      is_class || !is_js_object(progression) ? json::Value() : member_of(progression, "chords");
+  if (!is_class && !chords.is_array()) {
+    throw InvalidInputError("timeline progression must be a Progression; received " +
+                            describe_rejected(progression));
+  }
   double each = assert_range(beats, kMinValue, kMaxSafeInteger, "timeline beatsEach");
   json::Array views;
   json::Value key;
-  if (is_class_value(progression, "Progression")) {
+  if (is_class) {
     Progression read = read_progression_class(progression);
     views = views_of(read).as_array();
     key = carried_key(read.key());
   } else {
-    // Anything with a `chords` list of chords is read as a progression.
-    json::Value chords = member_or_throw(progression, "chords");
-    if (!chords.is_array()) {
-      property_of(chords, "map");
-      throw js::TypeError("chords.map is not a function");
-    }
-    for (const json::Value& chord : chords.as_array()) {
-      views.push_back(member_or_throw(chord, "data"));
+    const json::Array& members = chords.as_array();
+    for (std::size_t i = 0; i < members.size(); ++i) {
+      json::Value data = member_of(members[i], "data");
+      if (!is_js_object(data)) {
+        throw InvalidInputError("timeline progression chords[" + index_text(i) +
+                                "] must be a Chord; received " + describe_rejected(members[i]));
+      }
+      views.push_back(std::move(data));
     }
     key = member_of(progression, "key");
   }
@@ -1891,29 +1899,29 @@ void register_score() {
     const Score& self = score_instance(a, 0);
     return to_json(self.quantize(assert_range(a[1], kMinValue, kMaxSafeInteger, "quantize grid")));
   });
-  auto opening_meter = [](const Score& score) { return to_json(score.meter_at(0)); };
-  def_class_method("Score#humanize", [opening_meter](Args& a) -> json::Value {
+  // The whole meter map, as the score holds it.
+  auto meter_map = [](const Score& score) { return to_json(score.meters()); };
+  def_class_method("Score#humanize", [meter_map](Args& a) -> json::Value {
     const Score& self = score_instance(a, 0);
-    json::Value ts = field_record("ts", opening_meter(self));
+    json::Value ts = field_record("ts", meter_map(self));
     json::Value notes = forward(a, "humanize", json::Array{notes_of(self), merged({&ts, &a[1]})});
     return score_with(self, "notes", std::move(notes));
   });
-  def_class_method("Score#ornament", [opening_meter](Args& a) -> json::Value {
+  def_class_method("Score#ornament", [meter_map](Args& a) -> json::Value {
     const Score& self = score_instance(a, 0);
-    json::Value ts = field_record("ts", opening_meter(self));
+    json::Value ts = field_record("ts", meter_map(self));
     json::Value notes = forward(a, "ornament", json::Array{notes_of(self), merged({&ts, &a[1]})});
     return score_with(self, "notes", std::move(notes));
   });
-  def_class_method("Score#groove", [opening_meter](Args& a) -> json::Value {
+  def_class_method("Score#groove", [meter_map](Args& a) -> json::Value {
     const Score& self = score_instance(a, 0);
     json::Value notes =
-        forward(a, "applyGrooveTemplate", json::Array{notes_of(self), a[1], opening_meter(self)});
+        forward(a, "applyGrooveTemplate", json::Array{notes_of(self), a[1], meter_map(self)});
     return score_with(self, "notes", std::move(notes));
   });
-  def_class_method("Score#grooveTemplate", [opening_meter](Args& a) -> json::Value {
+  def_class_method("Score#grooveTemplate", [meter_map](Args& a) -> json::Value {
     const Score& self = score_instance(a, 0);
-    return forward(a, "extractGrooveTemplate",
-                   json::Array{notes_of(self), opening_meter(self), a[1]});
+    return forward(a, "extractGrooveTemplate", json::Array{notes_of(self), meter_map(self), a[1]});
   });
   def_class_method("Score#timeline", [](Args& a) -> json::Value {
     const Score& self = score_instance(a, 0);
@@ -1994,24 +2002,21 @@ void register_score() {
   });
   def_class_method("Score#hypermeter", [](Args& a) -> json::Value {
     const Score& self = score_instance(a, 0);
-    // The cadences come from the score's own harmony, read against its key context.
-    json::Value timeline = get(score_chord_analysis(a, self), "timeline");
-    std::variant<json::Value, KeyAtBeat> context = score_key_context(a, self, undefined_value());
-    json::Array beats;
-    if (const auto* key = std::get_if<json::Value>(&context)) {
-      json::Value hit_list = forward(a, "detectCadences", json::Array{timeline, *key});
-      for (const json::Value& hit : hit_list.as_array()) {
-        beats.push_back(get(hit, "atBeat"));
-      }
-    } else {
-      ChordTimeline typed{typed_segments(get(timeline, "segments"))};
-      for (const CadenceHit& hit : detect_cadences(typed, std::get<KeyAtBeat>(context))) {
-        beats.push_back(to_json(hit.atBeat));
-      }
+    json::Value asked = merged({&a[1]});
+    // Beats the caller gives are read as the plain function reads them.
+    if (opt_null_default(asked, "cadenceBeats") != nullptr) {
+      return forward(a, "hypermeter", json::Array{notes_of(self), to_json(self.meters()), asked});
     }
-    json::Value cadences = field_record("cadenceBeats", json::Value(std::move(beats)));
-    return forward(a, "hypermeter",
-                   json::Array{notes_of(self), to_json(self.meters()), merged({&cadences, &a[1]})});
+    // Otherwise the cadences come from the score's own harmony, read as spans in the key its
+    // phrases are read in; the options are checked in the order hypermeterOver checks them.
+    const json::Value& budget = get(asked, "budget");
+    assert_note_events(notes_of(self), "hypermeter notes", line_options(budget));
+    HypermeterOptions typed;
+    if (const json::Value* total = opt_null_default(asked, "totalBeats")) {
+      typed.totalBeats = assert_finite_number(*total, "hypermeter totalBeats");
+    }
+    typed.budget = number_of(budget);
+    return to_json(self.hypermeter(typed));
   });
   def_class_method("Score#motifs", [](Args& a) -> json::Value {
     return forward(a, "extractMotifs",

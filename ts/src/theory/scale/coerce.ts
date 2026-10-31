@@ -2,7 +2,7 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import { pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import { assertInteger } from '../../core/validation/index.js';
+import { assertInteger, describeRejected } from '../../core/validation/index.js';
 import type { KeyVariant } from './kinds.js';
 import { assertModeMask } from './masks.js';
 import { resolveKeyName } from './name.js';
@@ -156,5 +156,7 @@ export function toKeyScale(value: KeyLike): KeyScale {
       return normalizedKeyScale(data as KeyScale);
     }
   }
-  throw new InvalidInputError(`key must be a key name or a key/scale; received ${typeof value}`);
+  throw new InvalidInputError(
+    `key must be a key name or a key/scale; received ${describeRejected(value)}`,
+  );
 }

@@ -4,7 +4,7 @@ import { InvalidInputError } from '../core/errors/index.js';
 import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrument/profile.js';
 import { toStringedProfile } from '../core/instrument/profile.js';
 import type { MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
-import { beatsPerBar, meterAt, resolveMeters } from '../core/meter/index.js';
+import { beatsPerBar, beatsPerBarAt, meterAt, resolveMeters } from '../core/meter/index.js';
 import type { PositionalRng } from '../core/random/index.js';
 import { assertFiniteNumber } from '../core/validation/index.js';
 import type { BassLineOptions, BassSegment } from '../generate/bass/index.js';
@@ -457,7 +457,7 @@ export class Composer {
         : { instrument: toStringedProfile(instrument, 'bass instrument') }),
       segments,
       key,
-      ts: this.#openingMeter(),
+      ts: this.#meters,
       ctx: this.context,
     });
     return Score.of(notes, this.#scoreOptions(key));
@@ -490,7 +490,7 @@ export class Composer {
       ...(timeline === undefined ? {} : { timeline: toChordTimeline(timeline) }),
       melody: melody.notes,
       key,
-      ts: this.#openingMeter(),
+      ts: this.#meters,
       ctx: this.context,
     });
     return Score.of(notes, this.#scoreOptions(key));
@@ -524,14 +524,15 @@ export class Composer {
       ...opts,
       melody: melody.notes,
       ...(this.#key === undefined ? {} : { key: this.#key }),
-      ts: this.#openingMeter(),
+      ts: this.#meters,
       ctx: this.context,
     });
     const moved = melody.transpose(result.transposeSemitones);
+    const last = result.chords[result.chords.length - 1];
     const totalBeats = harmonizedSpan(
       moved.totalBeats,
       result.chords,
-      beatsPerBar(this.#openingMeter()),
+      beatsPerBarAt(last?.startBeat ?? 0, this.#meters),
     );
     return {
       chords: Timeline.fromChords(result.chords, totalBeats, result.key),
@@ -677,17 +678,6 @@ export class Composer {
   }
 
   /**
-   * The signature the parts are written against.
-   *
-   * Each generator names one time signature rather than a map, so a composer
-   * whose meter changes hands over the signature its music opens on — the same
-   * reading {@link Score.humanize} and its siblings take.
-   */
-  #openingMeter(): TimeSignature {
-    return meterAt(0, this.#meters);
-  }
-
-  /**
    * The one signature a part laid out in bars is written against.
    *
    * A part that places material bar by bar has to know how long a bar is, and a
@@ -701,7 +691,7 @@ export class Composer {
         `composer ${part} needs one meter for the whole part; the composer changes meter`,
       );
     }
-    return this.#openingMeter();
+    return meterAt(0, this.#meters);
   }
 
   /** The context every score a composer hands back is read against. */

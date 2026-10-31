@@ -11,6 +11,7 @@
 #include "cantus/core/instrument.h"
 #include "core/instrument/articulation.h"
 #include "core/instrument/profile.h"
+#include "core/random/internal.h"
 #include "core/validation/validation.h"
 #include "generate/context/context.h"
 #include "generate/context/draw.h"
@@ -341,7 +342,7 @@ json::Value draw_method(const Args& a, const json::Value& draw, std::string_view
     }
     assert_finite_number(json::Value(hi - lo), "float span");
     json::Value drawn = draw_from(source, joined(prefix.as_array(), args, 2));
-    return json::Value(lo + js::multiply(drawn, hi - lo));
+    return json::Value(scale_unit_draw(js::to_number(drawn), lo, hi));
   }
   throw RequestError("a Draw hybrid has no method " + js::quote(method));
 }
@@ -401,11 +402,16 @@ json::Array assert_wire_seed_path(const Args& a, std::size_t from, std::string_v
   return path;
 }
 
-bool WireSampler::prob(double p, std::string_view tag, double step) const {
+bool WireSampler::prob(double p, const SeedPath& key) const {
   json::Array args{json::Value(p)};
   args.insert(args.end(), path.begin(), path.end());
-  args.emplace_back(tag);
-  args.emplace_back(step);
+  for (const SeedSegment& segment : key) {
+    if (const std::string* name = std::get_if<std::string>(&segment)) {
+      args.emplace_back(*name);
+    } else {
+      args.emplace_back(std::get<double>(segment));
+    }
+  }
   return js::truthy(draw.call("prob", args));
 }
 
@@ -451,7 +457,8 @@ WireContext read_generation_context(const Args& a, const json::Value& input) {
   typed.seed = static_cast<std::uint32_t>(assert_integer(out.seed, "seed", 0, 4294967295.0));
   const json::Value& given_complexity = field_of("complexity");
   static const json::Value kNoComplexity{json::Object()};
-  const json::Value& complexity = nullish(given_complexity) ? kNoComplexity : given_complexity;
+  const json::Value& complexity =
+      nullish(given_complexity) ? kNoComplexity : assert_record(given_complexity, "ctx.complexity");
   Complexity dials;
   auto dial = [&](std::string_view key, json::Value& kept, std::optional<double>& value,
                   std::string_view name) {
@@ -487,14 +494,21 @@ WireContext read_generation_context(const Args& a, const json::Value& input) {
         static_cast<std::int64_t>(assert_integer(version, "algorithm version"));
   }
   out.rng = field_of("rng");
+  // A falsy source means none was supplied; anything else has to be one.
+  if (js::truthy(out.rng)) {
+    assert_record(out.rng, "ctx.rng");
+    if (!is_positional_rng_hybrid(out.rng) && !is_draw_hybrid(out.rng)) {
+      assert_function(get(out.rng, "at"), "ctx.rng.at");
+    }
+  }
   out.instruments = field_of("instruments");
+  if (!nullish(out.instruments)) {
+    assert_record(out.instruments, "ctx.instruments");
+  }
   // Validated on the way in: an entry naming a difficulty of 40 would clear every ceiling.
   const json::Value& vocabulary = field_of("vocabulary");
   if (!nullish(vocabulary)) {
-    if (!vocabulary.is_array()) {
-      throw js::TypeError("(ctx.vocabulary ?? []).map is not a function");
-    }
-    const json::Array& entries = vocabulary.as_array();
+    const json::Array& entries = assert_array(vocabulary, "ctx.vocabulary");
     for (std::size_t index = 0; index < entries.size(); ++index) {
       out.vocabulary.push_back(
           assert_wire_vocabulary(entries[index], "vocabulary[" + index_text(index) + "]"));
@@ -600,6 +614,25 @@ std::vector<json::Value> assert_wire_grid_events(const json::Value& events) {
   return list;
 }
 
+/**
+ * `sameTs`'s grouping half over an entry's wire grouping: equal when neither side states one, or
+ * both state the same list.
+ */
+bool wire_same_grouping(const json::Value& own, const std::optional<std::vector<int>>& asked) {
+  if (is_undefined(own) || !asked) {
+    return is_undefined(own) && !asked;
+  }
+  if (!own.is_array() || own.as_array().size() != asked->size()) {
+    return false;
+  }
+  for (std::size_t index = 0; index < asked->size(); ++index) {
+    if (!js::strict_equals(own.as_array()[index], json::Value((*asked)[index]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool wire_fits_query(const json::Value& entry, const json::Value& query) {
   const json::Value& candidate = assert_record(entry, "vocabulary entry");
   const json::Value& asked = assert_record(query, "vocabulary query");
@@ -626,7 +659,8 @@ bool wire_fits_query(const json::Value& entry, const json::Value& query) {
   if (!is_undefined(ts) && js::truthy(own_ts)) {
     TimeSignature signature = meter_at(0, read_meter_like(ts, "ts"));
     if (!(js::strict_equals(get(own_ts, "numerator"), json::Value(signature.numerator)) &&
-          js::strict_equals(get(own_ts, "denominator"), json::Value(signature.denominator)))) {
+          js::strict_equals(get(own_ts, "denominator"), json::Value(signature.denominator)) &&
+          wire_same_grouping(get(own_ts, "grouping"), signature.grouping))) {
       return false;
     }
   }
@@ -881,6 +915,58 @@ std::vector<Vocabulary<std::any>> read_fill_vocabulary(const json::Array& entrie
     out.push_back(std::move(typed));
   }
   return out;
+}
+
+json::Value events_json(std::vector<json::Value> events) {
+  return json::Value(
+      json::Array(std::make_move_iterator(events.begin()), std::make_move_iterator(events.end())));
+}
+
+/** `assertFunction(value, name)`, where a hybrid standing for a method is a function too. */
+const json::Value& assert_callable(const json::Value& value, std::string_view name) {
+  return is_wire_function(value) ? value : assert_function(value, name);
+}
+
+/** `assertOneOf(opts.rate ?? 'straight', FIGURE_RATES, 'rate')`. */
+FigureRate read_figure_rate(const json::Value& opts) {
+  return *parse_figure_rate(assert_one_of(opt_or(opts, "rate", to_string(FigureRate::kStraight)),
+                                          figure_rate_names(), "rate"));
+}
+
+FigureRate WireDeformPlan::rate() const { return read_figure_rate(asked); }
+
+std::optional<double> WireDeformPlan::rhythmic() const {
+  const json::Value* given = opt_strict(asked, "rhythmic");
+  if (given == nullptr) {
+    return std::nullopt;
+  }
+  return assert_range(*given, 0, 1, "complexity rhythmic");
+}
+
+TimeSignature WireDeformPlan::signature() const {
+  return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : figure_signature(kFigureTs);
+}
+
+std::optional<OrnamentRequest<WireGridModel>> WireDeformPlan::ornament() const {
+  const json::Value& amount = get(asked, "ornament");
+  std::optional<double> checked;
+  if (!is_undefined(amount)) {
+    checked = assert_range(amount, 0, 1, "ornament amount");
+  }
+  const json::Value& test = get(asked, "isOrnament");
+  if (!js::truthy(test)) {
+    return std::nullopt;
+  }
+  assert_callable(test, "opts.isOrnament");
+  if (!checked) {
+    return std::nullopt;
+  }
+  const Args& args = a;
+  const json::Value& marks = test;
+  std::function<bool(const json::Value&)> is_ornament = [&args, &marks](const json::Value& e) {
+    return js::truthy(call_wire_function(args, marks, "isOrnament", json::Array{e}));
+  };
+  return OrnamentRequest<WireGridModel>{is_ornament, *checked};
 }
 
 }  // namespace cantus::ops

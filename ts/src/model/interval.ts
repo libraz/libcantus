@@ -94,6 +94,13 @@ export class Interval {
    * @returns The interval from `a` to `b`.
    */
   static between(a: Note, b: Note): Interval {
+    // The first note measures, so it needs the method; the second is read for its data alone.
+    if (typeof a !== 'object' || a === null || typeof a.intervalTo !== 'function') {
+      throw new InvalidInputError(`interval a must be a Note; received ${describeRejected(a)}`);
+    }
+    if (typeof b !== 'object' || b === null || typeof b.data !== 'object' || b.data === null) {
+      throw new InvalidInputError(`interval b must be a Note; received ${describeRejected(b)}`);
+    }
     return a.intervalTo(b);
   }
 

@@ -59,16 +59,6 @@ json::Value names_json(const std::vector<std::string_view>& names) {
   return json::Value(std::move(out));
 }
 
-json::Value events_json(std::vector<json::Value> events) {
-  return json::Value(
-      json::Array(std::make_move_iterator(events.begin()), std::make_move_iterator(events.end())));
-}
-
-/** `assertFunction(value, name)`, where a hybrid standing for a method is a function too. */
-const json::Value& assert_callable(const json::Value& value, std::string_view name) {
-  return is_wire_function(value) ? value : assert_function(value, name);
-}
-
 /** `list[key]`: the element an integer-index key names, the length, or undefined. */
 json::Value element_at(const json::Array& list, const json::Value& key) {
   std::string type = js::type_of(key);
@@ -206,49 +196,6 @@ struct WirePatternModel {
   }
 
   bool playable(int pitch) const { return !sounds || sounds(pitch); }
-};
-
-/** `assertOneOf(opts.rate ?? 'straight', FIGURE_RATES, 'rate')`. */
-FigureRate read_figure_rate(const json::Value& opts) {
-  return *parse_figure_rate(assert_one_of(opt_or(opts, "rate", to_string(FigureRate::kStraight)),
-                                          figure_rate_names(), "rate"));
-}
-
-/** The options of deform, read when TS reads them. */
-struct WireDeformPlan {
-  const Args& a;
-  const json::Value& asked;
-  const json::Value* ts;
-
-  FigureRate rate() const { return read_figure_rate(asked); }
-
-  std::optional<double> rhythmic() const {
-    const json::Value* given = opt_strict(asked, "rhythmic");
-    if (given == nullptr) {
-      return std::nullopt;
-    }
-    return assert_range(*given, 0, 1, "complexity rhythmic");
-  }
-
-  TimeSignature signature() const {
-    return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : figure_signature(kFigureTs);
-  }
-
-  std::optional<OrnamentRequest<WireGridModel>> ornament() const {
-    const json::Value& amount = get(asked, "ornament");
-    const json::Value& test = get(asked, "isOrnament");
-    if (is_undefined(amount) || !js::truthy(test)) {
-      return std::nullopt;
-    }
-    assert_callable(test, "opts.isOrnament");
-    const Args& args = a;
-    const json::Value& marks = test;
-    std::function<bool(const json::Value&)> is_ornament = [&args, &marks](const json::Value& e) {
-      return js::truthy(call_wire_function(args, marks, "isOrnament", json::Array{e}));
-    };
-    return OrnamentRequest<WireGridModel>{is_ornament,
-                                          assert_range(amount, 0, 1, "ornament amount")};
-  }
 };
 
 //--------------------------------------------------------------------------------------------

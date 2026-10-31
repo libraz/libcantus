@@ -22,9 +22,12 @@ extern const TimeSignature kOrnamentDefaultTs;
 /** The names of ORNAMENT_STYLES, for assert_one_of(). */
 std::vector<std::string_view> ornament_style_names();
 
-/** ornament over the sounding notes, from the point its context is resolved. */
+/**
+ * ornament over the sounding notes, from the point its context is resolved; each note is weighed
+ * in the signature `meter` has in force where it sounds.
+ */
 std::vector<NoteEvent> ornament_with(const std::vector<NoteEvent>& sounding, OrnamentStyle style,
-                                     const TimeSignature& ts, const ResolvedContext& ctx);
+                                     const MeterData& meter, const ResolvedContext& ctx);
 
 }  // namespace cantus
 

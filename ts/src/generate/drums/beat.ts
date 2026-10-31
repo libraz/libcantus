@@ -32,7 +32,7 @@ import {
   QUARTER,
   SIXTEENTH,
 } from './internal.js';
-import type { KickPattern } from './kick.js';
+import type { KickEntries } from './kick.js';
 import { effectiveSwing, quantizeSwing } from './swing.js';
 
 /** Per-section drum state shared across the bars of a section. */
@@ -49,6 +49,11 @@ export type SectionCtx = {
   rhythmic: number;
   /** Ornament dial in [0, 1]: how many ghosts and decorations survive. */
   ornament: number;
+  /**
+   * Whether the ornament dial is the rhythmic dial standing in for one the
+   * caller did not name, so the ghosts enter as the rhythmic dial rises.
+   */
+  ornamentFollowsRhythmic: boolean;
   /** Difficulty ceiling, or undefined when the caller set none. */
   difficulty: number | undefined;
   ghostBoost: boolean;
@@ -75,6 +80,8 @@ export type BeatCtx = {
   openHhBeat: number;
   /** Hi-hat subdivision for this bar. */
   hhLevel: HiHatLevel;
+  /** The rhythmic-dial setting each hi-hat subdivision enters at in this bar. */
+  hhEntries: Readonly<Record<HiHatLevel, number>>;
   draw: Draw;
 };
 
@@ -123,18 +130,19 @@ export function swing16(tick: number, sec: SectionCtx, swingAmount: number): num
  * on an odd sixteenth is the one the ceiling can refuse: at that tempo the foot
  * does not get there, and the stroke is dropped rather than moved.
  */
-export function generateKickForBeat(ctx: BeatCtx, sec: SectionCtx, kick: KickPattern): void {
+export function generateKickForBeat(ctx: BeatCtx, sec: SectionCtx, kick: KickEntries): void {
   if (ctx.inPrechorusLift) {
     return;
   }
   const sixteenths = kick.length / 4;
   for (let step = 0; step < sixteenths; step += 1) {
     const index = ctx.beat * sixteenths + step;
-    if (!kick[index]) {
+    const entry = kick[index];
+    if (entry === undefined) {
       continue;
     }
     if (step === 0) {
-      ctx.track.add(GM.BD, ctx.beatTick, EIGHTH, ctx.velocity);
+      ctx.track.add(GM.BD, ctx.beatTick, EIGHTH, ctx.velocity, undefined, entry);
       continue;
     }
     const offBeat = step % 2 === 1;
@@ -142,7 +150,7 @@ export function generateKickForBeat(ctx: BeatCtx, sec: SectionCtx, kick: KickPat
       continue;
     }
     const tick = swing16(ctx.beatTick + step * SIXTEENTH, sec, ctx.swingAmount);
-    ctx.track.add(GM.BD, tick, offBeat ? SIXTEENTH : EIGHTH, ctx.velocity * 0.85);
+    ctx.track.add(GM.BD, tick, offBeat ? SIXTEENTH : EIGHTH, ctx.velocity * 0.85, undefined, entry);
   }
 }
 
@@ -273,7 +281,8 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     return;
   }
   const positions = selectGhostPositions(sec.ghostMood);
-  let ghostProb = leanedBy(getGhostDensity(sec.ghostMood, ctx.section, ctx.bpm), sec.ornament);
+  const ghostDensity = getGhostDensity(sec.ghostMood, ctx.section, ctx.bpm);
+  let ghostProb = leanedBy(ghostDensity, sec.ornament);
   if (sec.ghostBoost) {
     ghostProb = Math.min(1, ghostProb * 1.4);
   }
@@ -281,9 +290,15 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   for (const pos of positions) {
     const sixteenthInBeat = pos === 'e' ? 1 : 3;
     const posProb = getGhostProbabilityAtPosition(ctx.beat, sixteenthInBeat, leadIns);
-    if (!ctx.draw.prob(ghostProb * posProb, 'ghost', ctx.bar, ctx.beat, pos)) {
+    const at = ctx.draw.at('ghost', ctx.bar, ctx.beat, pos);
+    if (!(at < ghostProb * posProb)) {
       continue;
     }
+    // Leaned by the rhythmic dial in its stand-in role, the ghost sounds from
+    // the setting where the leaned chance passes its draw.
+    const entry = sec.ornamentFollowsRhythmic
+      ? at / (posProb * (sec.ghostBoost ? 1.4 : 1) * ghostDensity) - 0.5
+      : Number.NEGATIVE_INFINITY;
     const variation = ctx.draw.float(0.85, 1.15, 'ghostVelocity', ctx.bar, ctx.beat, pos);
     const ghostBase = getGhostVelocity(ctx.section, ctx.beat / 2);
     let ghostVel = ctx.velocity * ghostBase * variation;
@@ -292,7 +307,7 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     }
     const offset = pos === 'e' ? SIXTEENTH : 3 * SIXTEENTH;
     const tick = swing16(ctx.beatTick + offset, sec, ctx.swingAmount);
-    ctx.track.add(GM.SD, tick, SIXTEENTH, ghostVel);
+    ctx.track.add(GM.SD, tick, SIXTEENTH, ghostVel, undefined, entry);
   }
 }
 
@@ -382,6 +397,10 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   const isDynamicOpen =
     ctx.barHasOpenHh && ctx.beat === ctx.openHhBeat && !usesOffbeatOpenHiHat(sec.style);
   const dm = sec.densityMult;
+  // The downbeats the intro's quarter grid rests on are filled in from the
+  // eighth grid up, so that is the setting they enter at.
+  const beatEntry =
+    ctx.section === 'intro' && ctx.beat !== 0 ? ctx.hhEntries.eighth : ctx.hhEntries.quarter;
 
   if (ctx.hhLevel === 'quarter') {
     // The intro's quarter grid rests between its downbeats. The foot pulse is
@@ -393,11 +412,18 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     }
     const hhVel = Math.max(20, ctx.velocity * dm * 0.75 * typeMult);
     if (allowsOpenHiHat && isDynamicOpen) {
-      ctx.track.add(GM.OHH, ctx.beatTick, EIGHTH, hhVel + OHH_VEL_BOOST);
+      ctx.track.add(GM.OHH, ctx.beatTick, EIGHTH, hhVel + OHH_VEL_BOOST, undefined, beatEntry);
     } else if (allowsOpenHiHat && opensOnDownbeat(ctx, sec)) {
-      ctx.track.add(hiHatNote('open'), ctx.beatTick, EIGHTH, Math.max(20, hhVel * 1.1));
+      ctx.track.add(
+        hiHatNote('open'),
+        ctx.beatTick,
+        EIGHTH,
+        Math.max(20, hhVel * 1.1),
+        undefined,
+        beatEntry,
+      );
     } else {
-      ctx.track.add(hhInstrument, ctx.beatTick, EIGHTH, hhVel);
+      ctx.track.add(hhInstrument, ctx.beatTick, EIGHTH, hhVel, undefined, beatEntry);
     }
     return;
   }
@@ -408,22 +434,37 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       if (eighth === 1) {
         hhTick = swing16(hhTick, sec, ctx.swingAmount);
       }
+      const entry = eighth === 0 ? beatEntry : ctx.hhEntries.eighth;
       if (ctx.section === 'intro' && eighth === 1) {
         if (sec.useFootHh && ctx.beat % 2 === 0) {
-          ctx.track.add(GM.FHH, hhTick, EIGHTH, footHiHatVelocity(ctx.draw, ctx.bar, ctx.beat));
+          ctx.track.add(
+            GM.FHH,
+            hhTick,
+            EIGHTH,
+            footHiHatVelocity(ctx.draw, ctx.bar, ctx.beat),
+            undefined,
+            entry,
+          );
         }
         continue;
       }
       const hhVel = Math.max(20, ctx.velocity * dm * typeMult * (eighth === 0 ? 0.9 : 0.65));
       if (isDynamicOpen && allowsOpenHiHat && eighth === 0) {
-        ctx.track.add(GM.OHH, hhTick, EIGHTH, hhVel + OHH_VEL_BOOST);
+        ctx.track.add(GM.OHH, hhTick, EIGHTH, hhVel + OHH_VEL_BOOST, undefined, entry);
         continue;
       }
       const useOpen = eighth === 0 ? opensOnDownbeat(ctx, sec) : opensOffbeat(ctx, sec);
       if (useOpen && allowsOpenHiHat) {
-        ctx.track.add(hiHatNote('open'), hhTick, EIGHTH, Math.max(20, hhVel * 1.1));
+        ctx.track.add(
+          hiHatNote('open'),
+          hhTick,
+          EIGHTH,
+          Math.max(20, hhVel * 1.1),
+          undefined,
+          entry,
+        );
       } else {
-        ctx.track.add(hhInstrument, hhTick, EIGHTH / 2, hhVel);
+        ctx.track.add(hhInstrument, hhTick, EIGHTH / 2, hhVel, undefined, entry);
       }
     }
     return;
@@ -442,8 +483,14 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       ctx.draw.float(0.95, 1.05, 'hatVelocity', ctx.bar, ctx.beat, sixteenth),
     );
     const hhVel = Math.max(20, ctx.velocity * dm * typeMult * metricVel);
+    const entry =
+      sixteenth === 0
+        ? beatEntry
+        : sixteenth === 2
+          ? ctx.hhEntries.eighth
+          : ctx.hhEntries.sixteenth;
     if (isDynamicOpen && allowsOpenHiHat && sixteenth === 0) {
-      ctx.track.add(GM.OHH, hhTick, SIXTEENTH, hhVel + OHH_VEL_BOOST);
+      ctx.track.add(GM.OHH, hhTick, SIXTEENTH, hhVel + OHH_VEL_BOOST, undefined, entry);
       continue;
     }
     // The accents of the coarser grids are taken here as well, at the positions
@@ -451,20 +498,34 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     // that open there. Deciding them only on the eighth grid meant reaching the
     // sixteenths turned an open hat back into a closed one.
     if (allowsOpenHiHat && sixteenth === 0 && opensOnDownbeat(ctx, sec)) {
-      ctx.track.add(hiHatNote('open'), hhTick, SIXTEENTH, Math.max(20, hhVel * 1.1));
+      ctx.track.add(
+        hiHatNote('open'),
+        hhTick,
+        SIXTEENTH,
+        Math.max(20, hhVel * 1.1),
+        undefined,
+        entry,
+      );
       continue;
     }
     if (allowsOpenHiHat && sixteenth === 2 && opensOffbeat(ctx, sec)) {
-      ctx.track.add(hiHatNote('open'), hhTick, SIXTEENTH, Math.max(20, hhVel * 1.1));
+      ctx.track.add(
+        hiHatNote('open'),
+        hhTick,
+        SIXTEENTH,
+        Math.max(20, hhVel * 1.1),
+        undefined,
+        entry,
+      );
       continue;
     }
     if (allowsOpenHiHat && ctx.beat === 3 && sixteenth === 3) {
       const openProb = Math.max(0.1, Math.min(0.4, 30 / ctx.bpm));
       if (ctx.draw.prob(openProb, 'openHat', ctx.bar, ctx.beat, sixteenth)) {
-        ctx.track.add(GM.OHH, hhTick, SIXTEENTH, Math.max(20, hhVel * 1.2));
+        ctx.track.add(GM.OHH, hhTick, SIXTEENTH, Math.max(20, hhVel * 1.2), undefined, entry);
         continue;
       }
     }
-    ctx.track.add(hhInstrument, hhTick, SIXTEENTH / 2, hhVel);
+    ctx.track.add(hhInstrument, hhTick, SIXTEENTH / 2, hhVel, undefined, entry);
   }
 }

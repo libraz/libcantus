@@ -24,6 +24,7 @@ import {
   pitchClassOf as mod12,
   type Note,
   noteToPitchClass,
+  transposeByInterval,
   transposeNote,
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
@@ -177,6 +178,34 @@ function tritoneSubstituteRoot(dominant: Chord, tonic: Note, key: KeyScale): Not
   return transposeNote(resolution, 1);
 }
 
+/** The third each mediant offset is, by root offset in semitones. */
+const MEDIANT_THIRDS: Readonly<Record<(typeof THIRD_OFFSETS)[number], string>> = {
+  3: 'm3',
+  4: 'M3',
+  8: '-M3',
+  9: '-m3',
+};
+
+/**
+ * The root spelling of a chromatic mediant: the letter a third from the source
+ * root, altered to the mediant's pitch class. A mediant is a third relation, so
+ * E major's mediants are written G, G#, C and C#, and C's in A minor Eb and Ab
+ * rather than D# and G#.
+ */
+function mediantRoot(
+  source: Chord,
+  offset: (typeof THIRD_OFFSETS)[number],
+  tonic: Note,
+  key: KeyScale,
+): Note {
+  const hint = source.rootSpelling;
+  const root =
+    hint !== undefined && noteToPitchClass(hint) === mod12(source.rootPc)
+      ? hint
+      : spellPitchClass(source.rootPc, tonic, key);
+  return transposeByInterval(bareSpelling(root), MEDIANT_THIRDS[offset]);
+}
+
 /**
  * Propose substitutions for a chord within a key.
  *
@@ -202,8 +231,9 @@ function tritoneSubstituteRoot(dominant: Chord, tonic: Note, key: KeyScale): Not
  * tritone substitute of G7 formats as `Db7` and its chromatic mediants as `Bb`
  * and `Eb`. Where the substitution's function and the bare pitch class disagree,
  * the function decides — a tritone substitute is a bII7 and so is written on the
- * flattened supertonic of the chord it resolves to, and a borrowed chord takes
- * the spelling of the mode it is borrowed from.
+ * flattened supertonic of the chord it resolves to, a borrowed chord takes the
+ * spelling of the mode it is borrowed from, and a chromatic mediant is written
+ * on the letter a third from the source root (E's mediants are G#, not Ab).
  *
  * @param chord The chord to reharmonize, as a chord symbol or as chord data.
  * @param key The prevailing key, as a key name or as a key/scale.
@@ -277,7 +307,10 @@ export function substituteChord(
         commonToneCount(originalTriad, chordPitchClasses(mediant)) === 1 &&
         !isDiatonic(mediant, resolved)
       ) {
-        candidates.push({ chord: spelledInKey(mediant, tonic, scale), type: 'chromaticMediant' });
+        candidates.push({
+          chord: spelledOnRoot(mediant, mediantRoot(source, offset, tonic, scale), tonic, scale),
+          type: 'chromaticMediant',
+        });
       }
     }
   }

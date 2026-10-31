@@ -22,6 +22,34 @@ describe('shared deterministic random generator', () => {
   });
 });
 
+describe('Rng.float stays below its upper bound', () => {
+  it('never returns hi where rounding would reach it', () => {
+    for (const [lo, hi] of [
+      [0.7, 0.7000000000000001],
+      [1e16, 1e16 + 2],
+      [-0.7000000000000001, -0.7],
+      [-Number.MIN_VALUE, 0],
+    ] as const) {
+      const rng = createRng(1);
+      for (let i = 0; i < 2000; i += 1) {
+        const value = rng.float(lo, hi);
+        expect(value, `[${lo}, ${hi})`).toBeGreaterThanOrEqual(lo);
+        expect(value, `[${lo}, ${hi})`).toBeLessThan(hi);
+      }
+    }
+  });
+
+  it('draws once per call and keeps ordinary values unchanged', () => {
+    const floats = createRng(7);
+    const units = createRng(7);
+    for (let i = 0; i < 50; i += 1) {
+      const unit = units.next();
+      expect(floats.float(2, 6)).toBe(2 + unit * 4);
+    }
+    expect(createRng(3).float(5, 5)).toBe(5);
+  });
+});
+
 describe('error messages', () => {
   it('carries a rejected value whole, past a NUL character', () => {
     expect(() => createRng('x\u0000y' as unknown as number)).toThrow(

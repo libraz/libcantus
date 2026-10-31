@@ -98,3 +98,45 @@ TEST_CASE("voice notes get their position as id", "[voice]") {
   CHECK_THROWS_AS(to_voice_notes({first}), InvalidInputError);
   CHECK(to_string(SuspensionFigure::kSus4_3) == "sus4-3");
 }
+
+TEST_CASE("a solo line's suspension is judged against the chord", "[voice]") {
+  Chord f_major = make_chord(5, ChordQuality::kMaj);
+  Chord c_major = make_chord(0, ChordQuality::kMaj);
+  std::vector<VoiceNote> voice = {voice_note(65, 0, 1), voice_note(65, 1, 1), voice_note(64, 2, 1)};
+  std::vector<AnalyzedNote> notes = analyze_voice(
+      voice, [&](double beat) -> Nullable<Chord> { return beat < 1 ? f_major : c_major; },
+      KeyContext(KeyArg("C major")));
+  REQUIRE(notes.size() == 3);
+  REQUIRE_FALSE(notes[1].labels.empty());
+  CHECK(notes[1].labels[0].kind == TheoryLabelKind::kSuspension);
+  CHECK(notes[1].labels[0].type == SuspensionFigure::kSus4_3);
+  CHECK(notes[1].labels[0].resolveTo == 64);
+}
+
+TEST_CASE("a suspension resolving onto another interval names no figure", "[voice]") {
+  // B over C falling to B flat over C7 is a seventh going to a seventh.
+  Chord b_major = make_chord(11, ChordQuality::kMaj);
+  Chord c_seventh = make_chord(0, ChordQuality::kDom7);
+  std::vector<VoiceNote> voice = {voice_note(71, 0, 1), voice_note(71, 1, 1), voice_note(70, 2, 1)};
+  std::vector<AnalyzedNote> notes = analyze_voice(
+      voice, [&](double beat) -> Nullable<Chord> { return beat < 1 ? b_major : c_seventh; },
+      KeyContext(KeyArg("C major")),
+      [](double) { return std::vector<VoiceSnapshot>{VoiceSnapshot{36, std::nullopt}}; });
+  REQUIRE(notes.size() == 3);
+  for (const TheoryLabel& label : notes[1].labels) {
+    CHECK(label.kind != TheoryLabelKind::kSuspension);
+  }
+}
+
+TEST_CASE("a zero-length note is no one's neighbour", "[voice]") {
+  Chord c_major = make_chord(0, ChordQuality::kMaj);
+  Chord d_minor = make_chord(2, ChordQuality::kMin);
+  std::vector<VoiceNote> voice = {voice_note(60, 0, 0), voice_note(62, 0, 1), voice_note(64, 1, 1)};
+  std::vector<AnalyzedNote> notes = analyze_voice(
+      voice, [&](double beat) -> Nullable<Chord> { return beat < 1 ? c_major : d_minor; },
+      KeyContext(KeyArg("C major")));
+  REQUIRE(notes.size() == 3);
+  for (const TheoryLabel& label : notes[1].labels) {
+    CHECK(label.kind != TheoryLabelKind::kPassing);
+  }
+}

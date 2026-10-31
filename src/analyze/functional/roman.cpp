@@ -628,15 +628,16 @@ std::optional<PitchSpelling> written_root(const Chord& chord) {
 
 /**
  * The numeral a written root denotes: the degree on its letter, with the alteration it stands at
- * above that degree of the key (`writtenSpelling`); nullopt when no single accidental names it.
+ * above that degree of the key (`writtenSpelling`); nullopt when the root is a degree of the key,
+ * which takes its own numeral however it is spelled, or when no single accidental names it.
  */
 std::optional<std::pair<int, std::string>> written_spelling(
     double root_pc, const std::optional<PitchSpelling>& written, const ResolvedKey& resolved) {
-  if (!written) {
+  std::vector<int> tones = scale_tones_in_degree_order(roman_reference(resolved.scale));
+  if (!written || std::find(tones.begin(), tones.end(), pitch_class_of(root_pc)) != tones.end()) {
     return std::nullopt;
   }
   int degree_number = diatonic_letter_of(written->letter - resolved.tonic.letter) + 1;
-  std::vector<int> tones = scale_tones_in_degree_order(roman_reference(resolved.scale));
   if (degree_number < 1 || static_cast<std::size_t>(degree_number) > tones.size()) {
     return std::nullopt;
   }

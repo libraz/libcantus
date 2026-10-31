@@ -9,6 +9,7 @@ import {
 } from '../analyze/functional/index.js';
 import { InvalidInputError } from '../core/errors/index.js';
 import type { IntervalLike } from '../core/pitch/index.js';
+import { describeRejected } from '../core/validation/index.js';
 import type { SubstituteOptions, SubstitutionType } from '../generate/reharmony/index.js';
 import { substituteChord } from '../generate/reharmony/index.js';
 import type { Chord as ChordData, ChordSpan } from '../theory/chord/index.js';
@@ -88,7 +89,14 @@ export class Progression {
     const given = assertDataObjects<Chord>(chords, 'progression chords');
     // Each member is rebuilt from its own data, so a value that is no chord is
     // refused here rather than kept as a member.
-    return given.map((chord) => new ChordClass(chord.toJSON(), key ?? chord.key));
+    return given.map((chord, index) => {
+      if (typeof chord.toJSON !== 'function') {
+        throw new InvalidInputError(
+          `progression chords[${index}] must be a Chord; received ${describeRejected(chord)}`,
+        );
+      }
+      return new ChordClass(chord.toJSON(), key ?? chord.key);
+    });
   }
 
   /**

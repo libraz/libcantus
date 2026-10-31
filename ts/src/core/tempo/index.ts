@@ -335,7 +335,8 @@ export function tempoReader(map: TempoMap): TempoReader {
  * @param beat Position or length in quarter-note beats.
  * @param ppq Pulses (ticks) per quarter note, e.g. 96, 480, or 960.
  * @returns The whole tick count.
- * @throws If `beat` is not finite or `ppq` is not a positive integer.
+ * @throws If `beat` is not finite, `ppq` is not a positive integer, or the
+ *   tick count is past the safe integers.
  * @example
  * ```ts
  * import { beatsToTicks } from '@libraz/libcantus';
@@ -347,6 +348,8 @@ export function beatsToTicks(beat: number, ppq: number): number {
   assertFiniteNumber(beat, 'beat');
   assertPositiveInt(ppq, 'ppq');
   const ticks = Math.round(beat * ppq);
+  // A count past the safe integers is not a whole tick, and ticksToBeats refuses it.
+  assertInteger(ticks, 'ticks result');
   return ticks === 0 ? 0 : ticks;
 }
 

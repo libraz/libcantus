@@ -473,7 +473,7 @@ describe('reduceProgression with a key function answering in another form', () =
 
   it('refuses an answer that names no key', () => {
     expect(() => reduceProgression(timeline, () => null as never)).toThrow(
-      'key must be a key name or a key/scale; received object',
+      'key must be a key name or a key/scale; received null',
     );
     expect(() => reduceProgression(timeline, () => ({}) as never)).toThrow(
       'key.modeMask12 must be finite; received undefined',

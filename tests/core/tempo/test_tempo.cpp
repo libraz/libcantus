@@ -42,3 +42,10 @@ TEST_CASE("ticks keep a negative zero where TS does", "[tempo]") {
   CHECK(std::signbit(ticks_to_beats(-0.0, 480)));
   CHECK(ticks_to_beats(960, 480) == 2);
 }
+
+TEST_CASE("ticks past the safe integers are refused", "[tempo]") {
+  CHECK_THROWS_AS(beats_to_ticks(1e306, 960), InvalidInputError);
+  CHECK_THROWS_AS(beats_to_ticks(1e13, 960), InvalidInputError);
+  double largest = std::floor(9007199254740991.0 / 960);
+  CHECK(ticks_to_beats(beats_to_ticks(largest, 960), 960) == largest);
+}

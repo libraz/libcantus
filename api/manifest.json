@@ -39,8 +39,7 @@
           {
             "name": "data",
             "optional": false,
-            "rest": false,
-            "fields": ["tracks", "settings"]
+            "rest": false
           }
         ],
         "length": 1
@@ -59,7 +58,20 @@
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": [
+                "profile",
+                "budget",
+                "keys",
+                "harmonyTracks",
+                "minSeverity",
+                "ts",
+                "pickupBeats",
+                "harmonicRhythm",
+                "key",
+                "meters",
+                "timeline"
+              ]
             }
           ],
           "length": 2
@@ -72,8 +84,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["tracks", "settings"]
+              "rest": false
             }
           ],
           "length": 1
@@ -86,8 +97,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["tracks", "settings"]
+              "rest": false
             }
           ],
           "length": 1
@@ -141,7 +151,21 @@
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": [
+                "profile",
+                "budget",
+                "keys",
+                "harmonyTracks",
+                "minSeverity",
+                "ts",
+                "pickupBeats",
+                "harmonicRhythm",
+                "key",
+                "meters",
+                "timeline",
+                "step"
+              ]
             }
           ],
           "length": 1
@@ -154,7 +178,20 @@
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": [
+                "profile",
+                "budget",
+                "keys",
+                "harmonyTracks",
+                "minSeverity",
+                "ts",
+                "pickupBeats",
+                "harmonicRhythm",
+                "key",
+                "meters",
+                "timeline"
+              ]
             }
           ],
           "length": 1
@@ -175,7 +212,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["budget"]
+              "bag": ["budget"]
             }
           ],
           "length": 1
@@ -289,22 +326,12 @@
           {
             "name": "data",
             "optional": false,
-            "rest": false,
-            "fields": [
-              "rootPc",
-              "quality",
-              "intervals",
-              "bassPc",
-              "rootSpelling",
-              "bassSpelling",
-              "toneSpellings"
-            ]
+            "rest": false
           },
           {
             "name": "key",
             "optional": true,
-            "rest": false,
-            "fields": ["scale", "tonic", "variant", "toJSON"]
+            "rest": false
           }
         ],
         "length": 2
@@ -341,16 +368,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "rootPc",
-                "quality",
-                "intervals",
-                "bassPc",
-                "rootSpelling",
-                "bassSpelling",
-                "toneSpellings"
-              ]
+              "rest": false
             }
           ],
           "length": 1
@@ -363,16 +381,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "rootPc",
-                "quality",
-                "intervals",
-                "bassPc",
-                "rootSpelling",
-                "bassSpelling",
-                "toneSpellings"
-              ]
+              "rest": false
             }
           ],
           "length": 1
@@ -385,8 +394,7 @@
             {
               "name": "bass",
               "optional": false,
-              "rest": false,
-              "fields": ["letter", "alter", "octave", "toJSON"]
+              "rest": false
             },
             {
               "name": "figures",
@@ -396,8 +404,7 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 3
@@ -416,7 +423,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 2
@@ -435,7 +442,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 2
@@ -454,7 +461,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["input", "bassPc"]
+              "bag": ["input", "bassPc"]
             }
           ],
           "length": 2
@@ -473,7 +480,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["input", "bassPc"]
+              "bag": ["input", "bassPc"]
             }
           ],
           "length": 2
@@ -492,7 +499,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["input", "bassPc"]
+              "bag": ["input", "bassPc"]
             }
           ],
           "length": 2
@@ -540,8 +547,7 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -555,7 +561,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["includeBass"]
+              "bag": ["includeBass"]
             }
           ],
           "length": 1
@@ -594,14 +600,13 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["applied", "neapolitan"]
+              "bag": ["applied", "neapolitan"]
             }
           ],
           "length": 2
@@ -614,13 +619,13 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": ["applied", "neapolitan", "alternatives"]
             }
           ],
           "length": 2
@@ -633,8 +638,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -647,13 +651,13 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": ["applied", "neapolitan", "alternatives"]
             }
           ],
           "length": 2
@@ -666,8 +670,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -680,8 +683,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -694,8 +696,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -708,14 +709,13 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["melodyPcs"]
+              "bag": ["melodyPcs"]
             }
           ],
           "length": 2
@@ -728,8 +728,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -742,7 +741,8 @@
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": ["system", "flats"]
             }
           ],
           "length": 1
@@ -756,7 +756,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "voices",
                 "ranges",
                 "maxSpacing",
@@ -778,7 +778,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["style", "topNote", "octave", "rootless"]
+              "bag": ["style", "topNote", "octave", "rootless"]
             }
           ],
           "length": 1
@@ -791,8 +791,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -838,8 +837,7 @@
             {
               "name": "interval",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -878,7 +876,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["resolvesTo"]
+              "bag": ["resolvesTo"]
             }
           ],
           "length": 2
@@ -897,7 +895,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["use"]
+              "bag": ["use"]
             }
           ],
           "length": 2
@@ -910,8 +908,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -981,18 +978,7 @@
           {
             "name": "options",
             "optional": false,
-            "rest": false,
-            "fields": [
-              "key",
-              "meters",
-              "bpm",
-              "seed",
-              "complexity",
-              "instruments",
-              "vocabulary",
-              "algorithmVersion",
-              "rng"
-            ]
+            "rest": false
           }
         ],
         "length": 1
@@ -1006,18 +992,7 @@
             {
               "name": "options",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "key",
-                "meters",
-                "bpm",
-                "seed",
-                "complexity",
-                "instruments",
-                "vocabulary",
-                "algorithmVersion",
-                "rng"
-              ]
+              "rest": false
             }
           ],
           "length": 1
@@ -1030,18 +1005,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "key",
-                "meters",
-                "bpm",
-                "seed",
-                "complexity",
-                "instruments",
-                "vocabulary",
-                "algorithmVersion",
-                "rng"
-              ]
+              "rest": false
             }
           ],
           "length": 1
@@ -1054,18 +1018,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "key",
-                "meters",
-                "bpm",
-                "seed",
-                "complexity",
-                "instruments",
-                "vocabulary",
-                "algorithmVersion",
-                "rng"
-              ]
+              "rest": false
             }
           ],
           "length": 1
@@ -1078,18 +1031,7 @@
             {
               "name": "patch",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "key",
-                "meters",
-                "bpm",
-                "seed",
-                "complexity",
-                "instruments",
-                "vocabulary",
-                "algorithmVersion",
-                "rng"
-              ]
+              "rest": false
             }
           ],
           "length": 1
@@ -1102,8 +1044,7 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -1129,8 +1070,7 @@
             {
               "name": "complexity",
               "optional": false,
-              "rest": false,
-              "fields": ["rhythmic", "harmonic", "ornament", "difficulty"]
+              "rest": false
             }
           ],
           "length": 1
@@ -1143,8 +1083,7 @@
             {
               "name": "opts",
               "optional": false,
-              "rest": false,
-              "fields": ["style", "bars", "presetId", "preset", "ext"]
+              "rest": false
             }
           ],
           "length": 1
@@ -1157,18 +1096,7 @@
             {
               "name": "opts",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "budget",
-                "style",
-                "bars",
-                "section",
-                "fills",
-                "feel",
-                "role",
-                "nextSection",
-                "euclideanKick"
-              ]
+              "rest": false
             }
           ],
           "length": 1
@@ -1186,7 +1114,8 @@
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": ["budget", "style", "octave", "instrument"]
             }
           ],
           "length": 2
@@ -1204,7 +1133,18 @@
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": [
+                "weights",
+                "profile",
+                "chordAt",
+                "chordChangeBeats",
+                "register",
+                "rhythm",
+                "pitchLow",
+                "pitchHigh",
+                "timeline"
+              ]
             }
           ],
           "length": 2
@@ -1223,7 +1163,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["budget", "harmonicRhythm", "reharmonize", "placement", "phraseEnds"]
+              "bag": ["budget", "harmonicRhythm", "reharmonize", "placement", "phraseEnds"]
             }
           ],
           "length": 2
@@ -1236,14 +1176,13 @@
             {
               "name": "reference",
               "optional": false,
-              "rest": false,
-              "fields": ["profileVersion", "span", "meters", "form", "harmony", "melody"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["budget", "key", "register", "preserve"]
+              "bag": ["budget", "key", "register", "preserve"]
             }
           ],
           "length": 2
@@ -1256,26 +1195,13 @@
             {
               "name": "plan",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "planVersion",
-                "seed",
-                "algorithmVersion",
-                "keys",
-                "meters",
-                "span",
-                "sections",
-                "phrases",
-                "harmony",
-                "motifs",
-                "rhythm"
-              ]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["budget"]
+              "bag": ["budget"]
             }
           ],
           "length": 2
@@ -1364,8 +1290,7 @@
           {
             "name": "value",
             "optional": false,
-            "rest": false,
-            "fields": ["base", "dots", "tuplet"]
+            "rest": false
           }
         ],
         "length": 1,
@@ -1390,8 +1315,7 @@
             {
               "name": "tuplet",
               "optional": true,
-              "rest": false,
-              "fields": ["actual", "normal"]
+              "rest": false
             }
           ],
           "length": 1
@@ -1410,7 +1334,7 @@
               "name": "options",
               "optional": true,
               "rest": false,
-              "fields": ["beatUnit"]
+              "bag": ["beatUnit"]
             }
           ],
           "length": 1
@@ -1429,7 +1353,7 @@
               "name": "options",
               "optional": true,
               "rest": false,
-              "fields": ["beatUnit"]
+              "bag": ["beatUnit"]
             }
           ],
           "length": 1
@@ -1442,8 +1366,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["base", "dots", "tuplet"]
+              "rest": false
             }
           ],
           "length": 1
@@ -1456,8 +1379,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["base", "dots", "tuplet"]
+              "rest": false
             }
           ],
           "length": 1
@@ -1496,7 +1418,7 @@
               "name": "options",
               "optional": true,
               "rest": false,
-              "fields": ["beatUnit"]
+              "bag": ["beatUnit"]
             }
           ],
           "length": 0
@@ -1597,8 +1519,7 @@
             {
               "name": "profile",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -1736,14 +1657,12 @@
             {
               "name": "note",
               "optional": false,
-              "rest": false,
-              "fields": ["letter", "alter", "octave", "toJSON"]
+              "rest": false
             },
             {
               "name": "transposition",
               "optional": true,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -2040,8 +1959,7 @@
           {
             "name": "scale",
             "optional": false,
-            "rest": false,
-            "fields": ["rootPc", "modeMask12"]
+            "rest": false
           },
           {
             "name": "tonic",
@@ -2115,7 +2033,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 2
@@ -2134,7 +2052,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 2
@@ -2165,8 +2083,7 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "tonic",
@@ -2184,8 +2101,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant"]
+              "rest": false
             }
           ],
           "length": 1
@@ -2198,8 +2114,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant"]
+              "rest": false
             }
           ],
           "length": 1
@@ -2218,7 +2133,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["weights", "profile", "modes", "explain", "budget"]
+              "bag": ["weights", "profile", "modes", "explain", "budget"]
             }
           ],
           "length": 2
@@ -2237,7 +2152,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["weights", "profile", "modes", "explain", "budget"]
+              "bag": ["weights", "profile", "modes", "explain", "budget"]
             }
           ],
           "length": 2
@@ -2256,7 +2171,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["weights", "profile", "modes", "explain", "budget"]
+              "bag": ["weights", "profile", "modes", "explain", "budget"]
             }
           ],
           "length": 2
@@ -2323,7 +2238,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["order"]
+              "bag": ["order"]
             }
           ],
           "length": 1
@@ -2405,8 +2320,7 @@
             {
               "name": "other",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -2468,8 +2382,7 @@
             {
               "name": "interval",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -2508,8 +2421,7 @@
             {
               "name": "instrument",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -2537,7 +2449,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 1
@@ -2555,8 +2467,7 @@
             {
               "name": "tonic",
               "optional": true,
-              "rest": false,
-              "fields": ["letter", "alter", "octave", "toJSON"]
+              "rest": false
             }
           ],
           "length": 2
@@ -2699,7 +2610,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 1
@@ -2830,8 +2741,7 @@
           {
             "name": "ts",
             "optional": false,
-            "rest": false,
-            "fields": ["numerator", "denominator", "grouping"]
+            "rest": false
           }
         ],
         "length": 1,
@@ -2895,8 +2805,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["numerator", "denominator", "grouping"]
+              "rest": false
             }
           ],
           "length": 1
@@ -2909,8 +2818,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["numerator", "denominator", "grouping"]
+              "rest": false
             }
           ],
           "length": 1
@@ -2964,7 +2872,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["grouping"]
+              "bag": ["grouping"]
             }
           ],
           "length": 0
@@ -3083,8 +2991,7 @@
           {
             "name": "cell",
             "optional": false,
-            "rest": false,
-            "fields": ["notes"]
+            "rest": false
           }
         ],
         "length": 1
@@ -3098,8 +3005,7 @@
             {
               "name": "opts",
               "optional": false,
-              "rest": false,
-              "fields": ["key", "chord", "bars", "ts", "contour", "jitter", "ctx"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3125,8 +3031,7 @@
             {
               "name": "cell",
               "optional": false,
-              "rest": false,
-              "fields": ["notes"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3139,8 +3044,7 @@
             {
               "name": "cell",
               "optional": false,
-              "rest": false,
-              "fields": ["notes"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3178,8 +3082,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 3
@@ -3192,14 +3095,12 @@
             {
               "name": "timeline",
               "optional": false,
-              "rest": false,
-              "fields": ["at", "segments"]
+              "rest": false
             },
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "bars",
@@ -3209,8 +3110,7 @@
             {
               "name": "ts",
               "optional": false,
-              "rest": false,
-              "fields": ["numerator", "denominator", "grouping", "toJSON"]
+              "rest": false
             }
           ],
           "length": 4
@@ -3228,8 +3128,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 2
@@ -3256,7 +3155,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["meters", "tempo", "key"]
+              "bag": ["meters", "tempo", "key"]
             }
           ],
           "length": 1
@@ -3317,8 +3216,7 @@
           {
             "name": "data",
             "optional": false,
-            "rest": false,
-            "fields": ["letter", "alter", "octave"]
+            "rest": false
           }
         ],
         "length": 1
@@ -3361,7 +3259,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 2
@@ -3380,7 +3278,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 2
@@ -3411,8 +3309,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["letter", "alter", "octave"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3431,7 +3328,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 1
@@ -3474,8 +3371,7 @@
             {
               "name": "tuning",
               "optional": true,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3494,7 +3390,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["spelling"]
+              "bag": ["spelling"]
             }
           ],
           "length": 2
@@ -3520,8 +3416,7 @@
             {
               "name": "interval",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3547,8 +3442,7 @@
             {
               "name": "instrument",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3568,8 +3462,7 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3582,8 +3475,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["letter", "alter", "octave"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3630,7 +3522,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["system"]
+              "bag": ["system"]
             }
           ],
           "length": 1
@@ -3706,8 +3598,7 @@
           {
             "name": "key",
             "optional": true,
-            "rest": false,
-            "fields": ["scale", "tonic", "variant", "toJSON"]
+            "rest": false
           }
         ],
         "length": 2
@@ -3726,8 +3617,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 2
@@ -3745,8 +3635,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 2
@@ -3759,8 +3648,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["chords", "key", "chordKeys"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3773,8 +3661,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["chords", "key", "chordKeys"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3916,8 +3803,7 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3931,7 +3817,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "voices",
                 "ranges",
                 "maxSpacing",
@@ -3952,14 +3838,13 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["applied", "neapolitan"]
+              "bag": ["applied", "neapolitan"]
             }
           ],
           "length": 2
@@ -3972,8 +3857,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -3986,13 +3870,13 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": ["applied", "neapolitan", "alternatives", "approach", "voicing"]
             }
           ],
           "length": 2
@@ -4012,13 +3896,13 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": ["voicing", "alternatives", "approach"]
             }
           ],
           "length": 2
@@ -4042,7 +3926,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["melodyPcs"]
+              "bag": ["melodyPcs"]
             }
           ],
           "length": 3
@@ -4081,8 +3965,7 @@
             {
               "name": "interval",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4095,8 +3978,7 @@
             {
               "name": "target",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4164,8 +4046,7 @@
           {
             "name": "data",
             "optional": false,
-            "rest": false,
-            "fields": ["events", "ts"]
+            "rest": false
           }
         ],
         "length": 1
@@ -4179,14 +4060,13 @@
             {
               "name": "ts",
               "optional": false,
-              "rest": false,
-              "fields": ["numerator", "denominator", "grouping", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["bars", "subdivision", "ctx"]
+              "bag": ["bars", "subdivision", "ctx"]
             }
           ],
           "length": 2
@@ -4204,8 +4084,7 @@
             {
               "name": "ts",
               "optional": false,
-              "rest": false,
-              "fields": ["numerator", "denominator", "grouping", "toJSON"]
+              "rest": false
             }
           ],
           "length": 2
@@ -4218,8 +4097,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["events", "ts"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4232,8 +4110,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["events", "ts"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4291,16 +4168,7 @@
             {
               "name": "ctx",
               "optional": true,
-              "rest": false,
-              "fields": [
-                "seed",
-                "complexity",
-                "rng",
-                "instruments",
-                "bpm",
-                "algorithmVersion",
-                "vocabulary"
-              ]
+              "rest": false
             }
           ],
           "length": 2
@@ -4337,16 +4205,7 @@
             {
               "name": "ctx",
               "optional": true,
-              "rest": false,
-              "fields": [
-                "seed",
-                "complexity",
-                "rng",
-                "instruments",
-                "bpm",
-                "algorithmVersion",
-                "vocabulary"
-              ]
+              "rest": false
             }
           ],
           "length": 3
@@ -4360,21 +4219,12 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["rate", "isOrnament"]
+              "bag": ["rate", "isOrnament"]
             },
             {
               "name": "ctx",
               "optional": true,
-              "rest": false,
-              "fields": [
-                "seed",
-                "complexity",
-                "rng",
-                "instruments",
-                "bpm",
-                "algorithmVersion",
-                "vocabulary"
-              ]
+              "rest": false
             }
           ],
           "length": 2
@@ -4387,16 +4237,7 @@
             {
               "name": "ctx",
               "optional": true,
-              "rest": false,
-              "fields": [
-                "seed",
-                "complexity",
-                "rng",
-                "instruments",
-                "bpm",
-                "algorithmVersion",
-                "vocabulary"
-              ]
+              "rest": false
             }
           ],
           "length": 1
@@ -4475,8 +4316,7 @@
           {
             "name": "data",
             "optional": false,
-            "rest": false,
-            "fields": ["notes", "meters", "tempo", "key"]
+            "rest": false
           }
         ],
         "length": 1
@@ -4496,7 +4336,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["meters", "tempo", "key"]
+              "bag": ["meters", "tempo", "key"]
             }
           ],
           "length": 2
@@ -4510,7 +4350,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["meters", "tempo", "key"]
+              "bag": ["meters", "tempo", "key"]
             }
           ],
           "length": 1
@@ -4534,7 +4374,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["meters", "tempo", "key"]
+              "bag": ["meters", "tempo", "key"]
             }
           ],
           "length": 3
@@ -4547,8 +4387,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["notes", "meters", "tempo", "key"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4561,8 +4400,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["notes", "meters", "tempo", "key"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4678,8 +4516,7 @@
             {
               "name": "interval",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4692,8 +4529,7 @@
             {
               "name": "meters",
               "optional": false,
-              "rest": false,
-              "fields": ["numerator", "denominator", "grouping", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4719,8 +4555,7 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4747,7 +4582,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["ts", "timing", "velocity", "accent", "baseVelocity", "ctx", "part"]
+              "bag": ["ts", "timing", "velocity", "accent", "baseVelocity", "ctx", "part"]
             }
           ],
           "length": 1
@@ -4761,7 +4596,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["style", "amount", "ts", "ctx"]
+              "bag": ["style", "amount", "ts", "ctx"]
             }
           ],
           "length": 1
@@ -4774,8 +4609,7 @@
             {
               "name": "template",
               "optional": false,
-              "rest": false,
-              "fields": ["subdivision", "slotsPerBar", "slots", "ts"]
+              "rest": false
             }
           ],
           "length": 1
@@ -4802,7 +4636,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "key",
                 "ts",
                 "meters",
@@ -4833,7 +4667,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "ts",
                 "meters",
                 "expectedKeyBeats",
@@ -4855,7 +4689,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["profile", "modes", "explain", "budget"]
+              "bag": ["profile", "modes", "explain", "budget"]
             }
           ],
           "length": 1
@@ -4869,7 +4703,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "ts",
                 "meters",
                 "key",
@@ -4894,7 +4728,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "ts",
                 "meters",
                 "key",
@@ -4919,7 +4753,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["ts", "meters", "unitBars", "threshold", "totalBeats", "budget"]
+              "bag": ["ts", "meters", "unitBars", "threshold", "totalBeats", "budget"]
             }
           ],
           "length": 1
@@ -4933,7 +4767,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["totalBeats", "cadenceBeats", "budget"]
+              "bag": ["totalBeats", "cadenceBeats", "budget"]
             }
           ],
           "length": 1
@@ -4947,7 +4781,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["minNotes", "maxNotes", "minOccurrences", "budget"]
+              "bag": ["minNotes", "maxNotes", "minOccurrences", "budget"]
             }
           ],
           "length": 1
@@ -4968,7 +4802,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["budget", "timeline", "melody"]
+              "bag": ["budget", "timeline", "melody"]
             }
           ],
           "length": 1
@@ -4982,7 +4816,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["budget", "totalBeats"]
+              "bag": ["budget", "totalBeats"]
             }
           ],
           "length": 1
@@ -4995,7 +4829,15 @@
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": [
+                "key",
+                "variationThreshold",
+                "budget",
+                "minNotes",
+                "maxNotes",
+                "minOccurrences"
+              ]
             }
           ],
           "length": 1
@@ -5008,26 +4850,13 @@
             {
               "name": "plan",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "planVersion",
-                "seed",
-                "algorithmVersion",
-                "keys",
-                "meters",
-                "span",
-                "sections",
-                "phrases",
-                "harmony",
-                "motifs",
-                "rhythm"
-              ]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["budget"]
+              "bag": ["budget"]
             }
           ],
           "length": 2
@@ -5040,8 +4869,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5061,8 +4889,7 @@
             {
               "name": "instrument",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5076,7 +4903,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["allowNonPositiveDuration", "tieBreak", "budget", "name"]
+              "bag": ["allowNonPositiveDuration", "tieBreak", "budget", "name"]
             }
           ],
           "length": 1
@@ -5216,8 +5043,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["bpm"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5230,8 +5056,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["bpm"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5360,8 +5185,7 @@
           {
             "name": "data",
             "optional": false,
-            "rest": false,
-            "fields": ["segments", "totalBeats", "keys", "segmentConfidence"]
+            "rest": false
           }
         ],
         "length": 1
@@ -5385,8 +5209,7 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             }
           ],
           "length": 3
@@ -5405,7 +5228,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "key",
                 "ts",
                 "meters",
@@ -5446,8 +5269,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["segments", "totalBeats", "keys", "segmentConfidence"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5460,8 +5282,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["segments", "totalBeats", "keys", "segmentConfidence"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5525,7 +5346,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["basis"]
+              "bag": ["basis"]
             }
           ],
           "length": 1
@@ -5546,7 +5367,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "ts",
                 "meters",
                 "expectedKeyBeats",
@@ -5567,14 +5388,13 @@
             {
               "name": "key",
               "optional": true,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["applied", "neapolitan"]
+              "bag": ["applied", "neapolitan"]
             }
           ],
           "length": 2
@@ -5618,8 +5438,7 @@
             {
               "name": "interval",
               "optional": false,
-              "rest": false,
-              "fields": ["toJSON"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5667,8 +5486,7 @@
           {
             "name": "table",
             "optional": false,
-            "rest": false,
-            "fields": ["refStep", "refFreq", "divisions"]
+            "rest": false
           }
         ],
         "length": 1,
@@ -5683,8 +5501,7 @@
             {
               "name": "table",
               "optional": false,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5727,8 +5544,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5741,8 +5557,7 @@
             {
               "name": "data",
               "optional": false,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5837,14 +5652,12 @@
             {
               "name": "note",
               "optional": false,
-              "rest": false,
-              "fields": ["letter", "alter", "octave", "toJSON"]
+              "rest": false
             },
             {
               "name": "tuning",
               "optional": true,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5862,8 +5675,7 @@
             {
               "name": "tuning",
               "optional": true,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5881,8 +5693,7 @@
             {
               "name": "tuning",
               "optional": true,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5900,8 +5711,7 @@
             {
               "name": "tuning",
               "optional": true,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5919,8 +5729,7 @@
             {
               "name": "tuning",
               "optional": true,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5938,8 +5747,7 @@
             {
               "name": "tuning",
               "optional": true,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -5957,8 +5765,7 @@
             {
               "name": "tuning",
               "optional": true,
-              "rest": false,
-              "fields": ["refStep", "refFreq", "divisions"]
+              "rest": false
             }
           ],
           "length": 1
@@ -6029,23 +5836,13 @@
             {
               "name": "chord",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "rootPc",
-                "quality",
-                "intervals",
-                "bassPc",
-                "rootSpelling",
-                "bassSpelling",
-                "toneSpellings",
-                "toJSON"
-              ]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["style", "topNote", "octave", "rootless"]
+              "bag": ["style", "topNote", "octave", "rootless"]
             }
           ],
           "length": 2
@@ -6058,23 +5855,13 @@
             {
               "name": "chord",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "rootPc",
-                "quality",
-                "intervals",
-                "bassPc",
-                "rootSpelling",
-                "bassSpelling",
-                "toneSpellings",
-                "toJSON"
-              ]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "voices",
                 "ranges",
                 "maxSpacing",
@@ -6141,23 +5928,12 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "chord",
               "optional": true,
-              "rest": false,
-              "fields": [
-                "rootPc",
-                "quality",
-                "intervals",
-                "bassPc",
-                "rootSpelling",
-                "bassSpelling",
-                "toneSpellings",
-                "toJSON"
-              ]
+              "rest": false
             }
           ],
           "length": 2
@@ -6170,23 +5946,13 @@
             {
               "name": "chord",
               "optional": false,
-              "rest": false,
-              "fields": [
-                "rootPc",
-                "quality",
-                "intervals",
-                "bassPc",
-                "rootSpelling",
-                "bassSpelling",
-                "toneSpellings",
-                "toJSON"
-              ]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": [
+              "bag": [
                 "voices",
                 "ranges",
                 "maxSpacing",
@@ -6230,14 +5996,13 @@
             {
               "name": "key",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["ranges", "maxSpacing"]
+              "bag": ["ranges", "maxSpacing"]
             }
           ],
           "length": 4
@@ -6260,14 +6025,13 @@
             {
               "name": "mode",
               "optional": false,
-              "rest": false,
-              "fields": ["scale", "tonic", "variant", "toJSON"]
+              "rest": false
             },
             {
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["durations", "counterpointAbove"]
+              "bag": ["durations", "counterpointAbove"]
             }
           ],
           "length": 4
@@ -6285,7 +6049,8 @@
             {
               "name": "opts",
               "optional": true,
-              "rest": false
+              "rest": false,
+              "bag": ["leadAttacks", "counterAttacks", "countFourths", "key"]
             }
           ],
           "length": 2
@@ -6309,7 +6074,7 @@
               "name": "opts",
               "optional": true,
               "rest": false,
-              "fields": ["suggestions", "partners"]
+              "bag": ["suggestions", "partners"]
             }
           ],
           "length": 3
@@ -6406,7 +6171,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "key",
             "keys",
             "timeline",
@@ -6432,28 +6197,18 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
-          "rest": false
+          "rest": false,
+          "bag": ["applied", "neapolitan", "alternatives"]
         }
       ],
       "length": 2
@@ -6477,8 +6232,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -6498,7 +6252,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["ts", "meters", "key", "timeline", "melody", "totalBeats", "budget"]
+          "bag": ["ts", "meters", "key", "timeline", "melody", "totalBeats", "budget"]
         }
       ],
       "length": 2
@@ -6518,7 +6272,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["ts", "meters", "totalBeats", "budget"]
+          "bag": ["ts", "meters", "totalBeats", "budget"]
         }
       ],
       "length": 1
@@ -6542,8 +6296,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "otherVoicesAtBeat",
@@ -6567,14 +6320,12 @@
         {
           "name": "template",
           "optional": false,
-          "rest": false,
-          "fields": ["subdivision", "slotsPerBar", "slots", "ts"]
+          "rest": false
         },
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -6588,8 +6339,7 @@
         {
           "name": "timeline",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "segments"]
+          "rest": false
         },
         {
           "name": "name",
@@ -6813,8 +6563,7 @@
         {
           "name": "event",
           "optional": false,
-          "rest": false,
-          "fields": ["pitch", "startBeat", "durationBeat", "velocity", "articulation"]
+          "rest": false
         },
         {
           "name": "name",
@@ -6825,7 +6574,7 @@
           "name": "options",
           "optional": true,
           "rest": false,
-          "fields": ["allowNonPositiveDuration", "budget", "minStartBeat"]
+          "bag": ["allowNonPositiveDuration", "budget", "minStartBeat"]
         }
       ],
       "length": 1
@@ -6850,7 +6599,7 @@
           "name": "options",
           "optional": true,
           "rest": false,
-          "fields": ["allowNonPositiveDuration", "budget", "minStartBeat"]
+          "bag": ["allowNonPositiveDuration", "budget", "minStartBeat"]
         }
       ],
       "length": 1
@@ -6960,8 +6709,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping"]
+          "rest": false
         },
         {
           "name": "name",
@@ -6980,19 +6728,7 @@
         {
           "name": "entry",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "id",
-            "genre",
-            "material",
-            "articulations",
-            "fitsOver",
-            "sections",
-            "tempoRange",
-            "ts",
-            "difficulty",
-            "provenance"
-          ]
+          "rest": false
         },
         {
           "name": "label",
@@ -7016,8 +6752,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7041,8 +6776,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -7056,23 +6790,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7086,17 +6809,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "scaleName",
@@ -7107,7 +6820,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["resolvesTo"]
+          "bag": ["resolvesTo"]
         }
       ],
       "length": 2
@@ -7121,17 +6834,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "scaleName",
@@ -7142,7 +6845,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["use"]
+          "bag": ["use"]
         }
       ],
       "length": 2
@@ -7161,8 +6864,7 @@
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7176,14 +6878,12 @@
         {
           "name": "pos",
           "optional": false,
-          "rest": false,
-          "fields": ["bar", "beat"]
+          "rest": false
         },
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7197,14 +6897,12 @@
         {
           "name": "pos",
           "optional": false,
-          "rest": false,
-          "fields": ["bar", "beat"]
+          "rest": false
         },
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7223,8 +6921,7 @@
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7243,8 +6940,7 @@
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7258,8 +6954,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -7278,8 +6973,7 @@
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7299,7 +6993,7 @@
           "name": "options",
           "optional": true,
           "rest": false,
-          "fields": ["beatUnit"]
+          "bag": ["beatUnit"]
         }
       ],
       "length": 1
@@ -7357,7 +7051,7 @@
           "name": "options",
           "optional": true,
           "rest": false,
-          "fields": ["beatUnit"]
+          "bag": ["beatUnit"]
         }
       ],
       "length": 1
@@ -7371,23 +7065,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7401,8 +7084,7 @@
         {
           "name": "profile",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         },
         {
           "name": "pitch",
@@ -7445,8 +7127,7 @@
         {
           "name": "tuning",
           "optional": true,
-          "rest": false,
-          "fields": ["refStep", "refFreq", "divisions"]
+          "rest": false
         }
       ],
       "length": 1
@@ -7465,8 +7146,7 @@
         {
           "name": "tuning",
           "optional": true,
-          "rest": false,
-          "fields": ["refStep", "refFreq", "divisions"]
+          "rest": false
         }
       ],
       "length": 1
@@ -7504,14 +7184,13 @@
         {
           "name": "keyLike",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["ranges", "maxSpacing"]
+          "bag": ["ranges", "maxSpacing"]
         }
       ],
       "length": 4
@@ -7540,14 +7219,13 @@
         {
           "name": "modeLike",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["durations", "counterpointAbove"]
+          "bag": ["durations", "counterpointAbove"]
         }
       ],
       "length": 5
@@ -7571,8 +7249,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -7586,16 +7263,7 @@
         {
           "name": "span",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "startBeat",
-            "bassPc",
-            "intervals",
-            "degree",
-            "secondaryDominant"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -7609,8 +7277,7 @@
         {
           "name": "spec",
           "optional": false,
-          "rest": false,
-          "fields": ["rootPc", "base", "seventh", "alterations", "additions", "omissions", "bassPc"]
+          "rest": false
         }
       ],
       "length": 1
@@ -7624,22 +7291,13 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["includeBass"]
+          "bag": ["includeBass"]
         }
       ],
       "length": 1
@@ -7661,17 +7319,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "limit",
@@ -7690,17 +7338,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -7714,8 +7352,7 @@
         {
           "name": "spec",
           "optional": false,
-          "rest": false,
-          "fields": ["rootPc", "base", "seventh", "alterations", "additions", "omissions", "bassPc"]
+          "rest": false
         }
       ],
       "length": 1
@@ -7729,16 +7366,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -7752,8 +7380,7 @@
         {
           "name": "spec",
           "optional": false,
-          "rest": false,
-          "fields": ["rootPc", "base", "seventh", "alterations", "additions", "omissions", "bassPc"]
+          "rest": false
         }
       ],
       "length": 1
@@ -7792,7 +7419,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "key",
             "ts",
             "meters",
@@ -7816,29 +7443,18 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["applied", "neapolitan"]
+          "bag": ["applied", "neapolitan"]
         }
       ],
       "length": 2
@@ -7857,16 +7473,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         }
       ],
       "length": 2
@@ -7923,8 +7530,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7938,8 +7544,7 @@
         {
           "name": "interval",
           "optional": false,
-          "rest": false,
-          "fields": ["number", "quality", "semitones", "descending"]
+          "rest": false
         },
         {
           "name": "twoVoice",
@@ -7958,14 +7563,12 @@
         {
           "name": "a",
           "optional": false,
-          "rest": false,
-          "fields": ["notes", "intervals", "rhythm", "occurrences", "rationale"]
+          "rest": false
         },
         {
           "name": "b",
           "optional": false,
-          "rest": false,
-          "fields": ["notes", "intervals", "rhythm", "occurrences", "rationale"]
+          "rest": false
         }
       ],
       "length": 2
@@ -7979,20 +7582,18 @@
         {
           "name": "a",
           "optional": false,
-          "rest": false,
-          "fields": ["profileVersion", "span", "meters", "form", "harmony", "melody"]
+          "rest": false
         },
         {
           "name": "b",
           "optional": false,
-          "rest": false,
-          "fields": ["profileVersion", "span", "meters", "form", "harmony", "melody"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["budget"]
+          "bag": ["budget"]
         }
       ],
       "length": 3
@@ -8012,7 +7613,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "key",
             "keys",
             "timeline",
@@ -8044,7 +7645,7 @@
           "name": "options",
           "optional": true,
           "rest": false,
-          "fields": ["allowNonPositiveDuration", "tieBreak", "budget", "name"]
+          "bag": ["allowNonPositiveDuration", "tieBreak", "budget", "name"]
         }
       ],
       "length": 1
@@ -8086,26 +7687,22 @@
         {
           "name": "aPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "aCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 4
@@ -8119,26 +7716,22 @@
         {
           "name": "aPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "aCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "strictness",
@@ -8157,26 +7750,22 @@
         {
           "name": "aPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "aCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 4
@@ -8190,26 +7779,22 @@
         {
           "name": "aPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "aCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 4
@@ -8223,26 +7808,22 @@
         {
           "name": "aPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "aCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "bCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 4
@@ -8256,14 +7837,12 @@
         {
           "name": "a",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "b",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "twoVoice",
@@ -8282,14 +7861,12 @@
         {
           "name": "upper",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "lower",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 2
@@ -8303,26 +7880,22 @@
         {
           "name": "upperPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "upperCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "lowerPrev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "lowerCur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 4
@@ -8341,14 +7914,12 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": ["rhythmic", "ornament", "isOrnament", "rate", "spanSteps", "ts"]
+          "rest": false
         },
         {
           "name": "draw",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "prob", "range", "float"]
+          "rest": false
         },
         {
           "name": "path",
@@ -8367,14 +7938,13 @@
         {
           "name": "reference",
           "optional": false,
-          "rest": false,
-          "fields": ["profileVersion", "span", "meters", "form", "harmony", "melody"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["key", "register", "preserve", "ctx", "budget"]
+          "bag": ["key", "register", "preserve", "ctx", "budget"]
         }
       ],
       "length": 2
@@ -8407,44 +7977,23 @@
         {
           "name": "from",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "to",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["voicing", "alternatives", "approach"]
+          "bag": ["voicing", "alternatives", "approach"]
         }
       ],
       "length": 3
@@ -8458,14 +8007,12 @@
         {
           "name": "timeline",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "segments"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -8485,7 +8032,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["input", "bassPc"]
+          "bag": ["input", "bassPc"]
         }
       ],
       "length": 1
@@ -8505,7 +8052,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["input", "bassPc"]
+          "bag": ["input", "bassPc"]
         }
       ],
       "length": 1
@@ -8525,7 +8072,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["weights", "profile", "modes", "explain", "budget"]
+          "bag": ["weights", "profile", "modes", "explain", "budget"]
         }
       ],
       "length": 1
@@ -8545,7 +8092,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["weights", "profile", "modes", "explain", "budget"]
+          "bag": ["weights", "profile", "modes", "explain", "budget"]
         }
       ],
       "length": 1
@@ -8565,7 +8112,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["profile", "modes", "explain", "budget"]
+          "bag": ["profile", "modes", "explain", "budget"]
         }
       ],
       "length": 1
@@ -8585,7 +8132,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "ts",
             "meters",
             "expectedKeyBeats",
@@ -8621,20 +8168,17 @@
         {
           "name": "cell",
           "optional": false,
-          "rest": false,
-          "fields": ["notes"]
+          "rest": false
         },
         {
           "name": "timeline",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "segments"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "bars",
@@ -8644,8 +8188,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 5
@@ -8673,8 +8216,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -8693,8 +8235,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -8713,8 +8254,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -8728,14 +8268,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -8815,14 +8353,13 @@
         {
           "name": "duration",
           "optional": false,
-          "rest": false,
-          "fields": ["base", "dots", "tuplet"]
+          "rest": false
         },
         {
           "name": "options",
           "optional": true,
           "rest": false,
-          "fields": ["beatUnit"]
+          "bag": ["beatUnit"]
         }
       ],
       "length": 1
@@ -8884,14 +8421,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -8905,17 +8440,7 @@
         {
           "name": "q",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "profile",
-            "chord",
-            "key",
-            "otherVoices",
-            "prevPitch",
-            "strongBeat",
-            "vocalLow",
-            "vocalHigh"
-          ]
+          "rest": false
         },
         {
           "name": "pitchLow",
@@ -8944,26 +8469,13 @@
         {
           "name": "plan",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "planVersion",
-            "seed",
-            "algorithmVersion",
-            "keys",
-            "meters",
-            "span",
-            "sections",
-            "phrases",
-            "harmony",
-            "motifs",
-            "rhythm"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["budget"]
+          "bag": ["budget"]
         }
       ],
       "length": 3
@@ -8977,24 +8489,13 @@
         {
           "name": "q",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "profile",
-            "candidatePitch",
-            "prevPitch",
-            "chord",
-            "key",
-            "otherVoices",
-            "strongBeat",
-            "vocalLow",
-            "vocalHigh"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["suggestions", "partners"]
+          "bag": ["suggestions", "partners"]
         }
       ],
       "length": 1
@@ -9008,14 +8509,12 @@
         {
           "name": "upper",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "lower",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "maxSemitones",
@@ -9034,28 +8533,18 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
-          "rest": false
+          "rest": false,
+          "bag": ["applied", "neapolitan", "alternatives"]
         }
       ],
       "length": 2
@@ -9074,8 +8563,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         },
         {
           "name": "subdivision",
@@ -9100,7 +8588,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["minNotes", "maxNotes", "minOccurrences", "budget"]
+          "bag": ["minNotes", "maxNotes", "minOccurrences", "budget"]
         }
       ],
       "length": 1
@@ -9114,23 +8602,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9144,8 +8621,7 @@
         {
           "name": "bass",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "figures",
@@ -9155,8 +8631,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -9170,8 +8645,7 @@
         {
           "name": "profile",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         },
         {
           "name": "pitch",
@@ -9190,25 +8664,12 @@
         {
           "name": "entry",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "id",
-            "genre",
-            "material",
-            "articulations",
-            "fitsOver",
-            "sections",
-            "tempoRange",
-            "ts",
-            "difficulty",
-            "provenance"
-          ]
+          "rest": false
         },
         {
           "name": "query",
           "optional": false,
-          "rest": false,
-          "fields": ["genre", "section", "bpm", "ts", "difficulty", "quality", "articulations"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9227,8 +8688,7 @@
         {
           "name": "profile",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9247,8 +8707,7 @@
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         },
         {
           "name": "decimals",
@@ -9267,22 +8726,13 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
-          "rest": false
+          "rest": false,
+          "bag": ["system", "flats"]
         }
       ],
       "length": 2
@@ -9296,14 +8746,13 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["tonic", "mode"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -9317,14 +8766,13 @@
         {
           "name": "note",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -9338,14 +8786,13 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["grouping"]
+          "bag": ["grouping"]
         }
       ],
       "length": 1
@@ -9364,8 +8811,7 @@
         {
           "name": "tuning",
           "optional": true,
-          "rest": false,
-          "fields": ["refStep", "refFreq", "divisions"]
+          "rest": false
         }
       ],
       "length": 1
@@ -9379,23 +8825,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9409,8 +8844,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": ["segments", "key", "ts", "style", "octave", "instrument", "ctx", "budget"]
+          "rest": false
         }
       ],
       "length": 1
@@ -9424,22 +8858,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "melody",
-            "timeline",
-            "chordAt",
-            "chordChangeBeats",
-            "key",
-            "ts",
-            "register",
-            "rhythm",
-            "profile",
-            "weights",
-            "pitchLow",
-            "pitchHigh",
-            "ctx"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -9453,20 +8872,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "bars",
-            "style",
-            "section",
-            "ts",
-            "fills",
-            "feel",
-            "role",
-            "ctx",
-            "nextSection",
-            "euclideanKick",
-            "budget"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -9480,26 +8886,13 @@
         {
           "name": "plan",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "planVersion",
-            "seed",
-            "algorithmVersion",
-            "keys",
-            "meters",
-            "span",
-            "sections",
-            "phrases",
-            "harmony",
-            "motifs",
-            "rhythm"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["ctx", "budget"]
+          "bag": ["ctx", "budget"]
         }
       ],
       "length": 2
@@ -9513,8 +8906,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": ["key", "chord", "bars", "ts", "contour", "jitter", "ctx"]
+          "rest": false
         }
       ],
       "length": 1
@@ -9528,8 +8920,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": ["key", "style", "bars", "ts", "presetId", "preset", "ext", "ctx"]
+          "rest": false
         }
       ],
       "length": 1
@@ -9543,14 +8934,13 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["bars", "subdivision", "ctx"]
+          "bag": ["bars", "subdivision", "ctx"]
         }
       ],
       "length": 1
@@ -9569,8 +8959,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9603,18 +8992,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "melody",
-            "key",
-            "harmonicRhythm",
-            "ts",
-            "reharmonize",
-            "placement",
-            "phraseEnds",
-            "ctx",
-            "budget"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -9634,7 +9012,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["ts", "timing", "velocity", "accent", "baseVelocity", "ctx", "part"]
+          "bag": ["ts", "timing", "velocity", "accent", "baseVelocity", "ctx", "part"]
         }
       ],
       "length": 1
@@ -9653,14 +9031,13 @@
         {
           "name": "meter",
           "optional": true,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["totalBeats", "cadenceBeats", "budget"]
+          "bag": ["totalBeats", "cadenceBeats", "budget"]
         }
       ],
       "length": 2
@@ -9679,8 +9056,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": ["atBeat", "interval", "key", "answer", "invert", "from", "to", "velocityScale"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9694,8 +9070,7 @@
         {
           "name": "rng",
           "optional": false,
-          "rest": false,
-          "fields": ["at"]
+          "rest": false
         },
         {
           "name": "complexity",
@@ -9719,8 +9094,7 @@
         {
           "name": "profile",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -9734,8 +9108,7 @@
         {
           "name": "instrument",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -9754,16 +9127,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         }
       ],
       "length": 2
@@ -9796,14 +9160,12 @@
         {
           "name": "prev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "cur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9817,23 +9179,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9852,16 +9203,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         }
       ],
       "length": 2
@@ -9875,8 +9217,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -9909,23 +9250,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9967,14 +9297,12 @@
         {
           "name": "prev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "cur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 2
@@ -9988,20 +9316,17 @@
         {
           "name": "prev",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "cur",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -10043,8 +9368,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -10077,8 +9401,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10092,8 +9415,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["rootPc", "modeMask12"]
+          "rest": false
         }
       ],
       "length": 1
@@ -10112,8 +9434,7 @@
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10160,14 +9481,12 @@
         {
           "name": "a",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant"]
+          "rest": false
         },
         {
           "name": "b",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10181,14 +9500,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10208,7 +9525,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "ts",
             "meters",
             "expectedKeyBeats",
@@ -10282,8 +9599,7 @@
         {
           "name": "notes",
           "optional": false,
-          "rest": false,
-          "fields": ["notes", "intervals", "rhythm", "occurrences", "rationale"]
+          "rest": false
         }
       ],
       "length": 1
@@ -10297,14 +9613,12 @@
         {
           "name": "a",
           "optional": false,
-          "rest": false,
-          "fields": ["notes", "intervals", "rhythm", "occurrences", "rationale"]
+          "rest": false
         },
         {
           "name": "b",
           "optional": false,
-          "rest": false,
-          "fields": ["notes", "intervals", "rhythm", "occurrences", "rationale"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10342,8 +9656,7 @@
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10362,8 +9675,7 @@
         {
           "name": "meter",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10410,8 +9722,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -10450,7 +9761,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["key", "variationThreshold", "budget"]
+          "bag": ["key", "variationThreshold", "budget"]
         }
       ],
       "length": 2
@@ -10464,8 +9775,7 @@
         {
           "name": "cell",
           "optional": false,
-          "rest": false,
-          "fields": ["notes"]
+          "rest": false
         }
       ],
       "length": 1
@@ -10512,8 +9822,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10532,8 +9841,7 @@
         {
           "name": "tuning",
           "optional": true,
-          "rest": false,
-          "fields": ["refStep", "refFreq", "divisions"]
+          "rest": false
         }
       ],
       "length": 1
@@ -10547,23 +9855,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10582,23 +9879,13 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "voices",
             "ranges",
             "maxSpacing",
@@ -10634,8 +9921,7 @@
         {
           "name": "note",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 1
@@ -10649,8 +9935,7 @@
         {
           "name": "note",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 1
@@ -10684,7 +9969,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["style", "amount", "ts", "ctx"]
+          "bag": ["style", "amount", "ts", "ctx"]
         }
       ],
       "length": 1
@@ -10713,8 +9998,7 @@
         {
           "name": "draw",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "prob", "range", "float"]
+          "rest": false
         },
         {
           "name": "path",
@@ -10733,14 +10017,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10760,7 +10042,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -10794,7 +10076,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -10814,7 +10096,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -10842,8 +10124,7 @@
         {
           "name": "timeline",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "segments"]
+          "rest": false
         },
         {
           "name": "notes",
@@ -10854,7 +10135,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "ts",
             "meters",
             "key",
@@ -10884,16 +10165,7 @@
         {
           "name": "ctx",
           "optional": true,
-          "rest": false,
-          "fields": [
-            "seed",
-            "complexity",
-            "rng",
-            "instruments",
-            "bpm",
-            "algorithmVersion",
-            "vocabulary"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -10912,14 +10184,12 @@
         {
           "name": "query",
           "optional": false,
-          "rest": false,
-          "fields": ["genre", "section", "bpm", "ts", "difficulty", "quality", "articulations"]
+          "rest": false
         },
         {
           "name": "draw",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "prob", "range", "float"]
+          "rest": false
         },
         {
           "name": "path",
@@ -10957,8 +10227,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10972,14 +10241,12 @@
         {
           "name": "from",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "to",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -10993,8 +10260,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": ["bars", "genre", "section", "ts", "ctx", "rate", "feel", "velocity", "budget"]
+          "rest": false
         }
       ],
       "length": 1
@@ -11013,14 +10279,12 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": ["genre", "difficulty", "ts", "octave", "instrument", "ctx", "budget"]
+          "rest": false
         }
       ],
       "length": 3
@@ -11034,20 +10298,7 @@
         {
           "name": "plan",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "planVersion",
-            "seed",
-            "algorithmVersion",
-            "keys",
-            "meters",
-            "span",
-            "sections",
-            "phrases",
-            "harmony",
-            "motifs",
-            "rhythm"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -11066,8 +10317,7 @@
         {
           "name": "profile",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         },
         {
           "name": "bpm",
@@ -11105,21 +10355,7 @@
         {
           "name": "overrides",
           "optional": true,
-          "rest": false,
-          "fields": [
-            "imperfectConsonance",
-            "perfectConsonance",
-            "dissonance",
-            "chordTone",
-            "contraryMotion",
-            "obliqueMotion",
-            "similarMotion",
-            "parallelImperfect",
-            "stepwise",
-            "melodicDistance",
-            "forbiddenLeap",
-            "registerDrift"
-          ]
+          "rest": false
         }
       ],
       "length": 2
@@ -11155,8 +10391,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -11170,8 +10405,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -11204,8 +10438,7 @@
         {
           "name": "bass",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "figures",
@@ -11215,8 +10448,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -11230,20 +10462,18 @@
         {
           "name": "timeline",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "segments"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["basis"]
+          "bag": ["basis"]
         }
       ],
       "length": 2
@@ -11257,20 +10487,17 @@
         {
           "name": "a",
           "optional": false,
-          "rest": false,
-          "fields": ["notes", "intervals", "rhythm", "occurrences", "rationale"]
+          "rest": false
         },
         {
           "name": "b",
           "optional": false,
-          "rest": false,
-          "fields": ["notes", "intervals", "rhythm", "occurrences", "rationale"]
+          "rest": false
         },
         {
           "name": "keyLike",
           "optional": true,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -11284,14 +10511,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11305,14 +10530,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11359,16 +10582,7 @@
         {
           "name": "input",
           "optional": true,
-          "rest": false,
-          "fields": [
-            "seed",
-            "complexity",
-            "rng",
-            "instruments",
-            "bpm",
-            "algorithmVersion",
-            "vocabulary"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -11382,8 +10596,7 @@
         {
           "name": "value",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -11397,8 +10610,7 @@
         {
           "name": "opts",
           "optional": false,
-          "rest": false,
-          "fields": ["ts", "meters"]
+          "rest": false
         },
         {
           "name": "name",
@@ -11436,8 +10648,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11480,17 +10691,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "chordId",
@@ -11514,8 +10715,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11553,8 +10753,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11573,8 +10772,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11612,8 +10810,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant"]
+          "rest": false
         }
       ],
       "length": 1
@@ -11627,8 +10824,7 @@
         {
           "name": "scale",
           "optional": false,
-          "rest": false,
-          "fields": ["rootPc", "modeMask12"]
+          "rest": false
         }
       ],
       "length": 1
@@ -11642,8 +10838,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -11676,8 +10871,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11691,17 +10885,7 @@
         {
           "name": "target",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -11740,7 +10924,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["ts", "meters", "unitBars", "threshold", "totalBeats", "budget"]
+          "bag": ["ts", "meters", "unitBars", "threshold", "totalBeats", "budget"]
         }
       ],
       "length": 1
@@ -11759,8 +10943,7 @@
         {
           "name": "query",
           "optional": false,
-          "rest": false,
-          "fields": ["genre", "section", "bpm", "ts", "difficulty", "quality", "articulations"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11784,8 +10967,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -11813,16 +10995,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         },
         {
           "name": "startBeat",
@@ -11846,8 +11019,7 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11861,28 +11033,17 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         },
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -11896,22 +11057,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         },
         {
           "name": "root",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -11930,20 +11081,18 @@
         {
           "name": "timeline",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "segments"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["tonic", "budget"]
+          "bag": ["tonic", "budget"]
         }
       ],
       "length": 3
@@ -11962,20 +11111,17 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "context",
           "optional": true,
-          "rest": false,
-          "fields": ["chord", "chordRoot", "previous", "next"]
+          "rest": false
         }
       ],
       "length": 4
@@ -11994,20 +11140,17 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "context",
           "optional": true,
-          "rest": false,
-          "fields": ["chord", "chordRoot", "previous", "next"]
+          "rest": false
         }
       ],
       "length": 4
@@ -12026,14 +11169,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -12047,14 +11188,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -12073,22 +11212,12 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -12102,14 +11231,12 @@
         {
           "name": "a",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "b",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         }
       ],
       "length": 2
@@ -12123,8 +11250,7 @@
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["rootPc", "modeMask12"]
+          "rest": false
         }
       ],
       "length": 1
@@ -12143,8 +11269,7 @@
         {
           "name": "tuning",
           "optional": true,
-          "rest": false,
-          "fields": ["refStep", "refFreq", "divisions"]
+          "rest": false
         }
       ],
       "length": 1
@@ -12163,8 +11288,7 @@
         {
           "name": "tuning",
           "optional": true,
-          "rest": false,
-          "fields": ["refStep", "refFreq", "divisions"]
+          "rest": false
         }
       ],
       "length": 1
@@ -12192,14 +11316,12 @@
         {
           "name": "tonic",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -12213,29 +11335,18 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "key",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["melodyPcs"]
+          "bag": ["melodyPcs"]
         }
       ],
       "length": 3
@@ -12249,8 +11360,7 @@
         {
           "name": "scale",
           "optional": false,
-          "rest": false,
-          "fields": ["rootPc", "modeMask12"]
+          "rest": false
         }
       ],
       "length": 1
@@ -12322,14 +11432,12 @@
         {
           "name": "amount",
           "optional": false,
-          "rest": false,
-          "fields": ["amount", "ts"]
+          "rest": false
         },
         {
           "name": "draw",
           "optional": false,
-          "rest": false,
-          "fields": ["at", "prob", "range", "float"]
+          "rest": false
         },
         {
           "name": "path",
@@ -12372,7 +11480,21 @@
         {
           "name": "opts",
           "optional": true,
-          "rest": false
+          "rest": false,
+          "bag": [
+            "key",
+            "keys",
+            "timeline",
+            "harmonyTracks",
+            "minSeverity",
+            "ts",
+            "meters",
+            "pickupBeats",
+            "harmonicRhythm",
+            "profile",
+            "budget",
+            "step"
+          ]
         }
       ],
       "length": 1
@@ -12391,21 +11513,26 @@
         {
           "name": "analysis",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "keys",
-            "prevailingKey",
-            "timeline",
-            "segmentConfidence",
-            "cadences",
-            "tracks",
-            "conflicts"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
-          "rest": false
+          "rest": false,
+          "bag": [
+            "key",
+            "keys",
+            "timeline",
+            "harmonyTracks",
+            "minSeverity",
+            "ts",
+            "meters",
+            "pickupBeats",
+            "harmonicRhythm",
+            "profile",
+            "budget",
+            "step"
+          ]
         }
       ],
       "length": 2
@@ -12429,8 +11556,7 @@
         {
           "name": "ts",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         }
       ],
       "length": 3
@@ -12463,17 +11589,7 @@
         {
           "name": "value",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         }
       ],
       "length": 1
@@ -12487,8 +11603,7 @@
         {
           "name": "value",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         },
         {
           "name": "name",
@@ -12507,8 +11622,7 @@
         {
           "name": "value",
           "optional": false,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -12522,8 +11636,7 @@
         {
           "name": "value",
           "optional": false,
-          "rest": false,
-          "fields": ["numerator", "denominator", "grouping", "toJSON"]
+          "rest": false
         },
         {
           "name": "name",
@@ -12542,8 +11655,7 @@
         {
           "name": "value",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -12557,14 +11669,12 @@
         {
           "name": "note",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "instrument",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -12578,8 +11688,7 @@
         {
           "name": "value",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         }
       ],
       "length": 1
@@ -12593,8 +11702,7 @@
         {
           "name": "value",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         },
         {
           "name": "name",
@@ -12627,14 +11735,12 @@
         {
           "name": "note",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "instrument",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -12648,8 +11754,7 @@
         {
           "name": "cell",
           "optional": false,
-          "rest": false,
-          "fields": ["notes"]
+          "rest": false
         },
         {
           "name": "t",
@@ -12664,8 +11769,7 @@
         {
           "name": "key",
           "optional": true,
-          "rest": false,
-          "fields": ["scale", "tonic", "variant", "toJSON"]
+          "rest": false
         }
       ],
       "length": 4
@@ -12679,14 +11783,12 @@
         {
           "name": "given",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave", "toJSON"]
+          "rest": false
         },
         {
           "name": "named",
           "optional": false,
-          "rest": false,
-          "fields": ["toJSON"]
+          "rest": false
         }
       ],
       "length": 2
@@ -12700,16 +11802,7 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings"
-          ]
+          "rest": false
         },
         {
           "name": "semitones",
@@ -12738,7 +11831,8 @@
         {
           "name": "opts",
           "optional": true,
-          "rest": false
+          "rest": false,
+          "bag": ["system", "flats"]
         }
       ],
       "length": 3
@@ -12752,8 +11846,7 @@
         {
           "name": "note",
           "optional": false,
-          "rest": false,
-          "fields": ["letter", "alter", "octave"]
+          "rest": false
         },
         {
           "name": "semitones",
@@ -12764,7 +11857,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["spelling"]
+          "bag": ["spelling"]
         }
       ],
       "length": 3
@@ -12784,7 +11877,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -12818,7 +11911,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -12838,7 +11931,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -12872,7 +11965,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["system"]
+          "bag": ["system"]
         }
       ],
       "length": 2
@@ -12938,23 +12031,13 @@
         {
           "name": "chord",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "voices",
             "ranges",
             "maxSpacing",
@@ -12976,23 +12059,13 @@
         {
           "name": "given",
           "optional": false,
-          "rest": false,
-          "fields": [
-            "rootPc",
-            "quality",
-            "intervals",
-            "bassPc",
-            "rootSpelling",
-            "bassSpelling",
-            "toneSpellings",
-            "toJSON"
-          ]
+          "rest": false
         },
         {
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["style", "topNote", "octave", "rootless"]
+          "bag": ["style", "topNote", "octave", "rootless"]
         }
       ],
       "length": 2
@@ -13017,7 +12090,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": ["leadAttacks", "counterAttacks", "countFourths"]
+          "bag": ["leadAttacks", "counterAttacks", "countFourths"]
         }
       ],
       "length": 3
@@ -13056,7 +12129,7 @@
           "name": "opts",
           "optional": true,
           "rest": false,
-          "fields": [
+          "bag": [
             "voices",
             "ranges",
             "maxSpacing",

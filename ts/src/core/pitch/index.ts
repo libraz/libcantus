@@ -538,12 +538,26 @@ export function transposeNote(
   // Deriving it from floor(negative / 12) treated -6 as a descending fourth,
   // so transpose(+n) followed by transpose(-n) changed the letter spelling.
   const letterSteps = direction * ((LETTER_STEPS_BY_SEMITONE[withinOctave] ?? 0) + 7 * octaves);
-  const absoluteLetter = mod7(note.letter) + letterSteps;
+  return landOnLetter(note, mod7(note.letter) + letterSteps, steps);
+}
+
+/**
+ * The note `steps` semitones from `note`, with its letter moved to
+ * `absoluteLetter` — the tail {@link transposeNote} and
+ * {@link transposeByInterval} share.
+ *
+ * The alteration is letter arithmetic, so an octave-less note is spelled exactly
+ * as the same note with an octave would be, rather than folded into the
+ * nearest alteration of the target pitch class.
+ */
+function landOnLetter(note: Note, absoluteLetter: number, steps: number): Note {
   const letter = mod7(absoluteLetter);
   const natural = LETTER_SEMITONES[letter] ?? 0;
   if (note.octave === undefined) {
+    const source = LETTER_SEMITONES[mod7(note.letter)] ?? 0;
+    const wrapped = 12 * Math.floor(absoluteLetter / 7);
     return assertNote(
-      { letter, alter: alterFor(natural, mod12(noteToPitchClass(note) + steps)) },
+      { letter, alter: note.alter + source + steps - wrapped - natural },
       'transposed note',
     );
   }
@@ -560,12 +574,6 @@ export function transposeNote(
 /** Drop the octave from a spelled note. */
 function bareOf(note: Note): Note {
   return { letter: note.letter, alter: note.alter };
-}
-
-/** Shortest signed alteration taking a letter's natural pitch class to `pc`. */
-function alterFor(natural: number, pc: number): number {
-  const d = mod12(pc - natural);
-  return d > 6 ? d - 12 : d;
 }
 
 /** Reference semitone span of a perfect/major simple interval by diatonic number. */
@@ -976,24 +984,7 @@ export function transposeByInterval(given: NoteLike, named: IntervalLike): Note 
   assertInteger(interval.number, 'interval.number', 1, MAX_INTERVAL_NUMBER);
   assertFiniteNumber(interval.semitones, 'interval.semitones');
   const letterSteps = (interval.number - 1) * (isDescendingInterval(interval) ? -1 : 1);
-  const absoluteLetter = mod7(note.letter) + letterSteps;
-  const letter = mod7(absoluteLetter);
-  const natural = LETTER_SEMITONES[letter] ?? 0;
-  const steps = Math.round(interval.semitones);
-  if (note.octave === undefined) {
-    return assertNote(
-      { letter, alter: alterFor(natural, mod12(noteToPitchClass(note) + steps)) },
-      'transposed note',
-    );
-  }
-  const octave = note.octave + Math.floor(absoluteLetter / 7);
-  // The same domain this module requires of a note it is given: a transposition
-  // that lands outside it is refused here rather than handed on to be refused
-  // by whichever caller formats or measures it next.
-  return assertNote(
-    { letter, alter: noteToMidi(note) + steps - ((octave + 1) * 12 + natural), octave },
-    'transposed note',
-  );
+  return landOnLetter(note, mod7(note.letter) + letterSteps, Math.round(interval.semitones));
 }
 
 /** Diatonic ladder index of a note (letter + 7 * octave when octave-bearing). */
@@ -1042,22 +1033,20 @@ export function spelledInterval(a: Note, b: Note): SpelledInterval {
     // Signed pitch distance from a to b, so a note below a yields a negative span.
     semitones = noteToMidi(b) - noteToMidi(a);
   } else {
-    letterSteps = mod7(b.letter - a.letter);
-    let rawSemis = mod12(noteToPitchClass(b) - noteToPitchClass(a));
-    // Lift the chromatic span into the octave nearest the diatonic reference so
-    // wraparound intervals stay consistent with the diatonic number instead of
-    // collapsing modulo 12. The correction is bidirectional: an upward wrap
-    // (e.g. Ab -> G# = augmented seventh) adds an octave, while a same-letter or
-    // downward chromatic step (e.g. E -> Eb, F# -> F, C -> Cb = descending
-    // diminished/augmented unison) subtracts one so the sign follows pitch
-    // direction instead of returning a garbage stack of augmentations.
-    const reference = SIMPLE_REFERENCE[letterSteps + 1] ?? 0;
-    if (reference - rawSemis > 6) {
-      rawSemis += 12;
-    } else if (rawSemis - reference > 6) {
-      rawSemis -= 12;
-    }
-    semitones = rawSemis;
+    // `b` is read in the octave that puts its letter 0 to 6 steps above `a`'s,
+    // and the span is the letters' natural distance plus the two alterations —
+    // the octave-bearing measurement with the octaves dropped. Ab -> G# is an
+    // augmented seventh, and C -> Cb a descending augmented unison.
+    const fromLetter = mod7(a.letter);
+    const toLetter = mod7(b.letter);
+    letterSteps = mod7(toLetter - fromLetter);
+    const wrapped = toLetter < fromLetter ? 12 : 0;
+    semitones =
+      (LETTER_SEMITONES[toLetter] ?? 0) +
+      wrapped -
+      (LETTER_SEMITONES[fromLetter] ?? 0) +
+      b.alter -
+      a.alter;
   }
   const absSteps = Math.abs(letterSteps);
   const number = absSteps + 1;

@@ -115,6 +115,8 @@ export class HitList {
   readonly hits: DrumHit[] = [];
   /** Voices already struck at each quantized beat. */
   readonly #onsets = new Map<number, Set<number>>();
+  /** The rhythmic-dial setting each onset enters at, by onset key; absent is always. */
+  readonly #entries = new Map<string, number>();
 
   /**
    * Append a hit, clamping velocity and dropping non-positive positions.
@@ -123,6 +125,9 @@ export class HitList {
    * sounds once however many voices ask for it, and a second entry at the same
    * pitch and position is a note-on a reader answers with no note-off, heard as
    * a hung or cut stroke rather than as a louder one.
+   *
+   * `entry` is the rhythmic-dial setting above which the stroke sounds, for a
+   * stroke the dial adds; a stroke asked for twice sounds from the lower one.
    */
   add(
     pitch: number,
@@ -130,10 +135,19 @@ export class HitList {
     durationBeat: number,
     velocity: number,
     articulation?: Articulation,
+    entry = Number.NEGATIVE_INFINITY,
   ): void {
     const beat = Math.max(0, startBeat);
+    const key = onsetKey(pitch, beat);
+    const held = this.#entries.get(key);
     if (this.hasOnset(pitch, beat)) {
+      if (held !== undefined && entry < held) {
+        this.#entries.set(key, entry);
+      }
       return;
+    }
+    if (entry !== Number.NEGATIVE_INFINITY) {
+      this.#entries.set(key, entry);
     }
     const hit: DrumHit = {
       pitch,
@@ -153,6 +167,14 @@ export class HitList {
     } else {
       this.#onsets.set(beatSlot(beat), new Set([pitch]));
     }
+  }
+
+  /**
+   * The rhythmic-dial setting above which a written stroke sounds: minus
+   * infinity for one that sounds at every setting.
+   */
+  entryOf(pitch: number, startBeat: number): number {
+    return this.#entries.get(onsetKey(pitch, startBeat)) ?? Number.NEGATIVE_INFINITY;
   }
 
   /** Whether a hit of this pitch already starts exactly at `startBeat`. */

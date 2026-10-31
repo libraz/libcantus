@@ -68,7 +68,7 @@ ChordData read_chord_like(const json::Value& value) {
     return normalized_chord(like_target(value));
   }
   throw InvalidInputError("chord must be a chord symbol or chord data; received " +
-                          js::type_of(value));
+                          describe_rejected(value));
 }
 
 void settle_chord_quality(ChordData& data) { data.chord.quality = assert_chord_quality(data.wire); }

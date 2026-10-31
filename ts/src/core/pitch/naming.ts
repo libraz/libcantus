@@ -218,7 +218,7 @@ function parseEnglish(text: string): Note | null {
   }
   const note: Note = { letter, alter };
   if (match[3] !== undefined) {
-    note.octave = Number.parseInt(match[3], 10);
+    note.octave = octaveOf(match[3]);
   }
   return note;
 }
@@ -400,7 +400,13 @@ function splitOctave(text: string): { name: string; octave: number | undefined }
     return { name: text, octave: undefined };
   }
   const signed = start > 0 && text.charAt(start - 1) === '-' ? start - 1 : start;
-  return { name: text.slice(0, signed), octave: Number.parseInt(text.slice(signed), 10) };
+  return { name: text.slice(0, signed), octave: octaveOf(text.slice(signed)) };
+}
+
+/** An octave read from its digits, `-0` read as the octave 0 it names. */
+function octaveOf(digits: string): number {
+  const octave = Number.parseInt(digits, 10);
+  return octave === 0 ? 0 : octave;
 }
 
 /** Read a name in one system, or null when that system does not accept it. */
