@@ -22,8 +22,9 @@ ts/test/generated/
 tests/spec/generated/
 tests/corpus/out/
 
-# Tool caches and the Python environment.
+# Tool caches (emsdk-cache/ is the Emscripten SDK CI installs in the checkout) and the Python environment.
 .cache/
+emsdk-cache/
 .ruff_cache/
 __pycache__/
 bindings/python/.venv/
