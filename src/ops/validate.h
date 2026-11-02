@@ -133,6 +133,11 @@ double assert_positive_int(const json::Value& value, std::string_view name,
 /** `assertPositiveInt` with a cap from the wire. */
 double assert_positive_int(const json::Value& value, std::string_view name, const json::Value& max);
 
+/** `${name}[${index}]`, the name TS gives an element of a checked array. */
+inline std::string indexed_name(std::string_view name, std::size_t index) {
+  return join_name(name, "[") + index_text(index) + "]";
+}
+
 /** `assertRange` with bounds the library supplies. */
 double assert_range(const json::Value& value, double min, double max, std::string_view name);
 
@@ -192,8 +197,14 @@ inline bool is_null_or_undefined(const json::Value& v) noexcept {
  */
 const json::Value& property_of(const json::Value& v, std::string_view key);
 
+/** Reads property `key` of a value the way the caller's value model does. */
+using MemberReader = json::Value (*)(const json::Value& value, std::string_view key);
+
 /** `value.length`: the size of an array or a string (UTF-16), else the property of that name. */
 json::Value length_of(const json::Value& value);
+
+/** length_of() reading a property that is no array or string size through `member`. */
+json::Value length_of(const json::Value& value, MemberReader member);
 
 /**
  * What V8 says of a value spread or iterated that has no iterator: its type, and its text for a
@@ -203,6 +214,9 @@ std::string not_iterable_message(const json::Value& value);
 
 /** `list[index]` of an array, a string or a record; the TypeError JS raises for null/undefined. */
 json::Value element_of(const json::Value& list, std::size_t index);
+
+/** element_of() reading a record's property through `member`. */
+json::Value element_of(const json::Value& list, std::size_t index, MemberReader member);
 
 /** `${name}` of argument `i`, where TS declares no default. */
 inline std::string name_arg(const Args& a, std::size_t i) { return js::template_string(a[i]); }

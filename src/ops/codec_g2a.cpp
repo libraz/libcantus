@@ -37,6 +37,11 @@ void write_fields(const BassLick& v, FieldWriter& w) {
   w.field("sections", v.sections);
 }
 
+TimeSignature read_ts_or(const json::Value& opts, const TimeSignature& fallback) {
+  const json::Value* ts = opt_null_default(opts, "ts");
+  return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : meter_at(0, fallback);
+}
+
 BassPlacement read_bass_placement(const json::Array& placement) {
   // The chords are read into their plain form once, in placement order.
   std::vector<BassSegment> segments;

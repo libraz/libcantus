@@ -76,18 +76,18 @@ TimelineHost wire_timeline_host(const Args& a, const json::Value& timeline) {
   host.voice_at = [chord_at](double beat) { return read_host_chord(chord_at(beat)); };
   const CallContext* context = &a.context();
   host.found_at = [chord_at, context](double beat) -> std::optional<FoundChord> {
-    json::Value wire = chord_at(beat);
-    if (!js::truthy(wire)) {
+    auto wire = std::make_shared<const json::Value>(chord_at(beat));
+    if (!js::truthy(*wire)) {
       return std::nullopt;
     }
     // `functionOf` reads the chord it is handed through `toChordData`, once, and every reading
     // of it goes through a guard that refuses a quality no table has.
     auto checked = std::make_shared<std::optional<ChordData>>();
     FoundChord found;
-    found.raw = read_chord_fields(wire);
+    found.raw = read_chord_fields(*wire);
     found.checked = [wire, checked]() -> const Chord& {
       if (!*checked) {
-        ChordData data = read_chord_like(wire);
+        ChordData data = read_chord_like(*wire);
         settle_chord_quality(data);
         *checked = std::move(data);
       }
@@ -96,7 +96,7 @@ TimelineHost wire_timeline_host(const Args& a, const json::Value& timeline) {
     // `chordPitchClasses` is the op itself: it checks the chord the way the public function does.
     found.pitch_classes = [wire, context]() {
       json::Array arguments;
-      arguments.push_back(wire);
+      arguments.push_back(*wire);
       Args delegated(arguments, *context);
       json::Value out = find_op("chordPitchClasses")->fn(delegated);
       std::vector<int> pcs;

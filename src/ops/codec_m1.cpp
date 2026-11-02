@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "cantus/core/errors.h"
+#include "core/tempo/limits.gen.h"
 #include "core/validation/validation.h"
 #include "js/format.h"
 #include "js/number.h"
@@ -346,7 +347,7 @@ Meter read_meter_data(const json::Value& data) {
 }
 
 Tempo read_tempo_bpm(const json::Value& bpm) {
-  return Tempo::of(assert_range(bpm, MIN_MODEL_BPM, MAX_MODEL_BPM, "bpm"));
+  return Tempo::of(assert_range(bpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM, "bpm"));
 }
 
 Tempo read_tempo_data(const json::Value& data) {

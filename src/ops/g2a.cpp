@@ -47,12 +47,6 @@ namespace {
 //--------------------------------------------------------------------------------------------
 // generate/bass
 
-/** `opts.ts ?? DEFAULT_TS`, read as `meterAt(0, toMeterData(ts, 'ts'))`. */
-TimeSignature read_ts_option(const json::Value& opts) {
-  const json::Value* ts = opt_null_default(opts, "ts");
-  return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : meter_at(0, kGenerateDefaultTs);
-}
-
 /** `bassRegister(context.instrument('bass'), opts.instrument, octave)` over the wire. */
 BassRegister read_bass_register(const WireContext& ctx, const json::Value& given, double octave) {
   // `given` is read first; the context's own instrument is read only when it is absent.
@@ -82,15 +76,12 @@ void register_bass() {
     if (request.segments.empty()) {
       return json::Value(json::Array());
     }
-    request.ts = read_ts_option(opts);
-    const json::Value* style = opt_null_default(opts, "style");
-    request.style = *parse_bass_style(assert_one_of(style != nullptr ? *style : json::Value("root"),
+    request.ts = read_ts_or(opts, kGenerateDefaultTs);
+    request.style = *parse_bass_style(assert_one_of(opt_or(opts, "style", json::Value("root")),
                                                     bass_style_names(), "bass style"));
-    const json::Value* given_octave = opt_null_default(opts, "octave");
-    double octave = assert_integer(given_octave != nullptr
-                                       ? *given_octave
-                                       : json::Value(static_cast<double>(BASS_DEFAULT_OCTAVE)),
-                                   "bass octave", -1, 8);
+    double octave = assert_integer(
+        opt_or(opts, "octave", json::Value(static_cast<double>(BASS_DEFAULT_OCTAVE))),
+        "bass octave", -1, 8);
     assert_generation_budget(json::Value(estimated_bass_notes(request.segments)), "bass notes",
                              get(opts, "budget"));
     WireContext ctx = read_generation_context(a, get(opts, "ctx"));
@@ -107,12 +98,10 @@ void register_bass() {
                              get(asked, "budget"));
     LickRequest request;
     request.genre = *parse_genre(assert_one_of(get(asked, "genre"), genre_names(), "lick genre"));
-    request.ts = read_ts_option(asked);
-    const json::Value* given_octave = opt_null_default(asked, "octave");
-    double octave = assert_integer(given_octave != nullptr
-                                       ? *given_octave
-                                       : json::Value(static_cast<double>(BASS_DEFAULT_OCTAVE)),
-                                   "lick octave", -1, 8);
+    request.ts = read_ts_or(asked, kGenerateDefaultTs);
+    double octave = assert_integer(
+        opt_or(asked, "octave", json::Value(static_cast<double>(BASS_DEFAULT_OCTAVE))),
+        "lick octave", -1, 8);
     request.scale = read_key_like(a[1]);
     BassPlacement read = read_bass_placement(placement);
     request.segments = std::move(read.segments);
@@ -205,15 +194,15 @@ void register_countermelody() {
         throw InvalidInputError("countermelody needs a timeline or a chordAt callback");
       }
       const Args* args = &a;
-      json::Value fn = chord_at;
+      const json::Value* fn = &chord_at;
       request.chord_at = [args, fn](double beat) -> Nullable<Chord> {
-        if (is_timeline_hybrid(fn)) {
-          return read_host_chord_answer(timeline_chord_at(get(fn, "segments").as_array(), beat));
+        if (is_timeline_hybrid(*fn)) {
+          return read_host_chord_answer(timeline_chord_at(get(*fn, "segments").as_array(), beat));
         }
-        if (tag_of(fn) != Tag::kCallback) {
+        if (tag_of(*fn) != Tag::kCallback) {
           throw js::TypeError("harmony.chordAt is not a function");
         }
-        return read_host_chord_answer(args->callback(fn)(json::Array{json::Value(beat)}));
+        return read_host_chord_answer(args->callback(*fn)(json::Array{json::Value(beat)}));
       };
       const json::Value* given = opt_null_default(opts, "chordChangeBeats");
       if (given != nullptr) {
@@ -236,12 +225,12 @@ void register_countermelody() {
       }
       beat_count = json::Value(static_cast<double>(beats.size()));
       const Args* args = &a;
-      json::Value held = timeline;
+      const json::Value* held = &timeline;
       request.chord_at = [args, held](double beat) -> Nullable<Chord> {
-        if (is_timeline_hybrid(held)) {
-          return read_host_chord_answer(timeline_chord_at(get(held, "segments").as_array(), beat));
+        if (is_timeline_hybrid(*held)) {
+          return read_host_chord_answer(timeline_chord_at(get(*held, "segments").as_array(), beat));
         }
-        const json::Value& at = get(held, "at");
+        const json::Value& at = get(*held, "at");
         if (tag_of(at) != Tag::kCallback) {
           throw js::TypeError("timeline.at is not a function");
         }
@@ -259,13 +248,10 @@ void register_countermelody() {
       return ts != nullptr ? read_meter_like(*ts, "ts") : MeterData(kGenerateDefaultTs);
     }());
     cantus::assert_time_signature(request.ts);
-    const json::Value* rhythm = opt_null_default(opts, "rhythm");
     request.rhythm = *parse_counter_rhythm(assert_one_of(
-        rhythm != nullptr ? *rhythm : json::Value("complement"), counter_rhythm_names(), "rhythm"));
-    const json::Value* profile = opt_null_default(opts, "profile");
-    request.profile =
-        *parse_safety_profile(assert_one_of(profile != nullptr ? *profile : json::Value("pop"),
-                                            safety_profile_names(), "safety profile"));
+        opt_or(opts, "rhythm", json::Value("complement")), counter_rhythm_names(), "rhythm"));
+    request.profile = *parse_safety_profile(assert_one_of(
+        opt_or(opts, "profile", json::Value("pop")), safety_profile_names(), "safety profile"));
     ProfileWeightOverrides overrides = read_weight_overrides(get(opts, "weights"));
     request.weights = profile_weights(request.profile, overrides);
     request.key = read_key_like(get(opts, "key"));
@@ -317,23 +303,21 @@ void register_countermelody() {
       throw InvalidInputError("imitate needs from <= to; received " + js::to_string(plan.from) +
                               " > " + js::to_string(plan.to));
     }
-    const json::Value* scale = opt_null_default(opts, "velocityScale");
     plan.velocityScale =
-        assert_finite_number(scale != nullptr ? *scale : json::Value(1.0), "velocityScale");
-    const json::Value* answer = opt_null_default(opts, "answer");
+        assert_finite_number(opt_or(opts, "velocityScale", json::Value(1.0)), "velocityScale");
     plan.tonal = *parse_imitation_answer(assert_one_of(
-                     answer != nullptr ? *answer : json::Value("real"), imitation_answer_names(),
+                     opt_or(opts, "answer", json::Value("real")), imitation_answer_names(),
                      "imitate answer")) == ImitationAnswer::kTonal;
     const json::Value* invert = opt_null_default(opts, "invert");
     plan.invert = invert != nullptr && js::truthy(*invert);
     // The answer keeps every field the lead's notes carry, in the order they carry them.
-    json::Value sounding_wire = drop_silent_notes(a[0]);
+    json::Value sounding_wire = drop_silent_notes(a.take(0));
     std::vector<NoteEvent> sounding = sounding_notes_only(lead);
     std::vector<std::size_t> subject = imitation_subject(sounding, plan.from, plan.to);
     std::vector<NoteEvent> answers = imitation_answers(sounding, subject, plan);
     json::Array out;
     for (std::size_t at = 0; at < subject.size(); ++at) {
-      json::Value note = sounding_wire.as_array()[subject[at]];
+      json::Value note = std::move(sounding_wire.as_array()[subject[at]]);
       note.as_object().set("pitch", answers[at].pitch);
       note.as_object().set("startBeat", answers[at].startBeat);
       if (!is_undefined(get(note, "velocity"))) {

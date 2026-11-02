@@ -188,10 +188,10 @@ const json::Value& like_target(const json::Value& value) {
   return value;
 }
 
-json::Value like_data(json::Value value) {
+json::Value like_data(const json::Value& value) {
   switch (tag_of(value)) {
     case Tag::kToJson:
-      return std::move(*value.as_object().find("$tojson"));
+      return *value.as_object().find("$tojson");
     case Tag::kClass: {
       json::Object data;
       for (const json::Member& m : value.as_object()) {
@@ -203,6 +203,17 @@ json::Value like_data(json::Value value) {
     }
     default:
       return value;
+  }
+}
+
+json::Value like_data(json::Value&& value) {
+  switch (tag_of(value)) {
+    case Tag::kToJson:
+      return std::move(*value.as_object().find("$tojson"));
+    case Tag::kClass:
+      return like_data(static_cast<const json::Value&>(value));
+    default:
+      return std::move(value);
   }
 }
 

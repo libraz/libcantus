@@ -447,9 +447,10 @@ void register_chords() {
     if (reads_tone_letter_offsets(value)) {
       const json::Value& root = get(value, "rootPc");
       std::optional<std::vector<int>> offsets = chord_tone_letter_offsets(chord);
+      const json::Array* listed =
+          chord.intervals.empty() ? nullptr : &value.as_object().find("intervals")->as_array();
       for (std::size_t index = 0; index < chord.intervals.size(); ++index) {
-        double tone = assert_finite_number(
-            js::add(root, value.as_object().find("intervals")->as_array()[index]), "pitch");
+        double tone = assert_finite_number(js::add(root, (*listed)[index]), "pitch");
         if (pitch_class_of(tone) == pitch_class_of(assert_finite_number(a[0], "pitch"))) {
           spelled = offsets && index < offsets->size();
           break;

@@ -79,14 +79,19 @@ const json::Value& get(const json::Value& v, std::string_view key) {
   return f == nullptr ? undefined_value() : *f;
 }
 
-json::Value length_of(const json::Value& value) {
+json::Value length_of(const json::Value& value, MemberReader member) {
   if (value.is_array()) {
     return json::Value(static_cast<double>(value.as_array().size()));
   }
   if (value.is_string()) {
     return json::Value(static_cast<double>(js::utf16_length(value.as_string())));
   }
-  return property_of(value, "length");
+  property_of(value, "length");
+  return member(value, "length");
+}
+
+json::Value length_of(const json::Value& value) {
+  return length_of(value, [](const json::Value& v, std::string_view key) { return get(v, key); });
 }
 
 std::string not_iterable_message(const json::Value& value) {
@@ -99,6 +104,11 @@ std::string not_iterable_message(const json::Value& value) {
 }
 
 json::Value element_of(const json::Value& list, std::size_t index) {
+  return element_of(list, index,
+                    [](const json::Value& v, std::string_view key) { return get(v, key); });
+}
+
+json::Value element_of(const json::Value& list, std::size_t index, MemberReader member) {
   property_of(list, js::to_string(static_cast<double>(index)));
   if (list.is_array()) {
     return list.as_array().size() > index ? list.as_array()[index] : undefined_value();
@@ -109,7 +119,7 @@ json::Value element_of(const json::Value& list, std::size_t index) {
                                              static_cast<double>(index + 1)))
                : undefined_value();
   }
-  return get(list, js::to_string(static_cast<double>(index)));
+  return member(list, js::to_string(static_cast<double>(index)));
 }
 
 const json::Value& property_of(const json::Value& v, std::string_view key) {
@@ -276,8 +286,7 @@ double assert_range(const json::Value& value, double min, double max, std::strin
 
 double assert_range_option(const json::Value& opts, std::string_view key, double fallback,
                            double min, double max, std::string_view name) {
-  const json::Value* given = opt_null_default(opts, key);
-  return assert_range(given != nullptr ? *given : json::Value(fallback), min, max, name);
+  return assert_range(opt_or(opts, key, json::Value(fallback)), min, max, name);
 }
 
 double assert_range(const json::Value& value, const json::Value& min, const json::Value& max,

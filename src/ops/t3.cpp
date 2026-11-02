@@ -61,9 +61,7 @@ void register_voicing() {
     read_ranges_option(asked, opts);
     read_max_spacing_option(asked, opts);
     read_max_candidates_option(asked, opts);
-    if (const json::Value* budget = field(asked, "budget")) {
-      opts.budget = number_of(*budget);
-    }
+    opts.budget = budget_of(asked);
     // Each chord's tones are read where its candidates are enumerated, then the roles its own
     // spelling gives them where its move is scored, then the hints the key spells it by, chord by
     // chord.

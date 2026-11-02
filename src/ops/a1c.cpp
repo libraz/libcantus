@@ -119,8 +119,7 @@ void register_melody() {
   def("extractMotifs", [](Args& a) -> json::Value {
     const json::Value& asked = assert_options(a[1], "opts");
     auto pick = [&](std::string_view key, double fallback) {
-      const json::Value* given = opt_null_default(asked, key);
-      return given != nullptr ? *given : json::Value(fallback);
+      return opt_or(asked, key, json::Value(fallback));
     };
     double min_notes = assert_integer(pick("minNotes", MIN_CELL_NOTES), "motif minNotes", 2, 64);
     double max_notes = assert_integer(pick("maxNotes", MAX_CELL_NOTES), "motif maxNotes", 2, 64);
@@ -136,9 +135,7 @@ void register_melody() {
     typed.minNotes = min_notes;
     typed.maxNotes = max_notes;
     typed.minOccurrences = min_occurrences;
-    if (const json::Value* given = field(asked, "budget")) {
-      typed.budget = number_of(*given);
-    }
+    typed.budget = budget_of(asked);
     std::vector<MotifData> motifs = extract_motifs(line.typed, typed);
     json::Array ordered_wire = wire_line(a[0].as_array(), line.typed);
     json::Value out = to_json(motifs);
@@ -172,10 +169,9 @@ void register_melody() {
   });
   def("motifGraph", [](Args& a) -> json::Value {
     const json::Value& asked = assert_options(a[2], "opts");
-    const json::Value* given = opt_null_default(asked, "variationThreshold");
     double variation_threshold =
-        assert_range(given != nullptr ? *given : json::Value(DEFAULT_VARIATION_THRESHOLD), 0, 1,
-                     "motif graph variationThreshold");
+        assert_range_option(asked, "variationThreshold", DEFAULT_VARIATION_THRESHOLD, 0, 1,
+                            "motif graph variationThreshold");
     const json::Value& budget = get(asked, "budget");
     PhraseLine line = read_ordered(a[0], "line", budget);
     const json::Array& motifs = assert_array(a[1], "motifs");

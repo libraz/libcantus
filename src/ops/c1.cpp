@@ -35,6 +35,20 @@ BarPosition read_bar_position(const json::Value& pos, std::string_view name,
   return BarPosition{bar, beat};
 }
 
+/** `dropSilentNotes`, and `soundingNotesOnly` under its alias. */
+json::Value drop_silent_op(Args& a) { return drop_silent_notes(a.take(0)); }
+
+/** An op that checks an instrument profile read from argument 0 and hands the argument back. */
+template <class Check>
+void def_profile_check(std::string name, Check check) {
+  def(std::move(name), [check](Args& a) -> json::Value {
+    with_name_arg(a, 1, "instrument", [&](const std::string& label) {
+      check(read_instrument_profile(a[0], label), label);
+    });
+    return like_data(a.take(0));
+  });
+}
+
 void register_validation() {
   def("$const:DEFAULT_GENERATION_BUDGET",
       [](Args&) -> json::Value { return to_json(DEFAULT_GENERATION_BUDGET); });
@@ -66,8 +80,8 @@ void register_validation() {
                   [&](const std::string& name) { assert_finite_semitones(a[0], name); });
     return a.take(0);
   });
-  def("dropSilentNotes", [](Args& a) -> json::Value { return drop_silent_notes(a.take(0)); });
-  def("soundingNotesOnly", [](Args& a) -> json::Value { return drop_silent_notes(a.take(0)); });
+  def("dropSilentNotes", drop_silent_op);
+  def("soundingNotesOnly", drop_silent_op);
   def("assertOneOf", [](Args& a) -> json::Value {
     assert_one_of(a[0], a[1], name_arg(a, 2));
     return a.take(0);
@@ -114,18 +128,14 @@ void register_instrument() {
   def("$const:BASS_5_STRING", [](Args&) -> json::Value { return to_json(BASS_5_STRING); });
   def("$const:GUITAR_STANDARD", [](Args&) -> json::Value { return to_json(GUITAR_STANDARD); });
   def("$const:GUITAR_DROP_D", [](Args&) -> json::Value { return to_json(GUITAR_DROP_D); });
-  def("toInstrumentProfile", [](Args& a) -> json::Value {
-    with_name_arg(a, 1, "instrument", [&](const std::string& name) {
-      to_instrument_profile(read_instrument_profile(a[0], name), name);
-    });
-    return like_data(a.take(0));
-  });
-  def("toStringedProfile", [](Args& a) -> json::Value {
-    with_name_arg(a, 1, "instrument", [&](const std::string& name) {
-      to_stringed_profile(read_instrument_profile(a[0], name), name);
-    });
-    return like_data(a.take(0));
-  });
+  def_profile_check("toInstrumentProfile",
+                    [](const InstrumentProfile& profile, const std::string& name) {
+                      to_instrument_profile(profile, name);
+                    });
+  def_profile_check("toStringedProfile",
+                    [](const InstrumentProfile& profile, const std::string& name) {
+                      to_stringed_profile(profile, name);
+                    });
   def("instrumentRange", [](Args& a) -> json::Value {
     return to_json(instrument_range(read_instrument_profile(a[0])));
   });

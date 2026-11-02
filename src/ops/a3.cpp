@@ -41,28 +41,11 @@ namespace {
 
 /** `Number.MIN_VALUE`. */
 
-/** The notes that sound. */
-std::vector<NoteEvent> sounding_of(const std::vector<NoteEvent>& notes) {
-  std::vector<NoteEvent> out;
-  for (const NoteEvent& note : notes) {
-    if (note.durationBeat > 0) {
-      out.push_back(note);
-    }
-  }
-  return out;
-}
-
 /** `Cannot read properties of null (reading 'x')` for a value that has no properties. */
 [[noreturn]] void no_properties(const json::Value& value, std::string_view property) {
   throw js::TypeError(std::string("Cannot read properties of ") +
                       (value.is_null() ? "null" : "undefined") + " (reading '" +
                       std::string(property) + "')");
-}
-
-/** `.budget` of an options bag, as the typed options carry it. */
-std::optional<double> budget_of(const json::Value& opts) {
-  const json::Value* budget = field(opts, "budget");
-  return budget != nullptr ? number_of(*budget) : std::nullopt;
 }
 
 //--------------------------------------------------------------------------------------------
@@ -106,7 +89,7 @@ void register_hypermeter() {
     MeterMap meters = meter_argument(a, 1);
     std::vector<NoteEvent> notes =
         assert_note_events(a[0], "hypermeter notes", line_options(get(asked, "budget")));
-    std::vector<NoteEvent> sounding = sounding_of(notes);
+    std::vector<NoteEvent> sounding = sounding_notes_only(notes);
     HypermeterOptions typed;
     typed.totalBeats = assert_range_option(asked, "totalBeats", latest_sounding_end(sounding),
                                            js::min(0, first_sounding_beat(sounding)),
@@ -141,7 +124,7 @@ void register_sections() {
     FormSectionOptions typed;
     typed.meters = MeterArg(meters);
     typed.budget = budget_of(opts);
-    std::vector<NoteEvent> sounding = sounding_of(notes);
+    std::vector<NoteEvent> sounding = sounding_notes_only(notes);
     if (const json::Value* total = opt_null_default(opts, "totalBeats")) {
       // `resolveSpanEnd`'s range check, ahead of every other option as TS makes it.
       double first_onset = bar_grid_start(first_sounding_beat(sounding), MeterArg(meters));

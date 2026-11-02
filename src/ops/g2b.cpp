@@ -52,16 +52,10 @@ namespace {
 /** A bag of the note-list options TS reads with its defaults: durations that never sound pass. */
 json::Value default_note_options() { return json::Value(json::Object()); }
 
-/** `opts.ts ?? DEFAULT_TS`, read as `meterAt(0, toMeterData(ts, 'ts'))`. */
 /** `toMeterData(opts.ts ?? fallback, 'ts')`: the whole meter, a map included. */
 MeterData read_meter_or(const json::Value& opts, const TimeSignature& fallback) {
   const json::Value* ts = opt_null_default(opts, "ts");
   return ts != nullptr ? read_meter_like(*ts, "ts") : MeterData(fallback);
-}
-
-TimeSignature read_ts_or(const json::Value& opts, const TimeSignature& fallback) {
-  const json::Value* ts = opt_null_default(opts, "ts");
-  return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : meter_at(0, fallback);
 }
 
 /** The sounding notes of a wire list, and the wire notes they are, in order. */
@@ -70,10 +64,11 @@ struct Sounding {
   json::Array wire;
 };
 
-Sounding sounding_of(const json::Value& events, const std::vector<NoteEvent>& checked) {
+Sounding sounding_of(json::Value events, const std::vector<NoteEvent>& checked) {
   Sounding out;
   out.typed = sounding_notes_only(checked);
-  out.wire = drop_silent_notes(events).as_array();
+  json::Value kept = drop_silent_notes(std::move(events));
+  out.wire = std::move(kept.as_array());
   return out;
 }
 
@@ -159,7 +154,7 @@ void register_groove() {
     request.ts = read_meter_or(asked, kGenerateDefaultTs);
     std::vector<NoteEvent> events =
         assert_note_events(a[0], "humanize events", line_options(undefined_value()));
-    Sounding sounding = sounding_of(a[0], events);
+    Sounding sounding = sounding_of(a.take(0), events);
     json::Value timing = opt_or(asked, "timing", json::Value(GROOVE_DEFAULT_TIMING));
     json::Value velocity_jitter =
         opt_or(asked, "velocity", json::Value(GROOVE_DEFAULT_VELOCITY_JITTER));
@@ -173,10 +168,10 @@ void register_groove() {
     WireContext ctx = read_generation_context(a, get(asked, "ctx"));
     Draw draw = wire_part(ctx, opt_or(asked, "part", json::Value("humanize")));
     std::vector<NoteEvent> out = humanize_with(sounding.typed, request, draw);
-    // A copy keeps every field the note carries; the pass writes its own over it.
+    // The note keeps every field it carries; the pass writes its own over it.
     json::Array notes;
     for (std::size_t i = 0; i < out.size(); ++i) {
-      json::Value note = sounding.wire[i];
+      json::Value note = std::move(sounding.wire[i]);
       note.as_object().set("startBeat", out[i].startBeat);
       note.as_object().set("velocity", *out[i].velocity);
       notes.push_back(std::move(note));
@@ -246,11 +241,11 @@ void register_groove() {
       groove.slots.push_back(read);
     }
     // The template is checked; the notes are snapped to it in the numbers TS computes them in.
-    Sounding sounding = sounding_of(a[0], events);
+    Sounding sounding = sounding_of(a.take(0), events);
     std::vector<GroovedNote> out = groove_notes(sounding.typed, groove, meter);
     json::Array notes;
     for (std::size_t i = 0; i < out.size(); ++i) {
-      json::Value note = sounding.wire[i];
+      json::Value note = std::move(sounding.wire[i]);
       note.as_object().set("startBeat", out[i].startBeat);
       if (out[i].velocity) {
         note.as_object().set("velocity", *out[i].velocity);
@@ -284,11 +279,11 @@ void register_ornament() {
     if (!ctx.resolved.ornament) {
       ctx.resolved.ornament = amount;
     }
-    Sounding sounding = sounding_of(a[0], events);
+    Sounding sounding = sounding_of(a.take(0), events);
     std::vector<NoteEvent> out = ornament_with(sounding.typed, style, ts, ctx.resolved);
     json::Array notes;
     for (std::size_t i = 0; i < out.size(); ++i) {
-      json::Value note = sounding.wire[i];
+      json::Value note = std::move(sounding.wire[i]);
       // Only a note the pass decorated changes: one that carried an articulation is left alone.
       if (!sounding.typed[i].articulation && out[i].articulation) {
         note.as_object().set("articulation", to_string(*out[i].articulation));
@@ -396,9 +391,9 @@ void register_motif() {
     std::vector<NoteEvent> notes = read_cell_notes(a[0], "motif notes");
     KeyScale scale = read_key_like(a[2]);
     const Args* args = &a;
-    json::Value timeline = a[1];
+    const json::Value* timeline = &a[1];
     ChordAt chord_at = [args, timeline](double beat) -> std::optional<ChordTones> {
-      json::Value chord = timeline_at(*args, timeline, beat);
+      json::Value chord = timeline_at(*args, *timeline, beat);
       if (!js::truthy(chord)) {
         return std::nullopt;
       }

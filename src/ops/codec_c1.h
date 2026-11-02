@@ -71,7 +71,10 @@ void write_fields(const PercussionProfile& v, FieldWriter& w);
 const json::Value& like_target(const json::Value& value);
 
 /** like_target() as a result value: a `$class` instance loses its tag. */
-json::Value like_data(json::Value value);
+json::Value like_data(const json::Value& value);
+
+/** like_data() of a value the caller is done with: the payload or the value itself is moved. */
+json::Value like_data(json::Value&& value);
 
 /** `readMeterData(value, name)` over a wire MeterLike. */
 MeterData read_meter_like(const json::Value& value, std::string_view name = "meter");

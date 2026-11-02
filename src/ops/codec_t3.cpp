@@ -45,15 +45,13 @@ void read_ranges_option(const json::Value& asked, VoicingOptions& out) {
     out.ranges = std::move(read);
     return;
   }
-  const json::Value* voices = opt_null_default(asked, "voices");
   out.voices =
-      assert_positive_int(voices != nullptr ? *voices : json::Value(4), "voices", json::Value(128));
+      assert_positive_int(opt_or(asked, "voices", json::Value(4)), "voices", json::Value(128));
 }
 
 void read_max_spacing_option(const json::Value& asked, VoicingOptions& out) {
-  const json::Value* given = opt_null_default(asked, "maxSpacing");
   double max_spacing = assert_finite_number(
-      given != nullptr ? *given : json::Value(DEFAULT_MAX_SPACING), "maxSpacing");
+      opt_or(asked, "maxSpacing", json::Value(DEFAULT_MAX_SPACING)), "maxSpacing");
   if (max_spacing < 0) {
     throw InvalidInputError("maxSpacing must be non-negative");
   }

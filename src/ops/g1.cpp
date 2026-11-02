@@ -453,13 +453,11 @@ void register_drums() {
     request.bars = static_cast<int>(bars);
     const json::Value& euclid = get(opts, "euclideanKick");
     if (js::truthy(euclid)) {
-      const json::Value* given_steps = opt_null_default(euclid, "steps");
-      double steps = assert_integer(given_steps != nullptr ? *given_steps : json::Value(16),
-                                    "euclidean steps", 1, 16);
+      double steps =
+          assert_integer(opt_or(euclid, "steps", json::Value(16)), "euclidean steps", 1, 16);
       double pulses = assert_integer(get(euclid, "pulses"), "euclidean pulses");
-      const json::Value* given_rotation = opt_null_default(euclid, "rotation");
-      double rotation = assert_integer(given_rotation != nullptr ? *given_rotation : json::Value(0),
-                                       "euclidean rotation");
+      double rotation =
+          assert_integer(opt_or(euclid, "rotation", json::Value(0)), "euclidean rotation");
       request.euclidean = EuclideanPlan{pulses, steps, rotation};
     }
     request.style =

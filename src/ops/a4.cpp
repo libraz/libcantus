@@ -290,9 +290,7 @@ ChordTimelineOptions inference_options(const json::Value& opts, const MeterMap& 
   if (const json::Value* rhythm = opt_null_default(opts, "harmonicRhythm")) {
     out.harmonicRhythm = assert_range(*rhythm, kMinValue, kMaxSafeInteger, "harmonic rhythm");
   }
-  if (const json::Value* budget = field(opts, "budget")) {
-    out.budget = number_of(*budget);
-  }
+  out.budget = budget_of(opts);
   return out;
 }
 
@@ -349,8 +347,7 @@ WireRun analyze_wire(const Args& a, const json::Value& tracks, const json::Value
                            "arrangement note-voice comparisons", get(opts, "budget"));
   std::vector<NoteEvent> pooled =
       pool_notes(read.typed, harmony_tracks ? &*harmony_tracks : nullptr);
-  std::optional<double> budget =
-      field(opts, "budget") ? number_of(*field(opts, "budget")) : std::nullopt;
+  std::optional<double> budget = budget_of(opts);
 
   WireHarmony h;
   const json::Value* given_timeline = opt_strict(opts, "timeline");
@@ -743,9 +740,8 @@ void register_arrange() {
     json::Value note_options = arrangement_note_options(opts);
     ReadTracks read = read_tracks(a[0], note_options, opts);
     SafetyProfile profile = read_arrangement_profile(opts);
-    const json::Value* given_step = opt_null_default(opts, "step");
-    double step = assert_range(given_step != nullptr ? *given_step : json::Value(1.0), kMinValue,
-                               kMaxSafeInteger, "tension sampling step");
+    double step =
+        assert_range_option(opts, "step", 1.0, kMinValue, kMaxSafeInteger, "tension sampling step");
     // Read by no sampling this call makes, and checked all the same.
     read_min_severity(opts);
     assert_given(opts);
@@ -755,8 +751,7 @@ void register_arrange() {
     std::vector<NoteEvent> all = pool_notes(read.typed);
     double total_beats = latest_sounding_end(all);
     GridOrigin placed = grid_for_notes(all, step);
-    std::optional<double> budget =
-        field(opts, "budget") ? number_of(*field(opts, "budget")) : std::nullopt;
+    std::optional<double> budget = budget_of(opts);
 
     WireHarmony h;
     const json::Value* given_timeline = opt_strict(opts, "timeline");
@@ -786,8 +781,7 @@ void register_arrange() {
         key_options.budget = budget;
         keys = key_timeline_from_notes(pooled, key_options);
       }
-      Nullable<ResolvedKey> prevailing = prevailing_key_of(keys);
-      prevailing_key = prevailing ? *prevailing : resolve_key(major_key(0));
+      prevailing_key = prevailing_key_or_default(keys);
     }
     if (given_keys_wire != nullptr) {
       if (!given_keys) {

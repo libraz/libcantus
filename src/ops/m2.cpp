@@ -138,22 +138,22 @@ json::Value with_signed_zeros(json::Value value, const json::Value& source) {
 /** A key as a constructor or a function argument takes it: the instance itself. */
 json::Value key_wire(const Key& key) { return to_json(key); }
 
-/** A key's plain data with the zeros its instance argument wrote in the tonic. */
-json::Value key_data_echo(const Key& key, const json::Value& source) {
-  json::Value out = key_data_json(key.data());
+/** `out` (a key's data) with the zeros `source` wrote in the tonic. */
+json::Value with_tonic_zeros(json::Value out, const json::Value& source) {
   if (is_js_object(source)) {
     restore_signed_zero(*out.as_object().find("tonic"), get(source, "tonic"));
   }
   return out;
 }
 
+/** A key's plain data with the zeros its instance argument wrote in the tonic. */
+json::Value key_data_echo(const Key& key, const json::Value& source) {
+  return with_tonic_zeros(key_data_json(key.data()), source);
+}
+
 /** A key instance with the zeros its source wrote in the tonic. */
 json::Value key_echo(const Key& key, const json::Value& source) {
-  json::Value out = key_wire(key);
-  if (is_js_object(source)) {
-    restore_signed_zero(*out.as_object().find("tonic"), get(source, "tonic"));
-  }
-  return out;
+  return with_tonic_zeros(key_wire(key), source);
 }
 
 /** `describeTonic`: how a value that is not the class API's Note is named. */
@@ -1674,9 +1674,7 @@ std::variant<json::Value, KeyAtBeat> score_key_context(const Args& a, const Scor
   std::vector<KeyRegion> regions = typed_regions(score_key_regions(a, score));
   Nullable<ResolvedKey> found = prevailing_key_of(regions);
   ResolvedKey prevailing = found ? *found : key_identity(Key::major("C"));
-  return KeyAtBeat([regions, prevailing](double beat) {
-    return scale_of(KeyLookup(regions, prevailing)(beat));
-  });
+  return key_at_beat(std::move(regions), prevailing);
 }
 
 /** The options referenceFromReadings reads, from the bag a score hands it, in its order. */
@@ -1685,9 +1683,7 @@ ReferenceProfileOptions reference_options(const json::Value& bag, const json::Va
   ReferenceProfileOptions typed;
   typed.meters = MeterArg(resolve_wire_meters(asked, "reference meters"));
   const json::Value& budget = get(asked, "budget");
-  if (std::optional<double> read = number_of(budget)) {
-    typed.budget = read;
-  }
+  typed.budget = budget_of(asked);
   assert_note_events(notes, "reference notes", line_options(budget));
   const json::Value& total = get(asked, "totalBeats");
   if (!is_undefined(total)) {

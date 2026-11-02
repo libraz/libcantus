@@ -33,23 +33,6 @@ namespace cantus::ops {
 
 namespace {
 
-/** `.budget` of an options bag, as the typed options carry it. */
-std::optional<double> budget_of(const json::Value& opts) {
-  const json::Value* budget = field(opts, "budget");
-  return budget != nullptr ? number_of(*budget) : std::nullopt;
-}
-
-/** The notes that sound. */
-std::vector<NoteEvent> sounding_notes(const std::vector<NoteEvent>& notes) {
-  std::vector<NoteEvent> out;
-  for (const NoteEvent& note : notes) {
-    if (note.durationBeat > 0) {
-      out.push_back(note);
-    }
-  }
-  return out;
-}
-
 /**
  * The segments of a wire timeline for the typed profile. TS refuses a chord only once the profile
  * reaches it (read_harmony(), read_numerals()), and every chord reaches `toChordData` there, so a
@@ -111,7 +94,7 @@ ReferenceProfile analyze_wire(Args& a) {
   if (is_undefined(get(asked, "timeline"))) {
     // chordTimelineFromNotes reads the notes, then the span's end, then the key.
     notes = assert_note_events(a[0], "timeline notes", line_options(budget));
-    std::vector<NoteEvent> sounding = sounding_notes(notes);
+    std::vector<NoteEvent> sounding = sounding_notes_only(notes);
     assert_range_option(asked, "totalBeats", latest_sounding_end(sounding),
                         js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                         "timeline totalBeats");
@@ -124,7 +107,7 @@ ReferenceProfile analyze_wire(Args& a) {
     notes = assert_note_events(a[0], key == nullptr ? "key timeline notes" : "reference notes",
                                line_options(budget));
     if (key == nullptr) {
-      std::vector<NoteEvent> sounding = sounding_notes(notes);
+      std::vector<NoteEvent> sounding = sounding_notes_only(notes);
       assert_range_option(asked, "totalBeats", latest_sounding_end(sounding),
                           js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                           "key timeline totalBeats");

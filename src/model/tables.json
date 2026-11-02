@@ -32,18 +32,6 @@
       "cxx_type": "double"
     },
     {
-      "module": "model/tempo.ts",
-      "export": "MAX_BPM",
-      "cxx_type": "double",
-      "cxx_name": "MAX_MODEL_BPM"
-    },
-    {
-      "module": "model/tempo.ts",
-      "export": "MIN_BPM",
-      "cxx_type": "double",
-      "cxx_name": "MIN_MODEL_BPM"
-    },
-    {
       "module": "model/interval.ts",
       "export": "INVERSION_SUM",
       "cxx_type": "int"

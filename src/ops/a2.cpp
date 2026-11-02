@@ -148,9 +148,7 @@ void register_timeline() {
     typed.totalBeats = assert_range_option(opts, "totalBeats", latest_sounding_end(sounding),
                                            js::min(0, first_sounding_beat(sounding)),
                                            kMaxSafeInteger, "timeline totalBeats");
-    if (const json::Value* b = field(opts, "budget")) {
-      typed.budget = number_of(*b);
-    }
+    typed.budget = budget_of(opts);
     if (const json::Value* key = field(opts, "key")) {
       typed.key = read_key_arg(*key);
     }
@@ -198,9 +196,7 @@ void register_spelling() {
     if (given) {
       assert_tonic_of(*given, resolved.scale, "spellLine");
     }
-    if (const json::Value* b = field(opts, "budget")) {
-      typed.budget = number_of(*b);
-    }
+    typed.budget = budget_of(opts);
     // `timeline?.at(note.startBeat) ?? null`, asked once per note.
     ChordLookup lookup;
     const json::Value& timeline = a[1];
@@ -265,9 +261,8 @@ void register_reduction() {
     const json::Array& segments = assert_wire_timeline(a[0]);
     const json::Value& asked = assert_options(a[2], "opts");
     KeyAtBeat key_at = read_key_context(a, 1);
-    const json::Value* given = opt_null_default(asked, "basis");
     std::string name =
-        assert_one_of(given != nullptr ? *given : json::Value("function"),
+        assert_one_of(opt_or(asked, "basis", json::Value("function")),
                       std::vector<std::string_view>{to_string(ReductionBasis::kFunction),
                                                     to_string(ReductionBasis::kDuration)},
                       "reduction basis");

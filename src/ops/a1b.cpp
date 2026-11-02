@@ -146,9 +146,7 @@ KeyCall read_key_call(const json::Value& pitches, const json::Value& opts) {
     call.options.weights = read_weights(*weights, call.pitches.size());
   }
   call.options.explain = is_true_option(asked, "explain");
-  if (const json::Value* budget = field(asked, "budget")) {
-    call.options.budget = number_of(*budget);
-  }
+  call.options.budget = budget_of(asked);
   return call;
 }
 
@@ -192,9 +190,7 @@ void register_detect() {
     ResolvedProfile resolved = wire_profile_source(field(asked, "profile"))();
     typed.modes = read_modal_modes(field(asked, "modes"));
     typed.explain = is_true_option(asked, "explain");
-    if (const json::Value* budget = field(asked, "budget")) {
-      typed.budget = number_of(*budget);
-    }
+    typed.budget = budget_of(asked);
     return to_json(detect_key_from_notes_over(notes, typed, [resolved] { return resolved; }));
   });
 }
@@ -208,9 +204,7 @@ KeyTimelineOptions read_timeline_options(const json::Value& opts, const MeterMap
   typed.meters = MeterArg(meters);
   typed.expectedKeyBeats = expected;
   typed.minKeyBeats = minimum;
-  if (const json::Value* budget = field(opts, "budget")) {
-    typed.budget = number_of(*budget);
-  }
+  typed.budget = budget_of(opts);
   return typed;
 }
 
@@ -228,12 +222,7 @@ void register_keys() {
     note_bag.set("budget", get(opts, "budget"));
     std::vector<NoteEvent> notes =
         assert_note_events(a[0], "key timeline notes", json::Value(std::move(note_bag)));
-    std::vector<NoteEvent> sounding;
-    for (const NoteEvent& note : notes) {
-      if (note.durationBeat > 0) {
-        sounding.push_back(note);
-      }
-    }
+    std::vector<NoteEvent> sounding = sounding_notes_only(notes);
     double total = assert_range_option(opts, "totalBeats", latest_sounding_end(sounding),
                                        js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                                        "key timeline totalBeats");

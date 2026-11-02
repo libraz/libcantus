@@ -37,6 +37,9 @@ CANTUS_JSON_FIELDS(LickMaterial, lengthSteps, notes)
 /** A lick entry, in the field order the built-in dictionary writes. */
 void write_fields(const BassLick& v, FieldWriter& w);
 
+/** `opts.ts ?? fallback`, read as `meterAt(0, toMeterData(ts, 'ts'))`. */
+TimeSignature read_ts_or(const json::Value& opts, const TimeSignature& fallback);
+
 /** A chord placement as the lick placement reads it: the segments and how each quality reads. */
 struct BassPlacement {
   std::vector<BassSegment> segments;

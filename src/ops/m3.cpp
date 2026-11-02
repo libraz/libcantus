@@ -62,29 +62,11 @@ json::Value member_or_throw(const json::Value& value, std::string_view key) {
 }
 
 /** `value.length` of an array or a string, else the member of that name. */
-json::Value length_of(const json::Value& value) {
-  if (value.is_array()) {
-    return json::Value(static_cast<double>(value.as_array().size()));
-  }
-  if (value.is_string()) {
-    return json::Value(static_cast<double>(js::utf16_length(value.as_string())));
-  }
-  return member_or_throw(value, "length");
-}
+json::Value length_of(const json::Value& value) { return ops::length_of(value, member_of); }
 
 /** `list[index]`: the TypeError JS raises for null or undefined, else the element or member. */
 json::Value element_of(const json::Value& list, std::size_t index) {
-  property_of(list, js::to_string(static_cast<double>(index)));
-  if (list.is_array()) {
-    return list.as_array().size() > index ? list.as_array()[index] : undefined_value();
-  }
-  if (list.is_string()) {
-    return js::utf16_length(list.as_string()) > index
-               ? json::Value(js::utf16_slice(list.as_string(), static_cast<double>(index),
-                                             static_cast<double>(index + 1)))
-               : undefined_value();
-  }
-  return member_of(list, js::to_string(static_cast<double>(index)));
+  return ops::element_of(list, index, member_of);
 }
 
 /** `key in value`: the TypeError JS raises for a value that is no object. */

@@ -33,6 +33,11 @@ json::Value opt_or(const json::Value& opts, std::string_view key, const json::Va
   return v != nullptr ? *v : fallback;
 }
 
+std::optional<double> budget_of(const json::Value& opts) {
+  const json::Value* budget = field(opts, "budget");
+  return budget != nullptr ? number_of(*budget) : std::nullopt;
+}
+
 Presence opt_nullable(const json::Value& opts, std::string_view key) noexcept {
   const json::Value* v = field(opts, key);
   if (v == nullptr) {

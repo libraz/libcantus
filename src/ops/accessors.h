@@ -34,6 +34,9 @@ const json::Value* opt_null_default(const json::Value& opts, std::string_view ke
 /** `opts.key ?? fallback`, as the value TS then checks. */
 json::Value opt_or(const json::Value& opts, std::string_view key, const json::Value& fallback);
 
+/** `.budget` of an options bag as the typed options carry it: nullopt unless it is a number. */
+std::optional<double> budget_of(const json::Value& opts);
+
 /** `opts.key === undefined`: nullptr only when absent; null is returned for `read` to reject. */
 inline const json::Value* opt_strict(const json::Value& opts, std::string_view key) noexcept {
   return field(opts, key);
