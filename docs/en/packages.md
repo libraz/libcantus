@@ -28,6 +28,28 @@ All packages carry the same version number.
 
 The differences between pure TypeScript and the core-backed surfaces are described in [C++ core and surface differences](cpp.md). They are small; among them are object identity, a few type-system effects, and the module format.
 
+## Switching between pure TypeScript and WebAssembly
+
+The two npm packages have the same exports, subpaths and type declarations, so code keeps importing `@libraz/libcantus` and the build behind that name is chosen by configuration.
+
+To use WebAssembly everywhere, Node.js included, install it under the pure package's name:
+
+```sh
+yarn add @libraz/libcantus@npm:@libraz/libcantus-wasm
+```
+
+To choose per build, install both and alias the name in the bundler. With Vite:
+
+```js
+// vite.config.js
+export default {
+  resolve: { alias: { '@libraz/libcantus': '@libraz/libcantus-wasm' } },
+  build: { target: 'es2022' },
+};
+```
+
+The alias covers the subpaths too: `@libraz/libcantus/analyze` resolves to `@libraz/libcantus-wasm/analyze`. Either way the code must be ESM, since `require()` cannot load the WebAssembly package.
+
 ## Where each surface is documented
 
 | Surface | Page |

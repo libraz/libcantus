@@ -28,6 +28,28 @@ C++ コアの上に載る 2 つの JavaScript ビルド（`-wasm` と `-node`）
 
 純 TypeScript と C++ コアを使う面の差は[C++ コアと面ごとの差](cpp.md)にまとめています。差は小さく、たとえばオブジェクトの同一性、型システム由来のいくつかの効果、モジュール形式があります。
 
+## 純 TypeScript と WebAssembly の切り替え
+
+2 つの npm パッケージは、export、サブパス、型宣言が同じです。コードは `@libraz/libcantus` を import したままにして、その名前でどちらのビルドを使うかを設定で選べます。
+
+Node.js も含めてどこでも WebAssembly を使うなら、純 TypeScript パッケージの名前でインストールします。
+
+```sh
+yarn add @libraz/libcantus@npm:@libraz/libcantus-wasm
+```
+
+ビルドごとに選ぶなら、両方をインストールしてバンドラでエイリアスを張ります。Vite の場合は次のとおりです。
+
+```js
+// vite.config.js
+export default {
+  resolve: { alias: { '@libraz/libcantus': '@libraz/libcantus-wasm' } },
+  build: { target: 'es2022' },
+};
+```
+
+エイリアスはサブパスにも効き、`@libraz/libcantus/analyze` は `@libraz/libcantus-wasm/analyze` に解決されます。どちらの方法でもコードは ESM である必要があります。WebAssembly パッケージは `require()` では読み込めないためです。
+
 ## 面ごとのドキュメント
 
 | 面 | ページ |

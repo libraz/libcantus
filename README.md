@@ -67,6 +67,8 @@ import { detectChordBest } from '@libraz/libcantus-wasm';
 detectChordBest([60, 64, 67]);
 ```
 
+Code that imports `@libraz/libcantus` can switch to it without edits, through a package-manager or bundler alias: see [Switching between pure TypeScript and WebAssembly](docs/en/packages.md#switching-between-pure-typescript-and-webassembly).
+
 **Node native**, from a checkout (`make build-node`):
 
 ```js

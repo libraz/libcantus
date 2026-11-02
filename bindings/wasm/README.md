@@ -50,6 +50,16 @@ try {
 }
 ```
 
+## Switching from `@libraz/libcantus`
+
+Code that imports `@libraz/libcantus` can run on this package unchanged. Install it under that name:
+
+```sh
+yarn add @libraz/libcantus@npm:@libraz/libcantus-wasm
+```
+
+or keep both installed and alias the name in the bundler, e.g. `resolve.alias: { '@libraz/libcantus': '@libraz/libcantus-wasm' }` in Vite. Subpaths follow the alias. See [Switching between pure TypeScript and WebAssembly](https://github.com/libraz/libcantus/blob/main/docs/en/packages.md#switching-between-pure-typescript-and-webassembly).
+
 ## Differences from pure TypeScript
 
 Results, errors and messages are the same. What differs:

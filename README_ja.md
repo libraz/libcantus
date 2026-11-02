@@ -67,6 +67,8 @@ import { detectChordBest } from '@libraz/libcantus-wasm';
 detectChordBest([60, 64, 67]);
 ```
 
+`@libraz/libcantus` を import しているコードは、パッケージマネージャかバンドラのエイリアスで、書き換えずにこちらへ切り替えられます。[純 TypeScript と WebAssembly の切り替え](docs/ja/packages.md#純-typescript-と-webassembly-の切り替え)を参照してください。
+
 **Node ネイティブ**（チェックアウトから。`make build-node`）:
 
 ```js
