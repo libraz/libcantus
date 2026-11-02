@@ -22,7 +22,6 @@ namespace cantus {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** The note-event check a score holds its notes to: zero-length notes are accepted. */
 NoteEventAssertOptions score_note_options() {

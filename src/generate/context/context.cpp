@@ -17,7 +17,6 @@ namespace cantus {
 namespace {
 
 /** `Number.MIN_VALUE`, the lowest tempo a context accepts. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 std::optional<double> dial(const std::optional<double>& value, std::string_view name) {
   return value ? std::optional<double>(assert_range(*value, 0, 1, name)) : std::nullopt;

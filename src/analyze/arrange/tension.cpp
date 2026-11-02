@@ -206,8 +206,7 @@ std::vector<TensionPoint> tension_curve(const std::vector<ArrangementTrack>& tra
   assert_generation_budget(note_count, "arrangement notes", budget);
   SafetyProfile profile = arrangement_profile(opts.profile);
   double step = opts.step.value_or(1);
-  assert_range(step, std::numeric_limits<double>::denorm_min(), kMaxSafeInteger,
-               "tension sampling step");
+  assert_range(step, kMinValue, kMaxSafeInteger, "tension sampling step");
   // Read by no sampling this call makes, and checked all the same.
   if (opts.minSeverity) {
     assert_integer(*opts.minSeverity, "arrangement minSeverity",

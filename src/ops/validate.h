@@ -28,6 +28,7 @@
 #include "cantus/core/meter.h"
 #include "cantus/core/types.h"
 #include "cantus/core/validation.h"
+#include "core/validation/validation.h"
 #include "js/format.h"
 #include "json/json.h"
 #include "ops/args.h"
@@ -46,7 +47,7 @@ double assert_finite_number(const json::Value& value, std::string_view name);
 
 /** `assertInteger` with bounds the library supplies. */
 double assert_integer(const json::Value& value, std::string_view name,
-                      double min = -9007199254740991.0, double max = 9007199254740991.0);
+                      double min = -kMaxSafeInteger, double max = kMaxSafeInteger);
 
 /** `assertInteger` with bounds from the wire. */
 double assert_integer(const json::Value& value, std::string_view name, const json::Value& min,

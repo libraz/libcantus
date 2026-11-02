@@ -40,7 +40,6 @@ namespace cantus::ops {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** The notes that sound. */
 std::vector<NoteEvent> sounding_of(const std::vector<NoteEvent>& notes) {

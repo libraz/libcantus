@@ -50,7 +50,6 @@ double beat_difference(const json::Value& a, const json::Value& b) {
 }
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** The `input` option: only `auto` and `midi` are told apart from an unordered set. */
 ChordInputKind read_input_kind(const json::Value& asked) {

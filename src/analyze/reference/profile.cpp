@@ -24,6 +24,7 @@
 #include "cantus/core/meter.h"
 #include "cantus/core/validation.h"
 #include "cantus/theory/scale.h"
+#include "core/validation/validation.h"
 #include "js/math.h"
 
 namespace cantus {
@@ -146,7 +147,7 @@ ReferenceProfile reference_from_readings(const std::vector<NoteEvent>& notes,
   std::optional<double> budget = opts.budget;
   std::vector<NoteEvent> sounding = sounding_of(notes, budget);
   if (opts.totalBeats) {
-    assert_range(*opts.totalBeats, 0, 9007199254740991.0, "reference totalBeats");
+    assert_range(*opts.totalBeats, 0, kMaxSafeInteger, "reference totalBeats");
   }
   std::vector<NoteEvent> line =
       ordered_notes(opts.melody ? *opts.melody : notes, "reference melody", budget);

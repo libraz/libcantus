@@ -17,6 +17,7 @@
 #include "core/instrument/limits.gen.h"
 #include "core/instrument/profile.h"
 #include "core/meter/limits.gen.h"
+#include "core/validation/validation.h"
 #include "js/math.h"
 #include "js/number.h"
 
@@ -714,7 +715,7 @@ PlayabilityReport playability(const std::vector<NoteEvent>& notes,
   note_options.allowNonPositiveDuration = true;
   assert_note_events(notes, "playability notes", note_options);
   if (bpm) {
-    assert_range(*bpm, std::numeric_limits<double>::denorm_min(), 1000, "playability bpm");
+    assert_range(*bpm, kMinValue, 1000, "playability bpm");
   }
   // The profile is read before answering, whether or not a note would expose a contradiction.
   InstrumentProfile instrument = to_instrument_profile(profile, "playability profile");

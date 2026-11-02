@@ -40,8 +40,6 @@ void write_fields(const ReferenceMelody& v, FieldWriter& w) {
 
 namespace {
 
-constexpr double kMaxSafe = 9007199254740991.0;
-
 std::string at(std::string_view name, std::size_t index) {
   return std::string(name) + "[" + index_text(index) + "]";
 }
@@ -126,15 +124,15 @@ RhythmAnalysis read_rhythm_analysis(const json::Value& value, std::string_view n
   const json::Value& read = assert_record(value, name);
   RhythmAnalysis out;
   read_span(read, name, out.startBeat, out.endBeat);
-  out.bars = assert_range(get(read, "bars"), 0, kMaxSafe, with(name, ".bars"));
+  out.bars = assert_range(get(read, "bars"), 0, kMaxSafeInteger, with(name, ".bars"));
   double onsets = assert_integer(get(read, "onsets"), with(name, ".onsets"), 0);
   out.onsets = static_cast<std::size_t>(onsets);
   out.onsetDensity =
-      assert_range(get(read, "onsetDensity"), 0, kMaxSafe, with(name, ".onsetDensity"));
+      assert_range(get(read, "onsetDensity"), 0, kMaxSafeInteger, with(name, ".onsetDensity"));
   const json::Array& bar_onsets = assert_array(get(read, "barOnsets"), with(name, ".barOnsets"));
   for (std::size_t index = 0; index < bar_onsets.size(); ++index) {
     double count =
-        assert_range(bar_onsets[index], 0, kMaxSafe, at(with(name, ".barOnsets"), index));
+        assert_range(bar_onsets[index], 0, kMaxSafeInteger, at(with(name, ".barOnsets"), index));
     out.barOnsets.push_back(static_cast<std::size_t>(count));
   }
   out.onsetLevels = read_mass_distribution(get(read, "onsetLevels"), RHYTHM_LEVEL_COUNT,
@@ -161,7 +159,7 @@ FormSection read_form_section(const json::Value& value, std::string_view name,
   FormSection out;
   out.label = assert_string(get(read, "label"), with(name, ".label"));
   read_span(read, name, out.startBeat, out.endBeat);
-  out.bars = assert_range(get(read, "bars"), 0, kMaxSafe, with(name, ".bars"));
+  out.bars = assert_range(get(read, "bars"), 0, kMaxSafeInteger, with(name, ".bars"));
   out.firstOccurrence = static_cast<std::size_t>(assert_integer(get(read, "firstOccurrence"),
                                                                 with(name, ".firstOccurrence"), 0,
                                                                 js::max(section_count - 1, 0)));
@@ -201,7 +199,7 @@ ReferencePhraseMelody read_reference_phrase_melody(const json::Value& value,
     out.outline.push_back(assert_finite_number(outline[index], at(with(name, ".outline"), index)));
   }
   out.onsetDensity =
-      assert_range(get(read, "onsetDensity"), 0, kMaxSafe, with(name, ".onsetDensity"));
+      assert_range(get(read, "onsetDensity"), 0, kMaxSafeInteger, with(name, ".onsetDensity"));
   out.restRatio = assert_range(get(read, "restRatio"), 0, 1, with(name, ".restRatio"));
   return out;
 }
@@ -215,7 +213,7 @@ ReferencePhrase read_reference_phrase(const json::Value& value, std::string_view
   // A phrase is part of the piece the profile measures; a plan reads it bar by bar.
   cantus::assert_range(out.startBeat, span.startBeat, span.endBeat, with(name, ".startBeat"));
   cantus::assert_range(out.endBeat, span.startBeat, span.endBeat, with(name, ".endBeat"));
-  out.bars = assert_range(get(read, "bars"), 0, kMaxSafe, with(name, ".bars"));
+  out.bars = assert_range(get(read, "bars"), 0, kMaxSafeInteger, with(name, ".bars"));
   out.section = read_nullable(
       get(read, "section"), with(name, ".section"), [&](const json::Value& v, std::string_view n) {
         return static_cast<std::size_t>(assert_integer(v, n, 0, js::max(section_count - 1, 0)));
@@ -237,8 +235,8 @@ ReferenceForm read_reference_form(const json::Value& value, std::string_view nam
   const json::Value& read = assert_record(value, name);
   ReferenceForm out;
   const json::Value& hypermeter = assert_record(get(read, "hypermeter"), with(name, ".hypermeter"));
-  out.hypermeter.groupBars =
-      assert_range(get(hypermeter, "groupBars"), 0, kMaxSafe, with(name, ".hypermeter.groupBars"));
+  out.hypermeter.groupBars = assert_range(get(hypermeter, "groupBars"), 0, kMaxSafeInteger,
+                                          with(name, ".hypermeter.groupBars"));
   out.hypermeter.confidence =
       assert_range(get(hypermeter, "confidence"), 0, 1, with(name, ".hypermeter.confidence"));
   const json::Array& sections = assert_array(get(read, "sections"), with(name, ".sections"));
@@ -432,7 +430,8 @@ ReferenceMotif read_reference_motif(const json::Value& value, std::string_view n
     }
     out.rhythm.push_back(ratio);
   }
-  out.unitBeats = assert_range(get(read, "unitBeats"), 0, kMaxSafe, with(name, ".unitBeats"));
+  out.unitBeats =
+      assert_range(get(read, "unitBeats"), 0, kMaxSafeInteger, with(name, ".unitBeats"));
   if ((out.unitBeats > 0) != (!rhythm.empty())) {
     throw InvalidInputError(std::string(name) +
                             ".unitBeats must be positive exactly when rhythm is non-empty; "
@@ -440,7 +439,8 @@ ReferenceMotif read_reference_motif(const json::Value& value, std::string_view n
                             js::to_string(out.unitBeats) + " with " +
                             js::to_string(static_cast<double>(rhythm.size())) + " ratio(s)");
   }
-  out.spanBeats = assert_range(get(read, "spanBeats"), 0, kMaxSafe, with(name, ".spanBeats"));
+  out.spanBeats =
+      assert_range(get(read, "spanBeats"), 0, kMaxSafeInteger, with(name, ".spanBeats"));
   out.occurrences = assert_positive_int(get(read, "occurrences"), with(name, ".occurrences"));
   return out;
 }
@@ -489,7 +489,7 @@ ReferenceProfile read_reference_profile(const json::Value& value, std::string_vi
   std::string span = with(name, ".span");
   const json::Value& span_value = assert_record(get(read, "span"), span);
   read_span(span_value, span, out.span.startBeat, out.span.endBeat);
-  out.span.bars = assert_range(get(span_value, "bars"), 0, kMaxSafe, span + ".bars");
+  out.span.bars = assert_range(get(span_value, "bars"), 0, kMaxSafeInteger, span + ".bars");
   out.meters = assert_meter_map(get(read, "meters"), with(name, ".meters"));
   out.melody = read_reference_melody(get(read, "melody"), with(name, ".melody"));
   out.form = read_reference_form(get(read, "form"), with(name, ".form"), out.span,

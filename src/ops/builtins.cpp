@@ -11,6 +11,7 @@
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
 #include "cantus/version.h"
+#include "core/validation/validation.h"
 #include "js/format.h"
 #include "ops/codec.h"
 #include "ops/codec_m1.h"
@@ -22,8 +23,6 @@
 namespace cantus::ops {
 
 namespace {
-
-constexpr double kMaxSafeInteger = 9007199254740991.0;
 
 /** `$counter`: a mutable handle with an identity-tagged getter. */
 class Counter : public Handle {

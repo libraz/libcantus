@@ -30,7 +30,6 @@ namespace cantus {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** SEGMENTATION_QUALITIES: the qualities the boundary search considers. */
 constexpr std::string_view kSegmentationQualityNames[] =

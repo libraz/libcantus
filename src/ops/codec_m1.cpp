@@ -71,7 +71,6 @@ namespace cantus::ops {
 namespace {
 
 /** `Number.MIN_VALUE` and `Number.MAX_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 constexpr double kMaxValue = std::numeric_limits<double>::max();
 
 /** How a value that failed a shape check is named in the error explaining it. */

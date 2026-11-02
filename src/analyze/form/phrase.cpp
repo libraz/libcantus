@@ -30,7 +30,6 @@ namespace cantus {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** A name and the number it stands for. */
 struct NamedDouble {

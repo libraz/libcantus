@@ -44,7 +44,6 @@ namespace cantus::ops {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** `x == null`. */
 bool is_nullish(const json::Value& value) { return value.is_null() || is_undefined(value); }

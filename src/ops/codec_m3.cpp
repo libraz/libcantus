@@ -30,7 +30,6 @@ namespace cantus::ops {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** The host of a reader run outside any call: the readers call no host function. */
 const CallContext kNoHost;

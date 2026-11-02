@@ -151,7 +151,7 @@ void register_instrument() {
     std::vector<NoteEvent> notes = assert_note_events(a[0], "playability notes", note_options);
     std::optional<double> bpm;
     if (!a.undefined(2)) {
-      bpm = assert_range(a[2], std::numeric_limits<double>::denorm_min(), 1000, "playability bpm");
+      bpm = assert_range(a[2], kMinValue, 1000, "playability bpm");
     }
     InstrumentProfile profile = read_instrument_profile(a[1], "playability profile");
     return to_json(playability(notes, profile, bpm));

@@ -21,7 +21,6 @@ namespace {
 std::string str(std::string_view s) { return std::string(s); }
 
 /** `Number.MIN_VALUE` and `Number.MAX_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 constexpr double kMaxValue = std::numeric_limits<double>::max();
 
 /** The names of the note-name systems, in the order TS lists them. */

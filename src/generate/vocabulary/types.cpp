@@ -7,6 +7,7 @@
 
 #include "cantus/core/validation.h"
 #include "cantus/generate/context.h"
+#include "core/validation/validation.h"
 #include "generate/context/draw.h"
 
 namespace cantus {
@@ -70,8 +71,7 @@ void assert_vocabulary_fields(const std::optional<TimeSignature>& ts, double dif
   }
   assert_range(difficulty, 1, 5, name + " difficulty");
   if (tempo_range) {
-    double low = assert_range((*tempo_range)[0], std::numeric_limits<double>::denorm_min(), 1000,
-                              name + " tempoRange low");
+    double low = assert_range((*tempo_range)[0], kMinValue, 1000, name + " tempoRange low");
     assert_range((*tempo_range)[1], low, 1000, name + " tempoRange high");
   }
 }

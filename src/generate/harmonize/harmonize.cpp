@@ -194,9 +194,8 @@ HarmonizeResult harmonize_melody(const HarmonizeOptions& opts) {
   request.harmonic = harmonic;
   std::optional<double> given_rhythm = opts.harmonicRhythm;
   request.harmonicRhythm = [given_rhythm](const TimeSignature& signature) {
-    return assert_range(given_rhythm.value_or(default_harmonic_rhythm(signature)),
-                        std::numeric_limits<double>::denorm_min(), kMaxSafeInteger,
-                        "harmonic rhythm");
+    return assert_range(given_rhythm.value_or(default_harmonic_rhythm(signature)), kMinValue,
+                        kMaxSafeInteger, "harmonic rhythm");
   };
   std::optional<double> budget = opts.budget;
   request.charge = [budget](double estimated, std::string_view name) {

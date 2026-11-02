@@ -9,6 +9,7 @@
 
 #include "cantus/core/errors.h"
 #include "cantus/core/validation.h"
+#include "core/validation/validation.h"
 #include "js/math.h"
 #include "js/number.h"
 
@@ -17,7 +18,6 @@ namespace cantus {
 namespace {
 
 /** `Number.MIN_VALUE` and `Number.MAX_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 constexpr double kMaxValue = std::numeric_limits<double>::max();
 
 /** A generated JUST_RATIOS row: the semitone class as the object key, and its ratio. */

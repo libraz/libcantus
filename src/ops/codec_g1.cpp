@@ -34,7 +34,6 @@ namespace cantus::ops {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 std::string str(std::string_view s) { return std::string(s); }
 

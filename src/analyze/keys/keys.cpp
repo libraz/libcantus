@@ -39,7 +39,6 @@ constexpr int kFifthSemitones[] =
     ;
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** One of the 24 major and minor keys the search indexes (`KEY_CANDIDATES`). */
 struct KeyCandidate {

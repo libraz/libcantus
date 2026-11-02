@@ -4,6 +4,7 @@
 #include <limits>
 #include <vector>
 
+#include "core/validation/validation.h"
 #include "js/format.h"
 #include "ops/error_map.h"
 #include "ops/handles.h"
@@ -11,9 +12,6 @@
 namespace cantus::ops {
 
 namespace {
-
-/** 2^53 - 1: the largest id a JS number holds exactly. */
-constexpr double kMaxSafeInteger = 9007199254740991.0;
 
 [[noreturn]] void reject(const std::string& message) { throw RequestError(message); }
 

@@ -52,7 +52,6 @@ namespace cantus::ops {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** The op a method forwards to, called with wire arguments. */
 json::Value forward(const Args& a, std::string_view op, json::Array args) {

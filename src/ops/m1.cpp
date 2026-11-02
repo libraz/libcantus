@@ -45,7 +45,6 @@ namespace cantus::ops {
 namespace {
 
 /** `Number.MIN_VALUE` and `Number.MAX_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 constexpr double kMaxValue = std::numeric_limits<double>::max();
 
 /** A class value with the signs of the zeros its input wrote. */

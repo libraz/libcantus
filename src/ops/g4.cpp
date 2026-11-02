@@ -85,8 +85,8 @@ void register_g4() {
     json::Value rhythm = get(opts, "harmonicRhythm");
     request.harmonicRhythm = [rhythm](const TimeSignature& signature) {
       return assert_range(
-          nullish(rhythm) ? json::Value(default_harmonic_rhythm(signature)) : rhythm,
-          std::numeric_limits<double>::denorm_min(), kMaxSafeInteger, "harmonic rhythm");
+          nullish(rhythm) ? json::Value(default_harmonic_rhythm(signature)) : rhythm, kMinValue,
+          kMaxSafeInteger, "harmonic rhythm");
     };
     json::Value budget = get(opts, "budget");
     request.charge = [budget](double estimated, std::string_view name) {

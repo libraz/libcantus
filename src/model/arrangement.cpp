@@ -16,7 +16,6 @@ namespace cantus {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** A track's notes checked and copied, in the order they were given (`copyNotes`). */
 std::vector<NoteEvent> copy_notes(const std::vector<NoteEvent>& notes, const std::string& name,

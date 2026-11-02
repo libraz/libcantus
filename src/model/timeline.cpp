@@ -17,7 +17,6 @@ namespace cantus {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** A validated, defensive copy of one chord segment (`copySegment`). */
 ChordSegment copy_segment(const ChordSegment& segment) {

@@ -38,7 +38,6 @@ namespace cantus::ops {
 namespace {
 
 /** `Number.MIN_VALUE`. */
-constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 //--------------------------------------------------------------------------------------------
 // analyze/timeline
