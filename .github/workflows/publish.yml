@@ -75,13 +75,14 @@ jobs:
         working-directory: ts
         run: npm pack --ignore-scripts
 
+      # Artifacts outlive a day so a publish job that waits on manual registry setup can be re-run.
       - name: Upload package artifact
         uses: actions/upload-artifact@v7
         with:
           name: npm-package-ts
           path: 'ts/*.tgz'
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   build-wasm:
     runs-on: ubuntu-latest
@@ -137,7 +138,7 @@ jobs:
           name: npm-package-wasm
           path: 'bindings/wasm/*.tgz'
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   build-wheels:
     runs-on: ${{ matrix.os }}
@@ -192,7 +193,7 @@ jobs:
           name: wheel-${{ matrix.plat }}
           path: dist/*.whl
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   build-cli:
     runs-on: ${{ matrix.os }}
@@ -228,7 +229,7 @@ jobs:
           name: cli-${{ matrix.asset }}
           path: dist/*.tar.gz
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   publish-npm:
     needs: [verify, build-wasm]
