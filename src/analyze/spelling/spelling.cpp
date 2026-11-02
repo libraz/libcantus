@@ -28,12 +28,9 @@ const std::vector<std::vector<int>>& conventional_letter_steps() {
   return steps;
 }
 
-/** `mod12`. */
-int mod12(double value) { return pitch_class_of(value); }
-
 /** The shortest signed alteration, in [-6, 6], taking a letter's natural pc to `pc`. */
 int alteration_for(int letter, int pc) {
-  int distance = mod12(pc - natural_pitch_class_of(letter));
+  int distance = pitch_class_of(pc - natural_pitch_class_of(letter));
   return distance > 6 ? distance - 12 : distance;
 }
 
@@ -49,7 +46,7 @@ bool same_spelling(const NoteData& a, const NoteData& b) {
 
 /** Every spelling of `pitch` within a double accidental, `preferred` first (`candidatesFor`). */
 std::vector<NoteData> candidates_for(int pitch, const NoteData& preferred) {
-  int pc = mod12(pitch);
+  int pc = pitch_class_of(pitch);
   std::vector<NoteData> rest;
   for (int letter = 0; letter < 7; ++letter) {
     int alter = alteration_for(letter, pc);
@@ -77,15 +74,15 @@ std::vector<NoteData> candidates_for(int pitch, const NoteData& preferred) {
 std::optional<NoteData> chord_spelling_of(int pc, const Chord& chord, const NoteData& tonic,
                                           const KeyScale& key) {
   for (const NoteData& tone : spell_chord(chord, tonic, key)) {
-    if (mod12(natural_pitch_class_of(tone.letter) + tone.alter) == pc) {
+    if (pitch_class_of(natural_pitch_class_of(tone.letter) + tone.alter) == pc) {
       return tone;
     }
   }
-  if (!chord.bassPc || mod12(*chord.bassPc) != pc) {
+  if (!chord.bassPc || pitch_class_of(*chord.bassPc) != pc) {
     return std::nullopt;
   }
   const std::optional<PitchSpelling>& hint = chord.bassSpelling;
-  if (hint && mod12(natural_pitch_class_of(hint->letter) + hint->alter) == pc) {
+  if (hint && pitch_class_of(natural_pitch_class_of(hint->letter) + hint->alter) == pc) {
     return NoteData{static_cast<double>(diatonic_letter_of(hint->letter)), hint->alter,
                     std::nullopt};
   }
@@ -123,7 +120,7 @@ struct LineState {
 /** Weigh every spelling open to one note against what the chord and the key say (`stateFor`). */
 LineState state_for(int pitch, const std::optional<Chord>& chord, const NoteData& tonic,
                     const KeyScale& key) {
-  int pc = mod12(pitch);
+  int pc = pitch_class_of(pitch);
   std::optional<NoteData> from_chord;
   if (chord) {
     from_chord = chord_spelling_of(pc, *chord, tonic, key);

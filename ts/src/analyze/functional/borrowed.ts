@@ -69,10 +69,11 @@ export function borrowedSourceOf(chord: Chord, key: KeyScale): BorrowedSource {
     return null;
   }
   if (isNeapolitanChordOf(chord, key)) return 'neapolitan';
-  if (isBorrowed(chord, key)) {
-    return isMinorScale(key) ? 'parallelMajor' : 'parallelMinor';
+  // The checks of isBorrowed that remain once the two above have failed.
+  if (isMinorScaleAlteration(chord, key) || !isDiatonicChord(chord, parallelScale(key))) {
+    return null;
   }
-  return null;
+  return isMinorScale(key) ? 'parallelMajor' : 'parallelMinor';
 }
 
 /**

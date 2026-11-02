@@ -85,10 +85,34 @@ bool contains(const std::vector<int>& values, int value) {
   return std::find(values.begin(), values.end(), value) != values.end();
 }
 
+/** The qualities in canonical order, with what the match ranking reads of each. */
+struct QualityTables {
+  std::vector<ChordQuality> qualities;
+  /** Tones in a chord of each quality, indexed by the quality. */
+  std::vector<std::size_t> toneCounts;
+  /** Position of each quality in `qualities`, indexed by the quality. */
+  std::vector<double> ranks;
+};
+
+/** The quality tables, derived once. */
+const QualityTables& quality_tables() {
+  static const QualityTables tables = [] {
+    QualityTables out;
+    out.qualities = chord_qualities();
+    out.toneCounts.resize(out.qualities.size());
+    out.ranks.resize(out.qualities.size());
+    for (std::size_t position = 0; position < out.qualities.size(); ++position) {
+      auto index = static_cast<std::size_t>(out.qualities[position]);
+      out.toneCounts[index] = chord_pitch_classes(make_chord(0, out.qualities[position])).size();
+      out.ranks[index] = static_cast<double>(position);
+    }
+    return out;
+  }();
+  return tables;
+}
+
 /** The order matches are ranked in, as the TS comparator returns it (negative: `a` first). */
-double compare_matches(const ChordMatch& a, const ChordMatch& b,
-                       const std::vector<std::size_t>& tone_counts,
-                       const std::vector<ChordQuality>& qualities) {
+double compare_matches(const ChordMatch& a, const ChordMatch& b, const QualityTables& tables) {
   if (a.extraPcs.size() != b.extraPcs.size()) {
     return static_cast<double>(a.extraPcs.size()) - static_cast<double>(b.extraPcs.size());
   }
@@ -101,20 +125,16 @@ double compare_matches(const ChordMatch& a, const ChordMatch& b,
   if (a_root != b_root) {
     return a_root ? -1 : 1;
   }
-  std::size_t a_size = tone_counts[static_cast<std::size_t>(a.quality)];
-  std::size_t b_size = tone_counts[static_cast<std::size_t>(b.quality)];
+  std::size_t a_size = tables.toneCounts[static_cast<std::size_t>(a.quality)];
+  std::size_t b_size = tables.toneCounts[static_cast<std::size_t>(b.quality)];
   if (a_size != b_size) {
     return static_cast<double>(b_size) - static_cast<double>(a_size);
   }
   // Past size, two readings of the same pitches are told apart by the chord they name and by
   // nothing else: the canonical quality order decides, and only a chord symmetrical under
   // transposition reaches the root below it.
-  auto rank = [&](ChordQuality q) {
-    return static_cast<double>(std::find(qualities.begin(), qualities.end(), q) -
-                               qualities.begin());
-  };
-  double a_rank = rank(a.quality);
-  double b_rank = rank(b.quality);
+  double a_rank = tables.ranks[static_cast<std::size_t>(a.quality)];
+  double b_rank = tables.ranks[static_cast<std::size_t>(b.quality)];
   if (a_rank != b_rank) {
     return a_rank - b_rank;
   }
@@ -226,12 +246,8 @@ std::vector<ChordMatch> detect_chord(const std::vector<int>& pitches,
     bass_pc = pitch_class_of(lowest);
   }
   std::vector<ChordMatch> matches;
-  std::vector<ChordQuality> qualities = chord_qualities();
-  std::vector<std::size_t> tone_counts(qualities.size());
-  for (ChordQuality quality : qualities) {
-    tone_counts[static_cast<std::size_t>(quality)] =
-        chord_pitch_classes(make_chord(0, quality)).size();
-  }
+  const QualityTables& tables = quality_tables();
+  const std::vector<ChordQuality>& qualities = tables.qualities;
   for (int root_pc : input) {
     for (ChordQuality quality : qualities) {
       Chord chord = make_chord(root_pc, quality);
@@ -285,7 +301,7 @@ std::vector<ChordMatch> detect_chord(const std::vector<int>& pitches,
     }
   }
   std::stable_sort(matches.begin(), matches.end(), [&](const ChordMatch& a, const ChordMatch& b) {
-    return compare_matches(a, b, tone_counts, qualities) < 0;
+    return compare_matches(a, b, tables) < 0;
   });
   return matches;
 }

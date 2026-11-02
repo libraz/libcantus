@@ -20,9 +20,19 @@ import {
   resolveMeters,
 } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import { assertGenerationBudget, assertNoteEvents } from '../../core/validation/index.js';
+import {
+  assertGenerationBudget,
+  assertNoteEvents,
+  dropSilentNotes,
+} from '../../core/validation/index.js';
 import { BEAT_EPS, HUMANIZE_ADJACENCY } from '../adjacency.js';
-import { barSpanOf, firstSoundingBeat, lastBarOf, resolveSpanEnd } from '../form/internal.js';
+import {
+  barSpanOf,
+  firstSoundingBeat,
+  floorMod,
+  lastBarOf,
+  resolveSpanEnd,
+} from '../form/internal.js';
 import { barGridStart, latestSoundingEnd } from '../grid.js';
 import { ioiBinIndex, isMultipleOf, rhythmLevel } from './internal.js';
 
@@ -439,7 +449,7 @@ export function rhythmOver(
 ): RhythmAnalysis {
   const meters = resolveMeters(opts, 'rhythm meters');
   assertNoteEvents(notes, 'rhythm notes', { allowNonPositiveDuration: true, budget: opts.budget });
-  const sounding = notes.filter((note) => note.durationBeat > 0);
+  const sounding = dropSilentNotes(notes);
   const startBeat = windowStart ?? barGridStart(firstSoundingBeat(sounding), meters);
   const endBeat = resolveSpanEnd(
     opts.totalBeats,
@@ -502,8 +512,7 @@ export function rhythmOver(
     }
     const profile = profiles[index];
     if (profile !== undefined) {
-      const slotIndex =
-        ((onset.slot % profile.slotsPerBar) + profile.slotsPerBar) % profile.slotsPerBar;
+      const slotIndex = floorMod(onset.slot, profile.slotsPerBar);
       profile.shares[slotIndex] = (profile.shares[slotIndex] ?? 0) + 1;
       profile.onsets += 1;
     }

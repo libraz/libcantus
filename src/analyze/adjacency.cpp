@@ -5,6 +5,8 @@
 
 #include <cmath>
 
+#include "js/math.h"
+
 namespace cantus {
 
 bool same_instant(double beat, double other) { return std::fabs(beat - other) <= BEAT_EPS; }
@@ -14,5 +16,11 @@ bool adjacent(double prev_end, double next_start) {
 }
 
 bool has_ended(double prev_end, double beat) { return prev_end <= beat + HUMANIZE_ADJACENCY; }
+
+bool within_beats(double beat, double from, double to) {
+  return beat >= from - BEAT_EPS && beat < to - BEAT_EPS;
+}
+
+double beat_key(double beat) { return js::round(beat / BEAT_EPS); }
 
 }  // namespace cantus

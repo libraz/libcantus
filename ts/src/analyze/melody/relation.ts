@@ -23,7 +23,7 @@ import {
   type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
-import { BEAT_EPS, HUMANIZE_ADJACENCY } from '../adjacency.js';
+import { adjacent, BEAT_EPS } from '../adjacency.js';
 import {
   endBeatOf,
   intervalsOf,
@@ -312,11 +312,10 @@ export function relateMotifs(
   const backward = retroProfile !== null && sameNumbers(retroProfile, answerProfile);
   const semitones = (answer[0]?.pitch ?? 0) - (model[0]?.pitch ?? 0);
   const interval = intervalBetween(model[0]?.pitch ?? 0, answer[0]?.pitch ?? 0, key);
-  const gap = (answer[0]?.startBeat ?? 0) - endBeatOf(model);
   // A sequence follows its model immediately; anything further off is a
   // restatement somewhere else in the piece. Immediately is what the adjacency
   // test already means by it, so a statement that starts a hair early counts.
-  const sequence = gap >= -HUMANIZE_ADJACENCY && gap <= HUMANIZE_ADJACENCY;
+  const sequence = adjacent(endBeatOf(model), answer[0]?.startBeat ?? 0);
   const timeRatio = stretchRatio(modelGaps, answerGaps);
   const stretched = Math.abs(timeRatio - 1) > BEAT_EPS;
   const shapes = pitchShapes(intervalsOf(model), intervalsOf(answer));

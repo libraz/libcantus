@@ -51,10 +51,11 @@ Nullable<BorrowedSource> borrowed_source_of(const Chord& chord, const KeyScale& 
   if (is_neapolitan_chord_of(chord, key)) {
     return BorrowedSource::kNeapolitan;
   }
-  if (is_borrowed(chord, key)) {
-    return is_minor_scale(key) ? BorrowedSource::kParallelMajor : BorrowedSource::kParallelMinor;
+  // The checks of is_borrowed() that remain once the two above have failed.
+  if (is_minor_scale_alteration(chord, key) || !is_diatonic_chord(chord, parallel_scale(key))) {
+    return std::nullopt;
   }
-  return std::nullopt;
+  return is_minor_scale(key) ? BorrowedSource::kParallelMajor : BorrowedSource::kParallelMinor;
 }
 
 bool is_borrowed_chord(const ChordArg& chord, const KeyArg& key) {

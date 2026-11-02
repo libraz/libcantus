@@ -28,7 +28,7 @@ namespace {
 
 constexpr std::size_t kPitchClasses = static_cast<std::size_t>(PITCH_CLASSES);
 
-/** Semitones above the root a third may sit at: minor, then major (`THIRD_SEMITONES`). */
+/** Semitones above the root a third may sit at: minor, then major (`THIRD_SEMITONES`, tendency). */
 constexpr int kThirdSemitones[] =
 #include "analyze/keys/third_semitones.gen.inc"
     ;
@@ -120,6 +120,7 @@ std::vector<int> choose_keys(const std::vector<KeySlot>& slots, double change_co
       allocate_choice_table(static_cast<double>(slots.size()), count, "key search choices", budget);
   std::vector<double> costs = allocate_candidate_table(1, count, "key search costs", budget);
   std::vector<double> spare = allocate_candidate_table(1, count, "key search costs", budget);
+  const auto& distances = candidate_distance();
   const std::vector<double>& opening = slots[0].scores;
   for (int c = 0; c < count; ++c) {
     costs[static_cast<std::size_t>(c)] = -opening[static_cast<std::size_t>(c)];
@@ -133,6 +134,7 @@ std::vector<int> choose_keys(const std::vector<KeySlot>& slots, double change_co
     }
     int accent = metric_weight(slot.startBeat, meter);
     double metric_factor = 1 - (STRONG_BEAT_DISCOUNT * accent) / MAX_METRIC_WEIGHT;
+    double slot_change_cost = change_cost * metric_factor;
     std::size_t row_base = i * static_cast<std::size_t>(count);
     for (int to = 0; to < count; ++to) {
       // Holding the key is free; every other predecessor pays by distance.
@@ -142,9 +144,8 @@ std::vector<int> choose_keys(const std::vector<KeySlot>& slots, double change_co
         if (from == to) {
           continue;
         }
-        int distance =
-            candidate_distance()[static_cast<std::size_t>(from)][static_cast<std::size_t>(to)];
-        double penalty = change_cost * metric_factor * (1 + FIFTHS_DISTANCE_COST * distance);
+        int distance = distances[static_cast<std::size_t>(from)][static_cast<std::size_t>(to)];
+        double penalty = slot_change_cost * (1 + FIFTHS_DISTANCE_COST * distance);
         double cost = previous[static_cast<std::size_t>(from)] + penalty;
         if (cost < best) {
           best = cost;
@@ -201,16 +202,16 @@ std::vector<SlotRegion> regions_from_path(const std::vector<KeySlot>& slots,
   return regions;
 }
 
+constexpr std::size_t kNone = static_cast<std::size_t>(-1);
+
 /** A region of the merge pass, in a list that shrinks as regions absorb others (`MergeNode`). */
 struct MergeNode : SlotRegion {
-  /** Index of the neighbour before / after, or npos. */
-  std::size_t previous = static_cast<std::size_t>(-1);
-  std::size_t next = static_cast<std::size_t>(-1);
+  /** Index of the neighbour before / after, or kNone. */
+  std::size_t previous = kNone;
+  std::size_t next = kNone;
   /** Set when the region has been absorbed, so its heap entries are spent. */
   bool merged = false;
 };
-
-constexpr std::size_t kNone = static_cast<std::size_t>(-1);
 
 /** Fold a region's successor into it, and return the region that remains (`absorbNext`). */
 std::size_t absorb_next(std::vector<MergeNode>& nodes, std::size_t region) {
@@ -418,6 +419,25 @@ double positive_beats(double value, std::string_view name) {
   return assert_range(value, kMinValue, kMaxSafeInteger, name);
 }
 
+/** The meters and the two slot lengths a key search reads from its options (`resolveKeySearch`). */
+struct KeySearchOptions {
+  MeterMap meters;
+  double expectedKeyBeats;
+  double minKeyBeats;
+};
+
+KeySearchOptions resolve_key_search(const KeyTimelineOptions& opts, std::string_view meters_name) {
+  ResolveMetersOptions meter_options;
+  meter_options.ts = opts.ts;
+  meter_options.meters = opts.meters;
+  MeterMap meters = resolve_meters(meter_options, meters_name);
+  double bar = beats_per_bar_at(0, MeterArg(meters));
+  double expected_key_beats =
+      positive_beats(opts.expectedKeyBeats.value_or(bar * 4), "expectedKeyBeats");
+  double min_key_beats = positive_beats(opts.minKeyBeats.value_or(bar), "minKeyBeats");
+  return KeySearchOptions{std::move(meters), expected_key_beats, min_key_beats};
+}
+
 /** The chords sounding over a span of the analysis, with the beats the search reads them over. */
 struct OrderedSegment {
   std::size_t index;
@@ -555,6 +575,23 @@ void attach_pivots(std::vector<KeyRegion>& regions, const std::vector<OrderedSeg
 /** A region's key, owned by it: the candidate resolved whole. */
 ResolvedKey region_key(const KeyCandidate& candidate) { return resolve_key(candidate.key); }
 
+/** How well a pitch-class histogram fits a candidate key, as a correlation with its profile. */
+double candidate_fit(const std::array<double, 12>& weights, const KeyProfilePair& profile,
+                     const KeyCandidate& candidate) {
+  return profile_score(weights, candidate.minor ? profile.minor : profile.major, candidate.rootPc);
+}
+
+/** The region a candidate holds over `[start_beat, end_beat)` (`regionFor`). */
+KeyRegion region_for(const KeyCandidate& candidate, double start_beat, double end_beat,
+                     const std::array<double, 12>& weights, const KeyProfilePair& profile) {
+  KeyRegion out;
+  out.startBeat = start_beat;
+  out.endBeat = end_beat;
+  out.key = region_key(candidate);
+  out.confidence = js::max(0, candidate_fit(weights, profile, candidate));
+  return out;
+}
+
 }  // namespace
 
 std::vector<KeyRegion> key_timeline_from_notes(const std::vector<NoteEvent>& notes,
@@ -565,26 +602,16 @@ std::vector<KeyRegion> key_timeline_from_notes(const std::vector<NoteEvent>& not
 std::vector<KeyRegion> key_timeline_over(const std::vector<NoteEvent>& notes,
                                          const KeyTimelineOptions& opts,
                                          const ProfileSource& profile_source) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters_map = resolve_meters(meter_options, "key timeline meters");
-  const MeterArg meters(meters_map);
-  double bar = beats_per_bar_at(0, meters);
-  double expected_key_beats =
-      positive_beats(opts.expectedKeyBeats.value_or(bar * 4), "expectedKeyBeats");
-  double min_key_beats = positive_beats(opts.minKeyBeats.value_or(bar), "minKeyBeats");
+  KeySearchOptions search = resolve_key_search(opts, "key timeline meters");
+  const MeterArg meters(search.meters);
+  double expected_key_beats = search.expectedKeyBeats;
+  double min_key_beats = search.minKeyBeats;
   std::optional<double> budget = opts.budget;
   NoteEventAssertOptions note_options;
   note_options.allowNonPositiveDuration = true;
   note_options.budget = budget;
   assert_note_events(notes, "key timeline notes", note_options);
-  std::vector<NoteEvent> sounding;
-  for (const NoteEvent& note : notes) {
-    if (note.durationBeat > 0) {
-      sounding.push_back(note);
-    }
-  }
+  std::vector<NoteEvent> sounding = drop_silent_notes(notes);
   double total_beats = opts.totalBeats.value_or(latest_sounding_end(sounding));
   assert_range(total_beats, js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                "key timeline totalBeats");
@@ -620,7 +647,6 @@ std::vector<KeyRegion> key_timeline_over(const std::vector<NoteEvent>& notes,
   }
   const KeyProfilePair& profile = resolved_profile.get();
   WindowWeights empty;
-  empty.lowestPitch = std::numeric_limits<double>::infinity();
   std::vector<KeySlot> slots;
   double weight_sum = 0;
   int sounding_slots = 0;
@@ -644,9 +670,7 @@ std::vector<KeyRegion> key_timeline_over(const std::vector<NoteEvent>& notes,
     slot.startBeat = start_beat;
     slot.endBeat = end_beat;
     for (const KeyCandidate& candidate : candidates) {
-      slot.scores.push_back(profile_score(weights, candidate.minor ? profile.minor : profile.major,
-                                          candidate.rootPc) *
-                            total_weight);
+      slot.scores.push_back(candidate_fit(weights, profile, candidate) * total_weight);
     }
     slot.weight = total_weight;
     slots.push_back(std::move(slot));
@@ -686,14 +710,7 @@ std::vector<KeyRegion> key_timeline_over(const std::vector<NoteEvent>& notes,
         weights[pc] += slot_weights[i].weights[pc];
       }
     }
-    double correlation =
-        profile_score(weights, candidate.minor ? profile.minor : profile.major, candidate.rootPc);
-    KeyRegion out;
-    out.startBeat = start_beat;
-    out.endBeat = region.endBeat;
-    out.key = region_key(candidate);
-    out.confidence = js::max(0, correlation);
-    regions.push_back(std::move(out));
+    regions.push_back(region_for(candidate, start_beat, region.endBeat, weights, profile));
   }
   with_relations(regions);
   return regions;
@@ -704,15 +721,10 @@ std::vector<KeyRegion> detect_modulations_over(const std::vector<SegmentBeats>& 
                                                const KeyTimelineOptions& opts,
                                                const ProfileSource& profile_source,
                                                std::vector<std::size_t>* first_segments) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters_map = resolve_meters(meter_options, "modulation meters");
-  const MeterArg meters(meters_map);
-  double bar = beats_per_bar_at(0, meters);
-  double expected_key_beats =
-      positive_beats(opts.expectedKeyBeats.value_or(bar * 4), "expectedKeyBeats");
-  double min_key_beats = positive_beats(opts.minKeyBeats.value_or(bar), "minKeyBeats");
+  KeySearchOptions search = resolve_key_search(opts, "modulation meters");
+  const MeterArg meters(search.meters);
+  double expected_key_beats = search.expectedKeyBeats;
+  double min_key_beats = search.minKeyBeats;
   // One slot per chord, each holding a row of the candidate list: the search's table, not the
   // chord count, is what the budget stands for.
   const std::vector<KeyCandidate>& candidates = key_candidates();
@@ -816,14 +828,7 @@ std::vector<KeyRegion> detect_modulations_over(const std::vector<SegmentBeats>& 
         weights[static_cast<std::size_t>(pc)] += overlap;
       }
     }
-    double correlation =
-        profile_score(weights, candidate.minor ? profile.minor : profile.major, candidate.rootPc);
-    KeyRegion out;
-    out.startBeat = region.startBeat;
-    out.endBeat = region.endBeat;
-    out.key = region_key(candidate);
-    out.confidence = js::max(0, correlation);
-    regions.push_back(std::move(out));
+    regions.push_back(region_for(candidate, region.startBeat, region.endBeat, weights, profile));
     if (first_segments != nullptr) {
       first_segments->push_back(ordered[region.from].index);
     }
@@ -860,11 +865,7 @@ void attach_pivots_over(std::vector<KeyRegion>& regions, const std::vector<Segme
 }
 
 void attach_pivots(std::vector<KeyRegion>& regions, const std::vector<ChordSegment>& chords) {
-  std::vector<SegmentSpan> spans;
-  for (const ChordSegment& segment : chords) {
-    spans.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
-  }
-  attach_pivots_over(regions, spans,
+  attach_pivots_over(regions, spans_of(chords),
                      [&](std::size_t index) -> const Chord& { return chords[index].chord; });
 }
 
@@ -899,18 +900,35 @@ std::optional<std::size_t> prevailing_key_index(
   return best;
 }
 
+std::vector<SegmentSpan> spans_of(const std::vector<ChordSegment>& segments) {
+  std::vector<SegmentSpan> spans;
+  spans.reserve(segments.size());
+  for (const ChordSegment& segment : segments) {
+    spans.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
+  }
+  return spans;
+}
+
+std::string key_id(const KeyScale& scale) {
+  return js::to_string(static_cast<double>(pitch_class_of(scale.rootPc))) + ":" +
+         js::to_string(static_cast<double>(scale.modeMask12));
+}
+
 Nullable<ResolvedKey> prevailing_key_of(const std::vector<KeyRegion>& regions) {
   std::vector<std::pair<std::string, double>> entries;
   for (const KeyRegion& region : regions) {
-    std::string id = js::to_string(static_cast<double>(pitch_class_of(region.key.scale.rootPc))) +
-                     ":" + js::to_string(static_cast<double>(region.key.scale.modeMask12));
-    entries.emplace_back(std::move(id), js::max(0, region.endBeat - region.startBeat));
+    entries.emplace_back(key_id(region.key.scale), js::max(0, region.endBeat - region.startBeat));
   }
   std::optional<std::size_t> best = prevailing_key_index(entries);
   if (!best) {
     return std::nullopt;
   }
   return regions[*best].key;
+}
+
+ResolvedKey prevailing_key_or_default(const std::vector<KeyRegion>& regions) {
+  Nullable<ResolvedKey> prevailing = prevailing_key_of(regions);
+  return prevailing ? *prevailing : resolve_key(major_key(0));
 }
 
 const ResolvedKey& KeyLookup::operator()(double beat) const {

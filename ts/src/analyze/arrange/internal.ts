@@ -16,7 +16,7 @@ import {
 } from '../../core/validation/index.js';
 import { PROFILE_WEIGHTS, type SafetyProfile } from '../../theory/safety/index.js';
 import { resolveKey } from '../../theory/scale/index.js';
-import { adjacent, BEAT_EPS, hasEnded, sameInstant } from '../adjacency.js';
+import { adjacent, BEAT_EPS, hasEnded, sameInstant, withinBeats } from '../adjacency.js';
 import type { KeyRegion } from '../keys/index.js';
 import { assertChordTimeline, assertSpansInOrder, type ChordTimeline } from '../timeline/index.js';
 import type { IdentifiedVoiceNote } from '../voice/index.js';
@@ -72,7 +72,7 @@ export type PreparedTrack = {
 
 /** Whether a sounding span `[start, end)` covers a beat. */
 export function covers(note: PreparedNote, beat: number): boolean {
-  return beat >= note.startBeat - BEAT_EPS && beat < note.endBeat - BEAT_EPS;
+  return withinBeats(beat, note.startBeat, note.endBeat);
 }
 
 /** Whether a track's role means it carries no harmonic content. */
@@ -308,6 +308,9 @@ export function poolNotes(tracks: ArrangementTrack[], only?: ReadonlySet<number>
   return notes;
 }
 
+/** The lanes excluded when none is: shared, so a lookup without exclusions allocates nothing. */
+const NO_LANES: ReadonlySet<number> = new Set<number>();
+
 /**
  * Split a track's ordered notes into monophonic sub-voices.
  *
@@ -323,7 +326,10 @@ export function poolNotes(tracks: ArrangementTrack[], only?: ReadonlySet<number>
  */
 function splitIntoSubVoices(ordered: IdentifiedVoiceNote[]): IdentifiedVoiceNote[][] {
   const lanes: IdentifiedVoiceNote[][] = [];
-  const attachNearest = (note: IdentifiedVoiceNote, excluded = new Set<number>()): number => {
+  const attachNearest = (
+    note: IdentifiedVoiceNote,
+    excluded: ReadonlySet<number> = NO_LANES,
+  ): number => {
     let best = -1;
     let bestDistance = Number.POSITIVE_INFINITY;
     let bestEnd = Number.NEGATIVE_INFINITY;

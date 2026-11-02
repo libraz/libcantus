@@ -16,6 +16,7 @@
 #include "analyze/form/internal.h"
 #include "analyze/grid.h"
 #include "analyze/keys/keys.h"
+#include "analyze/melody/internal.h"
 #include "analyze/voice/voice.h"
 #include "cantus/analyze/melody.h"
 #include "cantus/core/errors.h"
@@ -101,7 +102,7 @@ void add_signal(Boundaries& boundaries, double beat, PhraseSignal signal, double
                 const CadenceHit* cadence = nullptr, std::optional<std::size_t> arrival = {}) {
   // Beats arrive from bar arithmetic and from note ends, which land an epsilon apart on the same
   // boundary; keying on a rounded beat merges them.
-  double key = js::round(beat / BEAT_EPS);
+  double key = beat_key(beat);
   auto found = boundaries.find(key);
   if (found == boundaries.end()) {
     Boundary fresh;
@@ -133,11 +134,8 @@ BoundaryReading read_boundary(const Boundary& boundary) {
                                                        boundary.strengths.end());
   std::stable_sort(signals.begin(), signals.end(), [](const auto& a, const auto& b) {
     double by_strength = b.second - a.second;
-    double order =
-        by_strength != 0 && !std::isnan(by_strength)
-            ? by_strength
-            : static_cast<double>(signal_rank(a.first)) - static_cast<double>(signal_rank(b.first));
-    return order < 0;
+    return js::or_else(by_strength, static_cast<double>(signal_rank(a.first)) -
+                                        static_cast<double>(signal_rank(b.first))) < 0;
   });
   BoundaryReading out;
   std::vector<double> strengths;
@@ -156,7 +154,7 @@ BoundaryReading read_boundary(const Boundary& boundary) {
 
 /** Whether a cadence arriving at `at_beat` closes the phrase [start, end) (`closesPhrase`). */
 bool closes_phrase(double at_beat, double start_beat, double end_beat) {
-  return at_beat >= start_beat - BEAT_EPS && at_beat < end_beat - BEAT_EPS;
+  return within_beats(at_beat, start_beat, end_beat);
 }
 
 /** How well a length matches what a phrase is expected to run (`lengthFit`). */
@@ -192,7 +190,7 @@ void rest_boundaries(Boundaries& boundaries, const std::vector<NoteEvent>& notes
   std::vector<NoteEvent> ordered = notes;
   std::stable_sort(ordered.begin(), ordered.end(), [](const NoteEvent& a, const NoteEvent& b) {
     double by_start = a.startBeat - b.startBeat;
-    return (by_start != 0 && !std::isnan(by_start) ? by_start : a.pitch - b.pitch) < 0;
+    return js::or_else(by_start, a.pitch - b.pitch) < 0;
   });
   double covered = -std::numeric_limits<double>::infinity();
   for (const NoteEvent& note : ordered) {
@@ -219,7 +217,7 @@ void repetition_boundaries(Boundaries& boundaries, const std::vector<NoteEvent>&
   auto onsets_in = [&](double from, double to) {
     std::vector<NoteEvent> out;
     for (const NoteEvent& note : notes) {
-      if (note.startBeat >= from - BEAT_EPS && note.startBeat < to - BEAT_EPS) {
+      if (within_beats(note.startBeat, from, to)) {
         out.push_back(note);
       }
     }
@@ -362,9 +360,7 @@ std::vector<std::size_t> choose_phrase_path(const std::vector<double>& beats,
 
 KeyAtBeat modulation_key_at(std::vector<KeyRegion> regions) {
   auto held = std::make_shared<std::vector<KeyRegion>>(std::move(regions));
-  Nullable<ResolvedKey> prevailing = prevailing_key_of(*held);
-  auto lookup_key =
-      std::make_shared<KeyLookup>(*held, prevailing ? *prevailing : resolve_key(major_key(0)));
+  auto lookup_key = std::make_shared<KeyLookup>(*held, prevailing_key_or_default(*held));
   // The pitch classes alone: a phrase boundary is argued from cadences and scale membership.
   return [held, lookup_key](double beat) { return scale_of((*lookup_key)(beat)); };
 }
@@ -391,11 +387,7 @@ BoundaryCadences boundary_cadences(const std::vector<CadenceHit>& found,
 }
 
 BoundaryCadences boundary_cadences(const ChordTimeline& timeline, const KeyContext& key) {
-  std::vector<SegmentSpan> segments;
-  for (const ChordSegment& segment : timeline.segments) {
-    segments.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
-  }
-  return boundary_cadences(detect_cadences(timeline, key), {}, segments);
+  return boundary_cadences(detect_cadences(timeline, key), {}, spans_of(timeline.segments));
 }
 
 PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEvent>& notes,
@@ -414,26 +406,13 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
     assert_range(opts.hypermeter->confidence, 0, 1, "phrase hypermeter confidence");
     assert_positive_int(opts.hypermeter->groupBars, "phrase hypermeter groupBars");
   }
-  std::vector<NoteEvent> sounding;
-  for (const NoteEvent& note : notes) {
-    if (note.durationBeat > 0) {
-      sounding.push_back(note);
-    }
-  }
+  std::vector<NoteEvent> sounding = drop_silent_notes(notes);
   const std::vector<SegmentSpan>& segments = source.segments;
-  // Whichever starts first, the notes or the chords; with neither, beat 0.
-  constexpr double kInfinity = std::numeric_limits<double>::infinity();
-  double earliest = js::min(first_sounding_beat(sounding, kInfinity),
-                            segments.empty() ? kInfinity : segments.front().startBeat);
-  double first_onset = std::isfinite(earliest) ? earliest : 0;
   // The pickup rule the whole analysis shares.
-  double span_start = bar_grid_start(first_onset, meters);
-  double latest_end =
-      js::max(segments.empty() ? -std::numeric_limits<double>::infinity() : segments.back().endBeat,
-              latest_sounding_end(sounding, -std::numeric_limits<double>::infinity()));
-  double notes_end = std::isfinite(latest_end) ? latest_end : 0;
+  TimelineSpan extent = timeline_span(sounding, segments, meters);
+  double span_start = extent.startBeat;
   double span_end =
-      resolve_span_end(source.total_beats(), span_start, notes_end, "phrase totalBeats");
+      resolve_span_end(source.total_beats(), span_start, extent.notesEnd, "phrase totalBeats");
   PhraseReading reading;
   if (span_end <= span_start + BEAT_EPS) {
     // Nothing sounds, so there is no material to hear a phrase in.
@@ -514,46 +493,59 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
   add_signal(boundaries, span_end, PhraseSignal::kPieceEnd, PIECE_END_STRENGTH);
 
   // The span's own ends are boundaries whether or not anything argues for them.
-  std::vector<const Boundary*> candidates;
+  struct Candidate {
+    const Boundary* boundary;
+    BoundaryReading reading;
+  };
+  std::vector<Candidate> candidates;
   for (const auto& entry : boundaries) {
     const Boundary& boundary = entry.second;
-    if (boundary.beat > span_start + BEAT_EPS && boundary.beat < span_end - BEAT_EPS &&
-        read_boundary(boundary).strength > 0) {
-      candidates.push_back(&boundary);
+    if (boundary.beat > span_start + BEAT_EPS && boundary.beat < span_end - BEAT_EPS) {
+      BoundaryReading boundary_reading = read_boundary(boundary);
+      if (boundary_reading.strength > 0) {
+        candidates.push_back(Candidate{&boundary, std::move(boundary_reading)});
+      }
     }
   }
   std::stable_sort(candidates.begin(), candidates.end(),
-                   [](const Boundary* a, const Boundary* b) { return a->beat - b->beat < 0; });
+                   [](const Candidate& a, const Candidate& b) {
+                     return a.boundary->beat - b.boundary->beat < 0;
+                   });
   Boundary fallback_end;
   fallback_end.beat = span_end;
-  auto end_found = boundaries.find(js::round(span_end / BEAT_EPS));
+  auto end_found = boundaries.find(beat_key(span_end));
   const Boundary& end_boundary = end_found != boundaries.end() ? end_found->second : fallback_end;
   Boundary start_boundary;
   start_boundary.beat = span_start;
   std::vector<const Boundary*> stops;
+  std::vector<BoundaryReading> readings;
   stops.push_back(&start_boundary);
-  stops.insert(stops.end(), candidates.begin(), candidates.end());
+  readings.push_back(read_boundary(start_boundary));
+  for (Candidate& candidate : candidates) {
+    stops.push_back(candidate.boundary);
+    readings.push_back(std::move(candidate.reading));
+  }
   stops.push_back(&end_boundary);
+  readings.push_back(read_boundary(end_boundary));
   assert_generation_budget(static_cast<double>(stops.size()) * static_cast<double>(stops.size()),
                            "form phrase boundary pairs", opts.budget);
 
-  std::vector<BoundaryReading> readings;
   std::vector<double> stop_beats;
   std::vector<double> stop_strengths;
   HeldCadences held;
-  for (const Boundary* stop : stops) {
-    readings.push_back(read_boundary(*stop));
+  for (std::size_t i = 0; i < stops.size(); ++i) {
+    const Boundary* stop = stops[i];
     stop_beats.push_back(stop->beat);
-    stop_strengths.push_back(readings.back().strength);
+    stop_strengths.push_back(readings[i].strength);
     held.arrivals.push_back(stop->cadence ? stop->cadence->atBeat : stop->beat);
-    held.uncredited.push_back(readings.back().uncredited);
+    held.uncredited.push_back(readings[i].uncredited);
   }
   std::vector<std::size_t> path =
       choose_phrase_path(stop_beats, stop_strengths, min_phrase_beats, expected, &held);
 
   std::set<double, KeyLess> downbeat_keys;
   for (double downbeat : downbeats()) {
-    downbeat_keys.insert(js::round(downbeat / BEAT_EPS));
+    downbeat_keys.insert(beat_key(downbeat));
   }
   std::size_t from = 0;
   for (std::size_t n = 0; n < path.size(); ++n) {
@@ -576,7 +568,7 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
     double confidence = clamp01(CLOSING_SHARE * closing_strength +
                                 (1 - CLOSING_SHARE) * js::max(0, length_fit(length, expected)));
     double structural_weight = structural_weight_of(
-        cadence, confidence, downbeat_keys.count(js::round(end_beat / BEAT_EPS)) > 0, is_last);
+        cadence, confidence, downbeat_keys.count(beat_key(end_beat)) > 0, is_last);
     // The signals say what the boundary was read from, so a cadence dropped as belonging to an
     // earlier phrase is dropped from them too.
     std::vector<PhraseSignal> signals;
@@ -585,7 +577,7 @@ PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEve
         signals.push_back(signal);
       }
     }
-    double bars = js::round(bar_span_of(start_beat, end_beat, meters) * 100) / 100;
+    double bars = round_to(bar_span_of(start_beat, end_beat, meters), 2);
     std::string names;
     for (std::size_t i = 0; i < signals.size(); ++i) {
       names += (i > 0 ? ", " : "") + std::string(to_string(signals[i]));
@@ -612,9 +604,7 @@ std::vector<Phrase> phrases_from_timeline(const ChordTimeline& timeline,
                                           const PhraseOptions& opts) {
   assert_chord_timeline(timeline);
   PhraseSource source;
-  for (const ChordSegment& segment : timeline.segments) {
-    source.segments.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
-  }
+  source.segments = spans_of(timeline.segments);
   ChordSource chord_at = [&](std::size_t index) -> const Chord& {
     return timeline.segments[index].chord;
   };
@@ -653,15 +643,14 @@ std::vector<StructuralCadence> structural_cadences(const std::vector<Phrase>& ph
     entry.cadence = hit.cadence;
     entry.weight = phrase.structuralWeight;
     entry.rationale = "Closes " + describe_cadence(phrase.cadence) + " on a phrase of confidence " +
-                      js::to_string(js::round(phrase.confidence * 100) / 100);
+                      js::to_string(round_to(phrase.confidence, 2));
     ranked.push_back(std::move(entry));
   }
-  std::stable_sort(
-      ranked.begin(), ranked.end(), [](const StructuralCadence& a, const StructuralCadence& b) {
-        double by_weight = b.weight - a.weight;
-        double order = by_weight != 0 && !std::isnan(by_weight) ? by_weight : a.atBeat - b.atBeat;
-        return order < 0;
-      });
+  std::stable_sort(ranked.begin(), ranked.end(),
+                   [](const StructuralCadence& a, const StructuralCadence& b) {
+                     double by_weight = b.weight - a.weight;
+                     return js::or_else(by_weight, a.atBeat - b.atBeat) < 0;
+                   });
   return ranked;
 }
 

@@ -3,7 +3,6 @@
 #include "analyze/histogram.h"
 
 #include <cmath>
-#include <limits>
 
 #include "analyze/adjacency.h"
 #include "cantus/core/pitch.h"
@@ -14,7 +13,8 @@ namespace cantus {
 
 double note_weight(const NoteEvent& note, double beats, const MeterArg* meter) {
   double velocity_factor = note.velocity ? *note.velocity / MAX_VELOCITY : 1;
-  double accent = meter == nullptr ? 1 : 1 + metric_weight(note.startBeat, *meter) / ACCENT_DIVISOR;
+  double accent =
+      meter == nullptr ? 1 : 1 + metric_weight(note.startBeat, *meter) / MAX_METRIC_WEIGHT;
   return beats * velocity_factor * accent;
 }
 
@@ -37,30 +37,32 @@ std::vector<std::vector<std::size_t>> bucket_notes_by_slot(const std::vector<Not
   return buckets;
 }
 
+double note_overlap(const NoteEvent& note, double window_start, double window_end) {
+  return js::min(note.startBeat + note.durationBeat, window_end) -
+         js::max(note.startBeat, window_start);
+}
+
+bool onset_in_window(const NoteEvent& note, double window_start, double window_end) {
+  return within_beats(note.startBeat, window_start, window_end);
+}
+
 WindowWeights window_weights(const std::vector<NoteEvent>& all,
                              const std::vector<std::size_t>* selection, double window_start,
                              double window_end, const MeterArg& meter) {
   WindowWeights out;
-  out.lowestPitch = std::numeric_limits<double>::infinity();
   std::size_t count = selection != nullptr ? selection->size() : all.size();
   for (std::size_t k = 0; k < count; ++k) {
     const NoteEvent& note = all[selection != nullptr ? (*selection)[k] : k];
-    double note_end = note.startBeat + note.durationBeat;
-    double overlap = js::min(note_end, window_end) - js::max(note.startBeat, window_start);
+    double overlap = note_overlap(note, window_start, window_end);
     if (overlap <= BEAT_EPS) {
       continue;
     }
-    bool onset_in_window =
-        note.startBeat >= window_start - BEAT_EPS && note.startBeat < window_end - BEAT_EPS;
     int pc = pitch_class_of(note.pitch);
     // The accent is asked for only where the onset falls in the window: a note held across the
     // boundary is already counted for its part of it.
-    double weight = note_weight(note, overlap, onset_in_window ? &meter : nullptr);
+    double weight = note_weight(note, overlap,
+                                onset_in_window(note, window_start, window_end) ? &meter : nullptr);
     out.weights[static_cast<std::size_t>(pc)] += weight;
-    // A note the histogram does not count cannot be the bass either.
-    if (weight > BEAT_EPS && note.pitch < out.lowestPitch) {
-      out.lowestPitch = note.pitch;
-    }
   }
   for (double w : out.weights) {
     out.totalWeight += w;

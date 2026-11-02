@@ -30,26 +30,21 @@ import {
   assertPositiveInt,
   assertRange,
   assertRecord,
+  dropSilentNotes,
 } from '../../core/validation/index.js';
-import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
-import { BEAT_EPS } from '../adjacency.js';
+import { scaleOf } from '../../theory/scale/index.js';
+import { BEAT_EPS, beatKey, withinBeats } from '../adjacency.js';
 import type { CadenceResult } from '../functional/index.js';
-import { barGridStart, latestSoundingEnd } from '../grid.js';
-import { detectModulations, keyLookup, prevailingKeyOf } from '../keys/index.js';
+import { timelineSpan } from '../grid.js';
+import { detectModulations, keyLookup, prevailingKeyOrDefault } from '../keys/index.js';
 import { melodicSimilarity } from '../melody/index.js';
+import { roundTo } from '../melody/internal.js';
 import type { CadenceHit, ChordTimeline } from '../timeline/index.js';
 import { assertChordTimeline, detectCadences } from '../timeline/index.js';
 import type { KeyContext } from '../voice/index.js';
 import type { CadenceSpan, Hypermeter } from './hypermeter.js';
 import { cadenceSpans, hypermeterOver } from './hypermeter.js';
-import {
-  barSpanOf,
-  clamp01,
-  combineEvidence,
-  firstSoundingBeat,
-  resolveSpanEnd,
-  sliceBars,
-} from './internal.js';
+import { barSpanOf, clamp01, combineEvidence, resolveSpanEnd, sliceBars } from './internal.js';
 
 /**
  * A reason a phrase boundary was placed where it was.
@@ -323,7 +318,7 @@ function addSignal(
 ): void {
   // Beats arrive from bar arithmetic and from note ends, which land an epsilon
   // apart on the same boundary; keying on a rounded beat merges them.
-  const key = Math.round(beat / BEAT_EPS);
+  const key = beatKey(beat);
   const existing = boundaries.get(key);
   const boundary = existing ?? { beat, strengths: new Map(), cadence: null };
   boundary.strengths.set(signal, Math.max(boundary.strengths.get(signal) ?? 0, strength));
@@ -362,7 +357,7 @@ function readBoundary(boundary: Boundary): BoundaryReading {
  * arriving at `atBeat`: only one that arrived inside it is.
  */
 function closesPhrase(atBeat: number, startBeat: number, endBeat: number): boolean {
-  return atBeat >= startBeat - BEAT_EPS && atBeat < endBeat - BEAT_EPS;
+  return withinBeats(atBeat, startBeat, endBeat);
 }
 
 /**
@@ -513,7 +508,7 @@ export function keyContextFor(
   const regions = detectModulations(timeline.segments, { meters, totalBeats, budget });
   // The pitch classes alone: a phrase boundary is argued from cadences and
   // scale membership, neither of which reads how the key is written.
-  const keyAt = keyLookup(regions, prevailingKeyOf(regions) ?? resolveKey(majorKey(0)));
+  const keyAt = keyLookup(regions, prevailingKeyOrDefault(regions));
   return (beat) => scaleOf(keyAt(beat));
 }
 
@@ -586,7 +581,7 @@ function repetitionBoundaries(
   const slices = sliceBars(notes, meters, spanStart, spanEnd, budget);
   assertGenerationBudget(slices.length * notes.length, 'form repetition comparisons', budget);
   const onsetsIn = (from: number, to: number): NoteEvent[] =>
-    notes.filter((note) => note.startBeat >= from - BEAT_EPS && note.startBeat < to - BEAT_EPS);
+    notes.filter((note) => withinBeats(note.startBeat, from, to));
   // Comparing the two windows runs an edit distance over their notes, so the
   // work is the product of what each side holds rather than one unit per slice.
   // It is charged as it is incurred, so a passage dense enough to matter is
@@ -727,24 +722,10 @@ export function phrasesFromTimeline(
     assertRange(opts.hypermeter.confidence, 0, 1, 'phrase hypermeter confidence');
     assertPositiveInt(opts.hypermeter.groupBars, 'phrase hypermeter groupBars');
   }
-  const sounding = notes.filter((note) => note.durationBeat > 0);
-  const segments = timeline.segments;
-  const firstSegment = segments[0];
-  const lastSegment = segments[segments.length - 1];
-  // Whichever starts first, the notes or the chords; with neither, beat 0.
-  const earliest = Math.min(
-    firstSoundingBeat(sounding, Number.POSITIVE_INFINITY),
-    firstSegment?.startBeat ?? Number.POSITIVE_INFINITY,
-  );
-  const firstOnset = Number.isFinite(earliest) ? earliest : 0;
+  const sounding = dropSilentNotes(notes);
   // The pickup rule the whole analysis shares, so the first beat this reports
   // is the one sections and hypermeter report for the same notes.
-  const spanStart = barGridStart(firstOnset, meters);
-  const latestEnd = Math.max(
-    lastSegment?.endBeat ?? Number.NEGATIVE_INFINITY,
-    latestSoundingEnd(sounding, Number.NEGATIVE_INFINITY),
-  );
-  const notesEnd = Number.isFinite(latestEnd) ? latestEnd : 0;
+  const { startBeat: spanStart, notesEnd } = timelineSpan(sounding, timeline.segments, meters);
   const spanEnd = resolveSpanEnd(opts.totalBeats, spanStart, notesEnd, 'phrase totalBeats');
   if (spanEnd <= spanStart + BEAT_EPS) {
     // Nothing sounds, so there is no material to hear a phrase in — the answer
@@ -805,27 +786,33 @@ export function phrasesFromTimeline(
     .filter(
       (boundary) => boundary.beat > spanStart + BEAT_EPS && boundary.beat < spanEnd - BEAT_EPS,
     )
+    .map((boundary) => ({ boundary, reading: readBoundary(boundary) }))
     // A stop nothing argues for is not a boundary that a length can buy. A
     // hypermeter position read with no confidence registers at strength zero,
     // and the path search weighs a cut by the two lengths it makes as well as
     // by the evidence: over a pedal point or a drone, where no cadence and no
     // harmonic novelty argue anywhere, the length term alone put boundaries in
     // the reading that a caller cannot tell from evidenced ones.
-    .filter((boundary) => readBoundary(boundary).strength > 0)
-    .sort((a, b) => a.beat - b.beat);
-  const endBoundary = boundaries.get(Math.round(spanEnd / BEAT_EPS)) ?? {
+    .filter(({ reading }) => reading.strength > 0)
+    .sort((a, b) => a.boundary.beat - b.boundary.beat);
+  const endBoundary = boundaries.get(beatKey(spanEnd)) ?? {
     beat: spanEnd,
     strengths: new Map<PhraseSignal, number>(),
     cadence: null,
   };
+  const startBoundary: Boundary = { beat: spanStart, strengths: new Map(), cadence: null };
   const stops: Boundary[] = [
-    { beat: spanStart, strengths: new Map(), cadence: null },
-    ...candidates,
+    startBoundary,
+    ...candidates.map(({ boundary }) => boundary),
     endBoundary,
   ];
   assertGenerationBudget(stops.length * stops.length, 'form phrase boundary pairs', opts.budget);
 
-  const readings = stops.map(readBoundary);
+  const readings = [
+    readBoundary(startBoundary),
+    ...candidates.map(({ reading }) => reading),
+    readBoundary(endBoundary),
+  ];
   const path = choosePhrasePath(
     stops.map((stop) => stop.beat),
     readings.map((reading) => reading.strength),
@@ -837,9 +824,7 @@ export function phrasesFromTimeline(
     },
   );
 
-  const downbeatKeys = new Set(
-    grouping.downbeats.map((downbeat) => Math.round(downbeat / BEAT_EPS)),
-  );
+  const downbeatKeys = new Set(grouping.downbeats.map(beatKey));
   const phrases: Phrase[] = [];
   let from = 0;
   for (let n = 0; n < path.length; n += 1) {
@@ -866,7 +851,7 @@ export function phrasesFromTimeline(
     const structuralWeight = structuralWeightOf(
       cadence,
       confidence,
-      downbeatKeys.has(Math.round(endBeat / BEAT_EPS)),
+      downbeatKeys.has(beatKey(endBeat)),
       isLast,
     );
     // The signals say what the boundary was read from, so a cadence dropped as
@@ -875,7 +860,7 @@ export function phrasesFromTimeline(
     // both halves of one fact and contradicts itself.
     const signals =
       cadence === null ? reading.signals.filter((signal) => signal !== 'cadence') : reading.signals;
-    const bars = Math.round(barSpanOf(startBeat, endBeat, meters) * 100) / 100;
+    const bars = roundTo(barSpanOf(startBeat, endBeat, meters), 2);
     phrases.push({
       startBeat,
       endBeat,
@@ -939,9 +924,10 @@ export function structuralCadences(phrases: readonly Phrase[]): StructuralCadenc
       endBeat: phrase.endBeat,
       cadence: hit.cadence,
       weight: phrase.structuralWeight,
-      rationale: `Closes ${describeCadence(hit)} on a phrase of confidence ${
-        Math.round(phrase.confidence * 100) / 100
-      }`,
+      rationale: `Closes ${describeCadence(hit)} on a phrase of confidence ${roundTo(
+        phrase.confidence,
+        2,
+      )}`,
     });
   }
   return ranked.sort((a, b) => b.weight - a.weight || a.atBeat - b.atBeat);

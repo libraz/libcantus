@@ -75,3 +75,28 @@ export function adjacent(prevEnd: number, nextStart: number): boolean {
 export function hasEnded(prevEnd: number, beat: number): boolean {
   return prevEnd <= beat + HUMANIZE_ADJACENCY;
 }
+
+/**
+ * Whether a beat falls in the half-open span `[from, to)`, with both edges
+ * pulled in by {@link BEAT_EPS} so a beat a hair before `to` belongs to the next
+ * span.
+ *
+ * @param beat The beat to place.
+ * @param from First beat of the span.
+ * @param to End of the span, exclusive.
+ * @returns True when the beat is inside.
+ */
+export function withinBeats(beat: number, from: number, to: number): boolean {
+  return beat >= from - BEAT_EPS && beat < to - BEAT_EPS;
+}
+
+/**
+ * A key under which beats within {@link BEAT_EPS} of one another collide, for a
+ * `Map` or `Set` of beats.
+ *
+ * @param beat The beat to key.
+ * @returns An integer for the beat's grid cell.
+ */
+export function beatKey(beat: number): number {
+  return Math.round(beat / BEAT_EPS);
+}

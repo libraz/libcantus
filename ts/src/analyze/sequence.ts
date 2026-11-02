@@ -10,6 +10,8 @@
  * substitute.
  */
 
+import { clamp01 } from './form/internal.js';
+
 /**
  * Edit distance between two sequences under a graded substitution cost and a
  * caller-chosen gap cost for insertion or deletion.
@@ -27,8 +29,9 @@ export function gradedEditDistance<T>(
   gap = 1,
 ): number {
   let previous = Array.from({ length: b.length + 1 }, (_, i) => i * gap);
+  // Two rows, swapped: every cell of `row` is written before it is read.
+  let row = new Array<number>(b.length + 1);
   for (let i = 1; i <= a.length; i += 1) {
-    const row = new Array<number>(b.length + 1);
     row[0] = i * gap;
     for (let j = 1; j <= b.length; j += 1) {
       const ai = a[i - 1] as T;
@@ -38,7 +41,7 @@ export function gradedEditDistance<T>(
       const insertion = (row[j - 1] ?? 0) + gap;
       row[j] = Math.min(substitution, deletion, insertion);
     }
-    previous = row;
+    [previous, row] = [row, previous];
   }
   return previous[b.length] ?? 0;
 }
@@ -57,5 +60,5 @@ export function distanceToSimilarity(distance: number, a: number, b: number): nu
   if (longest === 0) {
     return 1;
   }
-  return Math.min(1, Math.max(0, 1 - distance / longest));
+  return clamp01(1 - distance / longest);
 }

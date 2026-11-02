@@ -18,11 +18,17 @@ import {
 } from '../../core/validation/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
 import { evaluateSafety, NoteSafety, type SafetyProfile } from '../../theory/safety/index.js';
-import { majorKey, type ResolvedKey, resolveKey } from '../../theory/scale/index.js';
+import { type ResolvedKey, resolveKey } from '../../theory/scale/index.js';
 import { BEAT_EPS } from '../adjacency.js';
+import { clamp01 } from '../form/internal.js';
 import { functionOf } from '../functional/index.js';
 import { gridForNotes, latestSoundingEnd } from '../grid.js';
-import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
+import {
+  keyLookup,
+  keyTimelineFromNotes,
+  prevailingKeyOf,
+  prevailingKeyOrDefault,
+} from '../keys/index.js';
 import { type ChordTimeline, chordTimelineFromNotes, statedKeyRegions } from '../timeline/index.js';
 import {
   arrangementProfile,
@@ -65,11 +71,6 @@ export const SPAN_WEIGHT = 0.15;
 export const SPAN_SATURATION = 24;
 /** Distinct MIDI pitches a sample can hold, which bounds the safety evaluations it makes. */
 export const MAX_DISTINCT_PITCHES = 128;
-
-/** Clamp a value into [0, 1]. */
-function clamp01(value: number): number {
-  return Math.min(1, Math.max(0, value));
-}
 
 /**
  * Sample the harmonic tension of an arrangement at regular beats.
@@ -137,8 +138,8 @@ export function tensionCurve(
   assertGivenTimeline(opts.timeline, 'arrangement timeline');
   assertGivenKeys(opts.keys, 'arrangement keys');
   const harmonyTracks = harmonyTrackSet(opts.harmonyTracks, tracks);
-  const pooled = poolNotes(tracks, harmonyTracks);
   const all = poolNotes(tracks);
+  const pooled = harmonyTracks === undefined ? all : poolNotes(tracks, harmonyTracks);
   const totalBeats = latestSoundingEnd(all);
   // The grid the samples sit on is a whole number of steps from beat 0, and the
   // music itself starts at `musicStart`: a pickup sounds before beat 0 and an
@@ -170,7 +171,7 @@ export function tensionCurve(
       : {
           timeline: opts.timeline,
           keys: suppliedKeys,
-          prevailingKey: prevailingKeyOf(suppliedKeys) ?? resolveKey(majorKey(0)),
+          prevailingKey: prevailingKeyOrDefault(suppliedKeys),
         };
   // Harmonic tension is judged against the key in force at the sample, not
   // against one key for the piece: a chord is only tense relative to a tonic.

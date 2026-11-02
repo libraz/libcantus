@@ -6,6 +6,7 @@
 
 #include "cantus/core/pitch.h"
 #include "cantus/theory/scale.h"
+#include "js/math.h"
 #include "theory/scale/masks.h"
 #include "theory/tendency/tendency.h"
 
@@ -25,7 +26,7 @@ int degree_root_pc(double degree_number, const KeyScale& key) {
   }
   // A plain `%` yields a negative index for a degree below the first; wrap into range instead.
   auto count = static_cast<double>(tones.size());
-  double index = std::fmod(std::fmod(degree_number - 1, count) + count, count);
+  double index = js::floor_mod(degree_number - 1, count);
   // An index that is not a whole number reads as undefined in TS and collapses to the tonic.
   if (!std::isfinite(index) || index != std::floor(index)) {
     return pitch_class_of(key.rootPc);

@@ -16,11 +16,12 @@
 import type { NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget } from '../../core/validation/index.js';
 import type { ResolvedKey } from '../../theory/scale/index.js';
+import { floorMod } from '../form/internal.js';
 import type { CadenceType } from '../functional/cadence.js';
 import { HARMONIC_FUNCTIONS } from '../functional/function.js';
 import type { MotifGraph, MotifGraphEdge } from '../melody/graph.js';
 import { MOTIF_RELATION_KINDS, type MotifRelationKind } from '../melody/relation.js';
-import { compareMelodies } from '../melody/similarity.js';
+import { pitchSimilarityOf } from '../melody/similarity.js';
 import type { RhythmAnalysis } from '../rhythm/index.js';
 import { distanceToSimilarity, gradedEditDistance } from '../sequence.js';
 import type { ReferenceChord, ReferenceMotif, ReferencePhraseMelody } from './types.js';
@@ -189,12 +190,19 @@ export function romanDegreeToken(roman: string): string {
 /** The part of a reduced chord the progression alignment reads. */
 export type ProgressionChord = Pick<ReferenceChord, 'roman' | 'function'>;
 
+/** A progression chord with its degree token read once, not per alignment cell. */
+type DegreeChord = ProgressionChord & { degree: string };
+
+function withDegrees(chords: readonly ProgressionChord[]): DegreeChord[] {
+  return chords.map((chord) => ({ ...chord, degree: romanDegreeToken(chord.roman) }));
+}
+
 /** Substitution cost of one chord for another in the progression alignment. */
-function chordCost(x: ProgressionChord, y: ProgressionChord): number {
+function chordCost(x: DegreeChord, y: DegreeChord): number {
   if (x.roman === y.roman) {
     return 0;
   }
-  if (romanDegreeToken(x.roman) === romanDegreeToken(y.roman)) {
+  if (x.degree === y.degree) {
     return SAME_DEGREE_COST;
   }
   return x.function === y.function ? SAME_FUNCTION_COST : 1;
@@ -215,7 +223,7 @@ export function progressionSimilarity(
   budget?: number,
 ): number | null {
   assertGenerationBudget(a.length * b.length, 'reference progression alignment', budget);
-  return alignedSimilarity(a, b, chordCost, PROGRESSION_GAP);
+  return alignedSimilarity(withDegrees(a), withDegrees(b), chordCost, PROGRESSION_GAP);
 }
 
 /** The part of a reduced chord the function distribution reads. */
@@ -274,7 +282,7 @@ type KeyToken = { distance: number; mask: number };
 function keyTokens(keys: readonly ResolvedKey[]): KeyToken[] {
   const home = keys[0]?.scale.rootPc ?? 0;
   return keys.map((key) => ({
-    distance: (((key.scale.rootPc - home) % 12) + 12) % 12,
+    distance: floorMod(key.scale.rootPc - home, 12),
     mask: key.scale.modeMask12,
   }));
 }
@@ -416,7 +424,7 @@ function bestMatchMean(
   for (const motif of from) {
     let best = 0;
     for (const other of to) {
-      best = Math.max(best, compareMelodies(motif.cell, other.cell).pitchSimilarity);
+      best = Math.max(best, pitchSimilarityOf(motif.cell, other.cell));
     }
     weighted += motif.occurrences * best;
     weight += motif.occurrences;

@@ -8,6 +8,7 @@
  * a slightly ornamented version of itself still reads as close.
  */
 
+import type { NoteEvent } from '../../core/types.js';
 import { assertGenerationBudget } from '../../core/validation/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import { distanceToSimilarity, gradedEditDistance } from '../sequence.js';
@@ -65,6 +66,60 @@ function gapCost(x: number, y: number): number {
   }
   return Math.min(1, Math.abs(Math.log2(x / y)));
 }
+/** Likeness of two ordered lines by their interval sequences, in [0, 1]. */
+function pitchLikeness(left: readonly NoteEvent[], right: readonly NoteEvent[]): number {
+  const leftIntervals = intervalsOf(left);
+  const rightIntervals = intervalsOf(right);
+  assertGenerationBudget(leftIntervals.length * rightIntervals.length, 'melody alignment');
+  return distanceToSimilarity(
+    gradedEditDistance(leftIntervals, rightIntervals, intervalCost),
+    leftIntervals.length,
+    rightIntervals.length,
+  );
+}
+
+/** Likeness of two ordered lines by their rhythmic profiles, in [0, 1]. */
+function rhythmLikeness(left: readonly NoteEvent[], right: readonly NoteEvent[]): number {
+  const leftOnsets = onsetGaps(left);
+  const rightOnsets = onsetGaps(right);
+  const leftGaps = rhythmProfile(leftOnsets) ?? leftOnsets;
+  const rightGaps = rhythmProfile(rightOnsets) ?? rightOnsets;
+  return distanceToSimilarity(
+    gradedEditDistance(leftGaps, rightGaps, gapCost),
+    leftGaps.length,
+    rightGaps.length,
+  );
+}
+
+/** The numbers {@link compareMelodies} reports, without its rationale. */
+function likenessOf(
+  a: MelodicPhrase,
+  b: MelodicPhrase,
+): Pick<MelodicComparison, 'similarity' | 'pitchSimilarity' | 'rhythmSimilarity'> {
+  const left = orderedNotes(phraseNotes(a), 'melody a');
+  const right = orderedNotes(phraseNotes(b), 'melody b');
+  const pitchSimilarity = pitchLikeness(left, right);
+  const rhythmSimilarity = rhythmLikeness(left, right);
+  return {
+    similarity: PITCH_WEIGHT * pitchSimilarity + RHYTHM_WEIGHT * rhythmSimilarity,
+    pitchSimilarity,
+    rhythmSimilarity,
+  };
+}
+
+/**
+ * The interval-sequence term of {@link compareMelodies} alone, for callers that
+ * read nothing else of the comparison.
+ *
+ * @param a The first line: a motif, or plain note events.
+ * @param b The second line.
+ * @returns The likeness of the interval sequences, in [0, 1].
+ */
+export function pitchSimilarityOf(a: MelodicPhrase, b: MelodicPhrase): number {
+  const left = orderedNotes(phraseNotes(a), 'melody a');
+  const right = orderedNotes(phraseNotes(b), 'melody b');
+  return pitchLikeness(left, right);
+}
 /**
  * Compare two lines and say why they scored what they did.
  *
@@ -101,24 +156,7 @@ function gapCost(x: number, y: number): number {
  * @category Arrangement & Analysis
  */
 export function compareMelodies(a: MelodicPhrase, b: MelodicPhrase): MelodicComparison {
-  const left = orderedNotes(phraseNotes(a), 'melody a');
-  const right = orderedNotes(phraseNotes(b), 'melody b');
-  const leftIntervals = intervalsOf(left);
-  const rightIntervals = intervalsOf(right);
-  assertGenerationBudget(leftIntervals.length * rightIntervals.length, 'melody alignment');
-  const pitchSimilarity = distanceToSimilarity(
-    gradedEditDistance(leftIntervals, rightIntervals, intervalCost),
-    leftIntervals.length,
-    rightIntervals.length,
-  );
-  const leftGaps = rhythmProfile(onsetGaps(left)) ?? onsetGaps(left);
-  const rightGaps = rhythmProfile(onsetGaps(right)) ?? onsetGaps(right);
-  const rhythmSimilarity = distanceToSimilarity(
-    gradedEditDistance(leftGaps, rightGaps, gapCost),
-    leftGaps.length,
-    rightGaps.length,
-  );
-  const similarity = PITCH_WEIGHT * pitchSimilarity + RHYTHM_WEIGHT * rhythmSimilarity;
+  const { similarity, pitchSimilarity, rhythmSimilarity } = likenessOf(a, b);
   return {
     similarity,
     pitchSimilarity,
@@ -153,5 +191,5 @@ export function compareMelodies(a: MelodicPhrase, b: MelodicPhrase): MelodicComp
  * @category Arrangement & Analysis
  */
 export function melodicSimilarity(a: MelodicPhrase, b: MelodicPhrase): number {
-  return compareMelodies(a, b).similarity;
+  return likenessOf(a, b).similarity;
 }

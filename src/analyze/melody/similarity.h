@@ -16,6 +16,9 @@ namespace cantus {
 MelodicComparison compare_ordered(const std::vector<NoteEvent>& left,
                                   const std::vector<NoteEvent>& right);
 
+/** The interval-sequence term of `compareMelodies` alone (`pitchSimilarityOf`). */
+double pitch_similarity_of(const MelodicPhraseArg& a, const MelodicPhraseArg& b);
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_ANALYZE_MELODY_SIMILARITY_H_

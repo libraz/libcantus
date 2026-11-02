@@ -20,6 +20,13 @@ bool adjacent(double prev_end, double next_start);
 /** Whether a note ending at `prev_end` has finished by `beat` (`hasEnded`). */
 bool has_ended(double prev_end, double beat);
 
+/** Whether a beat falls in the half-open span `[from, to)`, edges pulled in by BEAT_EPS
+ * (`withinBeats`). */
+bool within_beats(double beat, double from, double to);
+
+/** A key under which beats within BEAT_EPS of one another collide (`beatKey`). */
+double beat_key(double beat);
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_ANALYZE_ADJACENCY_H_

@@ -9,7 +9,7 @@ double distance_to_similarity(double distance, double a, double b) {
   if (longest == 0) {
     return 1;
   }
-  return js::min(1, js::max(0, 1 - distance / longest));
+  return clamp01(1 - distance / longest);
 }
 
 }  // namespace cantus

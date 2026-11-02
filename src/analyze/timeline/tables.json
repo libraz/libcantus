@@ -96,12 +96,6 @@
     },
     {
       "module": "analyze/timeline/index.ts",
-      "export": "MAX_METRIC_WEIGHT",
-      "cxx_type": "int",
-      "cxx_name": "TIMELINE_MAX_METRIC_WEIGHT"
-    },
-    {
-      "module": "analyze/timeline/index.ts",
       "export": "DIRTY_SLOT_MARGIN",
       "cxx_type": "int"
     }

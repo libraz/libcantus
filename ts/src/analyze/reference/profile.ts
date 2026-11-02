@@ -13,12 +13,16 @@
 
 import type { MeterLike, MeterMap } from '../../core/meter/index.js';
 import { resolveMeters } from '../../core/meter/index.js';
-import { pitchClassOf } from '../../core/pitch/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import { assertNoteEvents, assertOptions, assertRange } from '../../core/validation/index.js';
+import {
+  assertNoteEvents,
+  assertOptions,
+  assertRange,
+  dropSilentNotes,
+} from '../../core/validation/index.js';
 import type { KeyLike, ResolvedKey } from '../../theory/scale/index.js';
-import { majorKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
-import { BEAT_EPS } from '../adjacency.js';
+import { resolveKey, scaleOf } from '../../theory/scale/index.js';
+import { withinBeats } from '../adjacency.js';
 import type { FormSection } from '../form/index.js';
 import {
   hypermeter,
@@ -26,12 +30,12 @@ import {
   sectionsFromNotes,
   structuralCadences,
 } from '../form/index.js';
-import { barSpanOf, firstSoundingBeat } from '../form/internal.js';
+import { barSpanOf } from '../form/internal.js';
 import { functionOf } from '../functional/function.js';
 import { chordToRoman } from '../functional/roman.js';
-import { barGridStart, latestSoundingEnd } from '../grid.js';
+import { timelineSpan } from '../grid.js';
 import type { KeyRegion } from '../keys/index.js';
-import { keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
+import { keyId, keyLookup, keyTimelineFromNotes, prevailingKeyOrDefault } from '../keys/index.js';
 import { melodicContour } from '../melody/contour.js';
 import type { MotifGraph } from '../melody/graph.js';
 import { motifGraph } from '../melody/graph.js';
@@ -139,28 +143,13 @@ function spanOf(
   meters: MeterMap,
   totalBeats: number | undefined,
 ): { startBeat: number; endBeat: number } {
-  const segments = timeline.segments;
-  const firstSegment = segments[0];
-  const lastSegment = segments[segments.length - 1];
-  const firstOnset = firstSoundingBeat(sounding, firstSegment?.startBeat ?? 0);
-  const startBeat = barGridStart(
-    Math.min(firstOnset, firstSegment?.startBeat ?? firstOnset),
-    meters,
-  );
-  const latestEnd = Math.max(
-    lastSegment?.endBeat ?? Number.NEGATIVE_INFINITY,
-    latestSoundingEnd(sounding, Number.NEGATIVE_INFINITY),
-  );
-  const notesEnd = Number.isFinite(latestEnd) ? latestEnd : 0;
+  const { startBeat, notesEnd } = timelineSpan(sounding, timeline.segments, meters);
   return { startBeat, endBeat: Math.max(startBeat, totalBeats ?? notesEnd) };
 }
 
 /** Whether two keys hold the same pitch classes, the identity `prevailingKeyOf` weighs by. */
 function sameKey(a: ResolvedKey, b: ResolvedKey): boolean {
-  return (
-    pitchClassOf(a.scale.rootPc) === pitchClassOf(b.scale.rootPc) &&
-    a.scale.modeMask12 === b.scale.modeMask12
-  );
+  return keyId(a.scale) === keyId(b.scale);
 }
 
 /**
@@ -184,8 +173,8 @@ function keyIndexAt(
 
 /** Index of the section a beat falls in, or null when none holds it. */
 function sectionAt(sections: readonly FormSection[], beat: number): number | null {
-  const index = sections.findIndex(
-    (section) => beat >= section.startBeat - BEAT_EPS && beat < section.endBeat - BEAT_EPS,
+  const index = sections.findIndex((section) =>
+    withinBeats(beat, section.startBeat, section.endBeat),
   );
   return index < 0 ? null : index;
 }
@@ -220,14 +209,16 @@ export function readingsFor(
     keys = keyTimelineFromNotes(notes, { meters, totalBeats: asked.totalBeats, budget });
   } else {
     // A stated key is taken as read across the span, as chord inference takes it.
-    const sounding = assertNoteEvents(notes, 'reference notes', {
-      allowNonPositiveDuration: true,
-      budget,
-    }).filter((note) => note.durationBeat > 0);
+    const sounding = dropSilentNotes(
+      assertNoteEvents(notes, 'reference notes', {
+        allowNonPositiveDuration: true,
+        budget,
+      }),
+    );
     const span = spanOf(sounding, timeline, meters, asked.totalBeats);
     keys = statedKeyRegions(resolveKey(asked.key), span.startBeat, span.endBeat);
   }
-  return { timeline, keys, prevailingKey: prevailingKeyOf(keys) ?? resolveKey(majorKey(0)) };
+  return { timeline, keys, prevailingKey: prevailingKeyOrDefault(keys) };
 }
 
 /**
@@ -249,10 +240,12 @@ export function referenceFromReadings(
   const asked = assertOptions(opts, 'reference options');
   const meters = resolveMeters(asked, 'reference meters');
   const budget = asked.budget;
-  const sounding = assertNoteEvents(notes, 'reference notes', {
-    allowNonPositiveDuration: true,
-    budget,
-  }).filter((note) => note.durationBeat > 0);
+  const sounding = dropSilentNotes(
+    assertNoteEvents(notes, 'reference notes', {
+      allowNonPositiveDuration: true,
+      budget,
+    }),
+  );
   if (asked.totalBeats !== undefined) {
     assertRange(asked.totalBeats, 0, Number.MAX_SAFE_INTEGER, 'reference totalBeats');
   }
@@ -337,12 +330,13 @@ export function referenceFromReadings(
   const graph: MotifGraph = motifGraph(line, motifs, { key: prevailingKey, budget });
   let register: ReferenceMelody['register'] = null;
   if (line.length > 0) {
-    const pitches = line.map((note) => note.pitch);
-    register = {
-      low: Math.min(...pitches),
-      high: Math.max(...pitches),
-      mean: weightedMean(line),
-    };
+    let low = Number.POSITIVE_INFINITY;
+    let high = Number.NEGATIVE_INFINITY;
+    for (const note of line) {
+      low = Math.min(low, note.pitch);
+      high = Math.max(high, note.pitch);
+    }
+    register = { low, high, mean: weightedMean(line) };
   }
   const lineMean = register?.mean ?? 0;
   const referenceMotifs: ReferenceMotif[] = motifs.map((motif) => {
@@ -368,9 +362,7 @@ export function referenceFromReadings(
     cadence: cadences.get(index) ?? null,
     melody: phraseMelody(line, phrase.startBeat, phrase.endBeat, lineMean, meters, budget),
     motifNodes: graph.nodes.flatMap((node, nodeIndex) =>
-      node.startBeat >= phrase.startBeat - BEAT_EPS && node.startBeat < phrase.endBeat - BEAT_EPS
-        ? [nodeIndex]
-        : [],
+      withinBeats(node.startBeat, phrase.startBeat, phrase.endBeat) ? [nodeIndex] : [],
     ),
   }));
 

@@ -3,6 +3,7 @@
 #include "analyze/reference/internal.h"
 
 #include "analyze/adjacency.h"
+#include "analyze/form/internal.h"
 #include "analyze/rhythm/internal.h"
 #include "cantus/core/limits.h"
 #include "js/math.h"
@@ -25,7 +26,7 @@ Nullable<ReferencePhraseMelody> phrase_melody(const std::vector<NoteEvent>& line
                                               std::optional<double> budget) {
   std::vector<NoteEvent> inside;
   for (const NoteEvent& note : line) {
-    if (note.startBeat >= start_beat - BEAT_EPS && note.startBeat < end_beat - BEAT_EPS) {
+    if (within_beats(note.startBeat, start_beat, end_beat)) {
       NoteEvent cut = note;
       cut.durationBeat = js::min(note.startBeat + note.durationBeat, end_beat) - note.startBeat;
       inside.push_back(cut);
@@ -67,7 +68,7 @@ Nullable<ReferencePhraseMelody> phrase_melody(const std::vector<NoteEvent>& line
   out.high = peak->pitch;
   out.mean = weighted_mean(inside);
   out.peakPitch = peak->pitch;
-  out.peakPosition = js::min(1, js::max(0, (peak->startBeat - start_beat) / length));
+  out.peakPosition = clamp01((peak->startBeat - start_beat) / length);
   out.onsetDensity = rhythm.onsetDensity;
   out.restRatio = rhythm.restRatio;
   return out;

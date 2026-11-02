@@ -79,19 +79,16 @@ TEST_CASE("notes are bucketed once into the slots they overlap", "[analyze][hist
                   BudgetExceededError);
 }
 
-TEST_CASE("a window weighs the overlap of each note, and finds the lowest counted pitch",
-          "[analyze][histogram]") {
+TEST_CASE("a window weighs the overlap of each note", "[analyze][histogram]") {
   std::vector<NoteEvent> notes = {note(60, 0, 2), note(64, 1, 3), note(48, 5, 1)};
   MeterArg meter("4/4");
   WindowWeights weights = window_weights(notes, nullptr, 0, 4, meter);
   CHECK(weights.weights[0] > 0);
   CHECK(weights.weights[4] > 0);
   CHECK(weights.weights[11] == 0);
-  CHECK(weights.lowestPitch == 60);
   CHECK(weights.totalWeight == weights.weights[0] + weights.weights[4]);
   WindowWeights empty = window_weights(notes, nullptr, 20, 24, meter);
   CHECK(empty.totalWeight == 0);
-  CHECK(std::isinf(empty.lowestPitch));
 }
 
 TEST_CASE("the graded edit distance charges a substitution by its cost and a gap by its price",

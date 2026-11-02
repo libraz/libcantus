@@ -8,7 +8,7 @@
  * turned on.
  */
 
-import type { MeterLike } from '../../core/meter/index.js';
+import type { MeterLike, MeterMap } from '../../core/meter/index.js';
 import { beatsPerBarAt, metricWeight, resolveMeters } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
@@ -20,6 +20,7 @@ import {
   assertNoteEvents,
   assertRange,
   assertRecord,
+  dropSilentNotes,
 } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { chordPitchClasses } from '../../theory/chord/index.js';
@@ -31,7 +32,7 @@ import {
   minorKey,
   resolveKey,
 } from '../../theory/scale/index.js';
-import { soundsDominantSeventh } from '../../theory/tendency/index.js';
+import { soundsDominantSeventh, THIRD_SEMITONES } from '../../theory/tendency/index.js';
 import { BEAT_EPS } from '../adjacency.js';
 import type { KeyProfileName, KeyProfilePair } from '../detect/index.js';
 import { profileScore, resolveKeyProfile } from '../detect/profiles.js';
@@ -40,7 +41,7 @@ import type { PivotChord } from '../functional/index.js';
 import { pivotChords } from '../functional/index.js';
 import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import type { WindowWeights } from '../histogram.js';
-import { bucketNotesBySlot, windowWeights } from '../histogram.js';
+import { bucketNotesBySlot, MAX_METRIC_WEIGHT, windowWeights } from '../histogram.js';
 
 /** How many pitch classes a histogram is indexed by. */
 export const PITCH_CLASSES = 12;
@@ -50,11 +51,7 @@ const EMPTY_WEIGHTS: WindowWeights = {
   weights: new Array<number>(PITCH_CLASSES).fill(0),
   totalWeight: 0,
   maxWeight: 0,
-  lowestPitch: Number.POSITIVE_INFINITY,
 };
-
-/** The largest value {@link metricWeight} returns (a downbeat). */
-export const MAX_METRIC_WEIGHT = 3;
 
 /**
  * A span of the piece over which one key is in force.
@@ -225,9 +222,12 @@ export const STRONG_BEAT_DISCOUNT = 0.4;
  */
 export const FIFTHS_DISTANCE_COST = 0.18;
 
+/** One of the 24 keys the search chooses between. */
+type KeyCandidate = { key: KeyScale; rootPc: number; minor: boolean };
+
 /** The 24 major and minor keys, in the order the search indexes them. */
-const KEY_CANDIDATES: readonly { key: KeyScale; rootPc: number; minor: boolean }[] = (() => {
-  const candidates: { key: KeyScale; rootPc: number; minor: boolean }[] = [];
+const KEY_CANDIDATES: readonly KeyCandidate[] = (() => {
+  const candidates: KeyCandidate[] = [];
   for (let rootPc = 0; rootPc < 12; rootPc += 1) {
     candidates.push({ key: majorKey(rootPc), rootPc, minor: false });
     candidates.push({ key: minorKey(rootPc), rootPc, minor: true });
@@ -302,6 +302,7 @@ function chooseKeys(
     const next = spare;
     const accent = metricWeight(slot?.startBeat ?? 0, meter);
     const metricFactor = 1 - (STRONG_BEAT_DISCOUNT * accent) / MAX_METRIC_WEIGHT;
+    const slotChangeCost = changeCost * metricFactor;
     const rowBase = i * count;
     for (let to = 0; to < count; to += 1) {
       // Holding the key is free; every other predecessor pays by distance.
@@ -312,7 +313,7 @@ function chooseKeys(
           continue;
         }
         const distance = CANDIDATE_DISTANCE[from]?.[to] ?? 0;
-        const penalty = changeCost * metricFactor * (1 + FIFTHS_DISTANCE_COST * distance);
+        const penalty = slotChangeCost * (1 + FIFTHS_DISTANCE_COST * distance);
         const cost = (previous[from] ?? Number.POSITIVE_INFINITY) + penalty;
         if (cost < best) {
           best = cost;
@@ -341,6 +342,57 @@ function chooseKeys(
     }
   }
   return path;
+}
+
+/** The meters and the two slot lengths a key search reads from its options. */
+function resolveKeySearch(
+  opts: KeyTimelineOptions,
+  metersName: string,
+): { meters: MeterMap; expectedKeyBeats: number; minKeyBeats: number } {
+  const meters = resolveMeters(opts, metersName);
+  const bar = beatsPerBarAt(0, meters);
+  const expectedKeyBeats = opts.expectedKeyBeats ?? bar * 4;
+  assertRange(expectedKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'expectedKeyBeats');
+  const minKeyBeats = opts.minKeyBeats ?? bar;
+  assertRange(minKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'minKeyBeats');
+  return { meters, expectedKeyBeats, minKeyBeats };
+}
+
+/** How well a pitch-class histogram fits a candidate key, as a correlation with its profile. */
+function candidateFit(
+  weights: readonly number[],
+  profile: KeyProfilePair,
+  candidate: KeyCandidate | undefined,
+): number {
+  return profileScore(
+    weights,
+    candidate?.minor ? profile.minor : profile.major,
+    candidate?.rootPc ?? 0,
+  );
+}
+
+/**
+ * The region a candidate holds over `[startBeat, endBeat)`, its confidence the
+ * correlation of the histogram `weights` with the candidate's profile.
+ */
+function regionFor(
+  candidate: KeyCandidate | undefined,
+  startBeat: number,
+  endBeat: number,
+  weights: readonly number[],
+  profile: KeyProfilePair,
+): KeyRegion {
+  // A fresh key per region: the candidate table is built once for the process
+  // and its distances are precomputed from it, so handing a region the table's
+  // own key would let a caller writing to `region.key` rewrite what every
+  // later search scores against.
+  const key = resolveKey(candidate?.key ?? majorKey(0));
+  return {
+    startBeat,
+    endBeat,
+    key,
+    confidence: Math.max(0, candidateFit(weights, profile, candidate)),
+  };
 }
 
 /** A run of slots the search gave one key, before relations and pivots. */
@@ -685,15 +737,10 @@ export function keyTimelineFromNotes(
   notes: readonly NoteEvent[],
   opts: KeyTimelineOptions = {},
 ): KeyRegion[] {
-  const meters = resolveMeters(opts, 'key timeline meters');
-  const bar = beatsPerBarAt(0, meters);
-  const expectedKeyBeats = opts.expectedKeyBeats ?? bar * 4;
-  assertRange(expectedKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'expectedKeyBeats');
-  const minKeyBeats = opts.minKeyBeats ?? bar;
-  assertRange(minKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'minKeyBeats');
+  const { meters, expectedKeyBeats, minKeyBeats } = resolveKeySearch(opts, 'key timeline meters');
   const budget = opts.budget;
   assertNoteEvents(notes, 'key timeline notes', { allowNonPositiveDuration: true, budget });
-  const sounding = notes.filter((note) => note.durationBeat > 0);
+  const sounding = dropSilentNotes(notes);
   const totalBeats = opts.totalBeats ?? latestSoundingEnd(sounding);
   assertRange(
     totalBeats,
@@ -766,9 +813,7 @@ export function keyTimelineFromNotes(
     // the fit and the modulation cost into the same units, so a loud, long slot
     // carries more of the argument than a sparse one.
     const scores = KEY_CANDIDATES.map(
-      (candidate) =>
-        profileScore(weights, candidate.minor ? profile.minor : profile.major, candidate.rootPc) *
-        totalWeight,
+      (candidate) => candidateFit(weights, profile, candidate) * totalWeight,
     );
     slots.push({ startBeat, endBeat, scores, weight: totalWeight });
     if (totalWeight > BEAT_EPS) {
@@ -805,12 +850,6 @@ export function keyTimelineFromNotes(
   }
   const regions = grouped.map((region) => {
     const candidate = KEY_CANDIDATES[region.candidate];
-    // A fresh key per region: the candidate table is built once for the process
-    // and its distances are precomputed from it, so handing a region the table's
-    // own key would let a caller writing to `region.key` rewrite what every
-    // later search scores against — and let two regions of one piece share the
-    // key that one of them edits.
-    const key = resolveKey(candidate?.key ?? majorKey(0));
     // Only the first region can start before the music: the slot holding the
     // pickup begins a whole slot before beat 0, and nothing sounds in the part
     // of it that precedes the upbeat.
@@ -829,17 +868,7 @@ export function keyTimelineFromNotes(
         weights[pc] = (weights[pc] ?? 0) + (slot.weights[pc] ?? 0);
       }
     }
-    const correlation = profileScore(
-      weights,
-      candidate?.minor ? profile.minor : profile.major,
-      candidate?.rootPc ?? 0,
-    );
-    return {
-      startBeat,
-      endBeat: region.endBeat,
-      key: resolveKey(key),
-      confidence: Math.max(0, correlation),
-    };
+    return regionFor(candidate, startBeat, region.endBeat, weights, profile);
   });
   return withRelations(regions);
 }
@@ -869,8 +898,11 @@ export const CADENCE_CREDIT = 0.6;
 export const CHORD_MODULATION_COST = 0.6;
 
 /** Score how strongly one chord argues for one key. */
-function chordFitsKey(chord: Chord, candidate: { key: KeyScale; rootPc: number }): number {
-  const tones = chordPitchClasses(chord);
+function chordFitsKey(
+  chord: Chord,
+  tones: readonly number[],
+  candidate: { key: KeyScale; rootPc: number },
+): number {
   if (tones.length === 0) {
     return 0;
   }
@@ -952,12 +984,7 @@ export function detectModulations(
   chords.forEach((segment, index) => {
     assertRecord<ChordSegment>(segment, `modulation chord segments[${index}]`);
   });
-  const meters = resolveMeters(opts, 'modulation meters');
-  const bar = beatsPerBarAt(0, meters);
-  const expectedKeyBeats = opts.expectedKeyBeats ?? bar * 4;
-  assertRange(expectedKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'expectedKeyBeats');
-  const minKeyBeats = opts.minKeyBeats ?? bar;
-  assertRange(minKeyBeats, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'minKeyBeats');
+  const { meters, expectedKeyBeats, minKeyBeats } = resolveKeySearch(opts, 'modulation meters');
   // One slot per chord, each holding a row of the candidate list: the search's
   // table, not the chord count, is what the budget stands for.
   assertGenerationBudget(
@@ -988,12 +1015,15 @@ export function detectModulations(
 
   const slots: KeySlot[] = ordered.map((segment) => {
     const length = segment.endBeat - segment.startBeat;
+    const tones = chordPitchClasses(segment.chord);
     return {
       startBeat: segment.startBeat,
       endBeat: segment.endBeat,
       // A chord that holds for two bars argues twice as hard as one that
       // passes in half a bar, exactly as a heavier slot does in the note path.
-      scores: KEY_CANDIDATES.map((candidate) => chordFitsKey(segment.chord, candidate) * length),
+      scores: KEY_CANDIDATES.map(
+        (candidate) => chordFitsKey(segment.chord, tones, candidate) * length,
+      ),
       weight: length,
     };
   });
@@ -1039,9 +1069,6 @@ export function detectModulations(
   const profile = resolveKeyProfile(opts.profile);
   const regions: KeyRegion[] = grouped.map((region) => {
     const candidate = KEY_CANDIDATES[region.candidate];
-    // Owned by the region, for the reason the note path spells out: the
-    // candidate table outlives the call, and a region's key is writable.
-    const key = resolveKey(candidate?.key ?? majorKey(0));
     // The confidence is the statistic the note path reports, not the chord fit
     // the search ran on: a chord fit says which key won, and a correlation says
     // how much of the region the winner explains. Reporting the search's own
@@ -1067,17 +1094,7 @@ export function detectModulations(
         weights[pc] = (weights[pc] ?? 0) + overlap;
       }
     }
-    const correlation = profileScore(
-      weights,
-      candidate?.minor ? profile.minor : profile.major,
-      candidate?.rootPc ?? 0,
-    );
-    return {
-      startBeat: region.startBeat,
-      endBeat: region.endBeat,
-      key,
-      confidence: Math.max(0, correlation),
-    };
+    return regionFor(candidate, region.startBeat, region.endBeat, weights, profile);
   });
   // The analyzed span runs to `totalBeats`, so the last key holds to the end of
   // it rather than to the last chord: silence changes no key, and the note path
@@ -1089,9 +1106,6 @@ export function detectModulations(
 
   return attachPivots(withRelations(regions), ordered);
 }
-
-/** Semitones above the root a third may sit at: minor, then major. */
-export const THIRD_SEMITONES = [3, 4];
 
 /** Semitones above the root a fifth may sit at: diminished, perfect, augmented. */
 export const FIFTH_SEMITONES = [6, 7, 8];
@@ -1262,6 +1276,11 @@ export function keyLookup(
   };
 }
 
+/** Identity of a key by the pitch classes it holds, for keying maps and caches. */
+export function keyId(scale: KeyScale): string {
+  return `${pitchClass(scale.rootPc)}:${scale.modeMask12}`;
+}
+
 /**
  * The single key that holds for most of a run of regions.
  *
@@ -1287,7 +1306,7 @@ export function prevailingKeyOf(regions: readonly KeyRegion[]): ResolvedKey | nu
   for (const [index, given] of regions.entries()) {
     const region = assertRecord<KeyRegion>(given, `key regions[${index}]`);
     assertRecord<ResolvedKey>(region.key, `key regions[${index}].key`);
-    const id = `${pitchClass(region.key.scale.rootPc)}:${region.key.scale.modeMask12}`;
+    const id = keyId(region.key.scale);
     const entry = totals.get(id);
     const length = Math.max(0, region.endBeat - region.startBeat);
     if (entry === undefined) {
@@ -1306,4 +1325,9 @@ export function prevailingKeyOf(regions: readonly KeyRegion[]): ResolvedKey | nu
     }
   }
   return best;
+}
+
+/** {@link prevailingKeyOf}, or C major when there are no regions to hold one. */
+export function prevailingKeyOrDefault(regions: readonly KeyRegion[]): ResolvedKey {
+  return prevailingKeyOf(regions) ?? resolveKey(majorKey(0));
 }

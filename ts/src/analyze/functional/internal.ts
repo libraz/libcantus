@@ -34,6 +34,7 @@ export {
 } from '../../theory/tendency/index.js';
 
 import { heptatonicFrameOf } from '../../theory/tendency/index.js';
+import { floorMod } from '../form/internal.js';
 
 /** Whether a scale has a minor third and no major third (a minor key). */
 export function isMinorScale(key: KeyScale): boolean {
@@ -56,7 +57,7 @@ export function degreeRootPc(degreeNumber: number, key: KeyScale): number {
   }
   // A plain `%` yields a negative index for a degree below the first, which
   // reads as undefined and collapses to the tonic; wrap into range instead.
-  const index = (((degreeNumber - 1) % tones.length) + tones.length) % tones.length;
+  const index = floorMod(degreeNumber - 1, tones.length);
   return tones[index] ?? mod12(key.rootPc);
 }
 

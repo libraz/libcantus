@@ -16,6 +16,7 @@ import {
   assertOneOf,
   assertOptions,
   assertRecord,
+  dropSilentNotes,
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality } from '../../theory/chord/index.js';
 import { chordPitchClasses, chordQualities, makeChord } from '../../theory/chord/index.js';
@@ -695,7 +696,7 @@ export function detectKeyFromNotes(
     allowNonPositiveDuration: true,
     budget: asked.budget,
   });
-  const sounding = notes.filter((note) => note.durationBeat > 0);
+  const sounding = dropSilentNotes(notes);
   return detectKey(
     sounding.map((note) => note.pitch),
     {

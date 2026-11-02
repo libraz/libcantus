@@ -9,6 +9,7 @@
 #include <string_view>
 
 #include "analyze/adjacency.h"
+#include "analyze/form/internal.h"
 #include "analyze/grid.h"
 #include "analyze/timeline/timeline.h"
 #include "cantus/analyze/functional.h"
@@ -42,9 +43,6 @@ double function_tension(HarmonicFunction function) {
   }
   return 0;
 }
-
-/** Clamp a value into [0, 1] (`clamp01`). */
-double clamp01(double value) { return js::min(1, js::max(0, value)); }
 
 /** One sounding pitched note at a beat (`allSounding`). */
 std::vector<int> all_sounding(const std::vector<PreparedTrack>& prepared, double beat) {
@@ -217,8 +215,12 @@ std::vector<TensionPoint> tension_curve(const std::vector<ArrangementTrack>& tra
   assert_given_keys(opts.keys, "arrangement keys");
   std::optional<std::set<std::size_t>> harmony_tracks =
       harmony_track_set(opts.harmonyTracks, tracks);
-  std::vector<NoteEvent> pooled = pool_notes(tracks, harmony_tracks ? &*harmony_tracks : nullptr);
   std::vector<NoteEvent> all = pool_notes(tracks);
+  std::vector<NoteEvent> harmony_pool;
+  if (harmony_tracks) {
+    harmony_pool = pool_notes(tracks, &*harmony_tracks);
+  }
+  const std::vector<NoteEvent>& pooled = harmony_tracks ? harmony_pool : all;
   double total_beats = latest_sounding_end(all);
   // The grid the samples sit on is a whole number of steps from beat 0, and the music itself
   // starts at `music_start`.
@@ -253,8 +255,7 @@ std::vector<TensionPoint> tension_curve(const std::vector<ArrangementTrack>& tra
       key_options.budget = budget;
       keys = key_timeline_from_notes(pooled, key_options);
     }
-    Nullable<ResolvedKey> prevailing = prevailing_key_of(keys);
-    prevailing_key = prevailing ? *prevailing : resolve_key(major_key(0));
+    prevailing_key = prevailing_key_or_default(keys);
   }
   // Harmonic tension is judged against the key in force at the sample.
   const std::vector<KeyRegion>& regions = opts.keys ? *opts.keys : keys;

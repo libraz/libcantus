@@ -1,7 +1,7 @@
 {
   "tables": [
     {
-      "module": "analyze/keys/index.ts",
+      "module": "theory/tendency/index.ts",
       "export": "THIRD_SEMITONES",
       "cxx_type": "int",
       "cxx_name": "kThirdSemitones",
@@ -20,11 +20,6 @@
       "module": "analyze/keys/index.ts",
       "export": "PITCH_CLASSES",
       "cxx_type": "int"
-    },
-    {
-      "module": "analyze/keys/index.ts",
-      "export": "MAX_METRIC_WEIGHT",
-      "cxx_type": "double"
     },
     {
       "module": "analyze/keys/index.ts",

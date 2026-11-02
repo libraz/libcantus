@@ -13,6 +13,7 @@ import type { VoiceSnapshot } from '../../theory/safety/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
 import { toKeyScale } from '../../theory/scale/index.js';
 import { adjacent, sameInstant } from '../adjacency.js';
+import { floorMod } from '../form/internal.js';
 
 /**
  * A suspension figure, named by the interval above the bass and the interval it
@@ -157,10 +158,10 @@ function intervalAboveBass(pitch: number, others: VoiceSnapshot[], chord: Chord)
     bass = Math.min(bass, ov.pitch);
   }
   if (Number.isFinite(bass) && bass < pitch) {
-    return (((pitch - bass) % 12) + 12) % 12;
+    return floorMod(pitch - bass, 12);
   }
   const ref = chord.bassPc ?? chord.rootPc;
-  return (((pitchClass(pitch) - pitchClass(ref)) % 12) + 12) % 12;
+  return floorMod(pitchClass(pitch) - pitchClass(ref), 12);
 }
 
 /**
@@ -290,9 +291,7 @@ function clashesWithChord(pitch: number, chord: Chord): boolean {
   if (chord.bassPc !== undefined) {
     tones.push(chord.bassPc);
   }
-  return tones.some(
-    (tone) => !isConsonantInterval((((pitchClass(pitch) - tone) % 12) + 12) % 12, false),
-  );
+  return tones.some((tone) => !isConsonantInterval(floorMod(pitchClass(pitch) - tone, 12), false));
 }
 
 /** Widest interval, in semitones, a resolution by step may cover. */

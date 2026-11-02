@@ -15,7 +15,6 @@
 #include "cantus/core/pitch.h"
 #include "cantus/core/validation.h"
 #include "cantus/theory/counterpoint.h"
-#include "core/event_index/order.h"
 #include "js/math.h"
 #include "js/number.h"
 
@@ -80,9 +79,6 @@ bool is_step(double a, double b) {
   return d == 1 || d == 2;
 }
 
-/** Floor modulo by 12 as `((x % 12) + 12) % 12` computes it. */
-double mod12(double x) { return std::fmod(std::fmod(x, 12) + 12, 12); }
-
 /**
  * Interval class of a pitch above the actual sounding bass (`intervalAboveBass`): the lowest
  * pitch among the other sounding voices when one lies below the note, else the chord's bass.
@@ -94,10 +90,10 @@ double interval_above_bass(double pitch, const std::vector<OtherVoice>& others,
     bass = js::min(bass, other.raw_pitch());
   }
   if (std::isfinite(bass) && bass < pitch) {
-    return mod12(pitch - bass);
+    return js::floor_mod(pitch - bass, 12);
   }
   double ref = chord.bassPc ? *chord.bassPc : chord.rootPc;
-  return mod12(pitch_class_of(pitch) - pitch_class_of(ref));
+  return js::floor_mod(pitch_class_of(pitch) - pitch_class_of(ref), 12);
 }
 
 /** The figure a suspended interval class names, from its first interval alone (`suspendedFigure`).
@@ -177,7 +173,7 @@ bool clashes_with_chord(double pitch, const Chord& chord) {
     tones.push_back(*chord.bassPc);
   }
   return std::any_of(tones.begin(), tones.end(), [&](double tone) {
-    return !is_consonant_interval(mod12(pitch_class_of(pitch) - tone), false);
+    return !is_consonant_interval(js::floor_mod(pitch_class_of(pitch) - tone, 12), false);
   });
 }
 
@@ -311,8 +307,13 @@ std::vector<AnalyzedNote> analyze_voice_over(const std::vector<VoiceNote>& voice
   std::vector<AnalyzedNote> result;
   // Melodic neighbours are read along the notes that sound: a zero-length note has none and is
   // no one's.
-  std::vector<std::size_t> sounding =
-      sounding_indices(std::vector<NoteEvent>(voice.begin(), voice.end()));
+  std::vector<std::size_t> sounding;
+  for (std::size_t i = 0; i < voice.size(); ++i) {
+    // The drop_silent_notes() predicate, read in place rather than on a copy of the voice.
+    if (voice[i].durationBeat > 0) {
+      sounding.push_back(i);
+    }
+  }
   std::vector<std::optional<std::size_t>> line(voice.size());
   for (std::size_t position = 0; position < sounding.size(); ++position) {
     line[sounding[position]] = position;

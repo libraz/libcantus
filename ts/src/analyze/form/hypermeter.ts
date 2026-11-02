@@ -15,6 +15,7 @@ import {
   assertGenerationBudget,
   assertNoteEvents,
   assertOptions,
+  dropSilentNotes,
 } from '../../core/validation/index.js';
 import type { ChordSegment } from '../../theory/chord/index.js';
 import { BEAT_EPS } from '../adjacency.js';
@@ -402,7 +403,7 @@ export function hypermeterOver(
     allowNonPositiveDuration: true,
     budget: asked.budget,
   });
-  const sounding = notes.filter((note) => note.durationBeat > 0);
+  const sounding = dropSilentNotes(notes);
   const firstOnset = firstSoundingBeat(sounding);
   const spanEnd = resolveSpanEnd(
     asked.totalBeats,

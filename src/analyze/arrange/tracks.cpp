@@ -148,9 +148,7 @@ std::vector<double> evaluation_beats(const VoiceNote& note,
 
 TimelineHost host_of(const ChordTimeline& timeline) {
   TimelineHost host;
-  for (const ChordSegment& segment : timeline.segments) {
-    host.spans.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
-  }
+  host.spans = spans_of(timeline.segments);
   ChordSource chord_at = [&timeline](std::size_t index) -> const Chord& {
     return timeline.segments[index].chord;
   };
@@ -283,8 +281,7 @@ TrackPass analyze_tracks(const std::vector<PreparedTrack>& prepared,
   std::stable_sort(
       pass.conflicts.begin(), pass.conflicts.end(), [](const Conflict& a, const Conflict& b) {
         double by_safety = static_cast<double>(b.safety) - static_cast<double>(a.safety);
-        double order = by_safety != 0 && !std::isnan(by_safety) ? by_safety : a.beat - b.beat;
-        return order < 0;
+        return js::or_else(by_safety, a.beat - b.beat) < 0;
       });
   return pass;
 }
@@ -320,8 +317,7 @@ CallerKeys caller_keys(const TimelineHost& timeline, const std::optional<KeyArg>
     }
     attach_pivots_over(out.keys, timeline.spans, timeline.chords.raw);
   }
-  Nullable<ResolvedKey> prevailing = prevailing_key_of(out.keys);
-  out.prevailing_key = prevailing ? *prevailing : resolve_key(major_key(0));
+  out.prevailing_key = prevailing_key_or_default(out.keys);
   out.segment_confidence.assign(timeline.spans.size(), 0);
   return out;
 }

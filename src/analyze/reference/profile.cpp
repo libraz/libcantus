@@ -39,23 +39,14 @@ struct Span {
 /** The span every analysis is read over (`spanOf`). */
 Span span_of(const std::vector<NoteEvent>& sounding, const ChordTimeline& timeline,
              const MeterMap& meters, std::optional<double> total_beats) {
-  const auto& segments = timeline.segments;
-  bool has_segments = !segments.empty();
-  double first_start = has_segments ? segments.front().startBeat : 0;
-  double first_onset = first_sounding_beat(sounding, first_start);
-  double start_beat =
-      bar_grid_start(js::min(first_onset, has_segments ? first_start : first_onset), meters);
-  double latest_end =
-      js::max(has_segments ? segments.back().endBeat : -std::numeric_limits<double>::infinity(),
-              latest_sounding_end(sounding, -std::numeric_limits<double>::infinity()));
-  double notes_end = std::isfinite(latest_end) ? latest_end : 0;
-  return Span{start_beat, js::max(start_beat, total_beats.value_or(notes_end))};
+  TimelineSpan extent = timeline_span(sounding, timeline.segments, meters);
+  double start_beat = extent.startBeat;
+  return Span{start_beat, js::max(start_beat, total_beats.value_or(extent.notesEnd))};
 }
 
 /** Whether two keys hold the same pitch classes. */
 bool same_key(const ResolvedKey& a, const ResolvedKey& b) {
-  return pitch_class_of(a.scale.rootPc) == pitch_class_of(b.scale.rootPc) &&
-         a.scale.modeMask12 == b.scale.modeMask12;
+  return key_id(a.scale) == key_id(b.scale);
 }
 
 /** Index of the key region a chord is read against (`keyIndexAt`). */
@@ -77,7 +68,7 @@ std::size_t key_index_at(const std::vector<ReferenceKeyRegion>& regions, double 
 /** Index of the section a beat falls in (`sectionAt`). */
 Nullable<std::size_t> section_at(const std::vector<FormSection>& sections, double beat) {
   for (std::size_t i = 0; i < sections.size(); ++i) {
-    if (beat >= sections[i].startBeat - BEAT_EPS && beat < sections[i].endBeat - BEAT_EPS) {
+    if (within_beats(beat, sections[i].startBeat, sections[i].endBeat)) {
       return i;
     }
   }
@@ -90,13 +81,7 @@ std::vector<NoteEvent> sounding_of(const std::vector<NoteEvent>& notes,
   options.allowNonPositiveDuration = true;
   options.budget = budget;
   assert_note_events(notes, "reference notes", options);
-  std::vector<NoteEvent> out;
-  for (const NoteEvent& note : notes) {
-    if (note.durationBeat > 0) {
-      out.push_back(note);
-    }
-  }
-  return out;
+  return drop_silent_notes(notes);
 }
 
 MeterMap meters_of(const ReferenceProfileOptions& opts) {
@@ -135,8 +120,7 @@ ReferenceReadings readings_for(const std::vector<NoteEvent>& notes,
     Span span = span_of(sounding, timeline, meters, opts.totalBeats);
     keys = stated_key_regions(resolve_key(*opts.key), span.startBeat, span.endBeat);
   }
-  Nullable<ResolvedKey> prevailing = prevailing_key_of(keys);
-  ResolvedKey key = prevailing ? *prevailing : resolve_key(major_key(0));
+  ResolvedKey key = prevailing_key_or_default(keys);
   return ReferenceReadings{std::move(timeline), std::move(keys), std::move(key)};
 }
 
@@ -276,7 +260,7 @@ ReferenceProfile reference_from_readings(const std::vector<NoteEvent>& notes,
     out.melody = phrase_melody(line, phrase.startBeat, phrase.endBeat, line_mean, meters, budget);
     for (std::size_t node = 0; node < graph.nodes.size(); ++node) {
       double start = graph.nodes[node].startBeat;
-      if (start >= phrase.startBeat - BEAT_EPS && start < phrase.endBeat - BEAT_EPS) {
+      if (within_beats(start, phrase.startBeat, phrase.endBeat)) {
         out.motifNodes.push_back(node);
       }
     }

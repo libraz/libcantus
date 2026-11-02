@@ -49,9 +49,6 @@ inline constexpr double CHANGE_COST = 0.35;
 /** STRONG_BEAT_DISCOUNT of ts/src/analyze/timeline/index.ts. */
 inline constexpr double TIMELINE_STRONG_BEAT_DISCOUNT = 0.5;
 
-/** MAX_METRIC_WEIGHT of ts/src/analyze/timeline/index.ts. */
-inline constexpr int TIMELINE_MAX_METRIC_WEIGHT = 3;
-
 /** DIRTY_SLOT_MARGIN of ts/src/analyze/timeline/index.ts. */
 inline constexpr int DIRTY_SLOT_MARGIN = 1;
 

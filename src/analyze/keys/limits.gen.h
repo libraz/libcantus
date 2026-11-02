@@ -7,9 +7,6 @@ namespace cantus {
 /** PITCH_CLASSES of ts/src/analyze/keys/index.ts. */
 inline constexpr int PITCH_CLASSES = 12;
 
-/** MAX_METRIC_WEIGHT of ts/src/analyze/keys/index.ts. */
-inline constexpr double MAX_METRIC_WEIGHT = 3;
-
 /** MODULATION_COST of ts/src/analyze/keys/index.ts. */
 inline constexpr double MODULATION_COST = 0.15;
 

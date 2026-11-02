@@ -21,30 +21,38 @@ import {
   assertOneOf,
   assertRange,
   assertRecord,
+  dropSilentNotes,
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, ChordSpan } from '../../theory/chord/index.js';
 import { chordFromSpan, chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
-import {
-  isScaleTone,
-  majorKey,
-  type ResolvedKey,
-  resolveKey,
-  scaleOf,
-} from '../../theory/scale/index.js';
-import { BEAT_EPS } from '../adjacency.js';
+import { isScaleTone, type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
+import { BEAT_EPS, sameInstant } from '../adjacency.js';
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord } from '../detect/index.js';
-import { firstSoundingBeat } from '../form/internal.js';
+import { clamp01, firstSoundingBeat } from '../form/internal.js';
 import { augmentedSixthFromPitchClasses } from '../functional/augmented-sixth.js';
 import { isCadentialSixFour } from '../functional/cadence.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
 import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import type { SlotGrid, WindowWeights } from '../histogram.js';
-import { bucketNotesBySlot, noteWeight, windowWeights } from '../histogram.js';
+import {
+  bucketNotesBySlot,
+  MAX_METRIC_WEIGHT,
+  noteOverlap,
+  noteWeight,
+  onsetInWindow,
+  windowWeights,
+} from '../histogram.js';
 import type { KeyRegion } from '../keys/index.js';
-import { attachPivots, keyLookup, keyTimelineFromNotes, prevailingKeyOf } from '../keys/index.js';
+import {
+  attachPivots,
+  keyId,
+  keyLookup,
+  keyTimelineFromNotes,
+  prevailingKeyOrDefault,
+} from '../keys/index.js';
 import type { KeyContext } from '../voice/index.js';
 import { keyScaleAt } from '../voice/index.js';
 
@@ -645,9 +653,7 @@ function bassSoundsOnlyBelow(
   let upperFloor = Number.POSITIVE_INFINITY;
   let highestBass = Number.NEGATIVE_INFINITY;
   for (const note of notes) {
-    const overlap =
-      Math.min(note.startBeat + note.durationBeat, windowEnd) -
-      Math.max(note.startBeat, windowStart);
+    const overlap = noteOverlap(note, windowStart, windowEnd);
     if (overlap <= BEAT_EPS) {
       continue;
     }
@@ -680,15 +686,14 @@ function windowBass(
   const counted: { note: NoteEvent; overlap: number }[] = [];
   let firstSounding = Number.POSITIVE_INFINITY;
   for (const note of notes) {
-    const overlap =
-      Math.min(note.startBeat + note.durationBeat, windowEnd) -
-      Math.max(note.startBeat, windowStart);
+    const overlap = noteOverlap(note, windowStart, windowEnd);
     if (overlap <= BEAT_EPS) {
       continue;
     }
-    const onsetInWindow =
-      note.startBeat >= windowStart - BEAT_EPS && note.startBeat < windowEnd - BEAT_EPS;
-    if (noteWeight(note, overlap, onsetInWindow ? meters : undefined) <= BEAT_EPS) {
+    if (
+      noteWeight(note, overlap, onsetInWindow(note, windowStart, windowEnd) ? meters : undefined) <=
+      BEAT_EPS
+    ) {
       continue;
     }
     counted.push({ note, overlap });
@@ -723,7 +728,7 @@ function chordConfidence(
     }
   }
   const raw = totalWeight > 0 ? chordWeight / totalWeight : 0;
-  const confidence = Math.min(1, Math.max(0, raw));
+  const confidence = clamp01(raw);
   return exact ? confidence : confidence * INEXACT_CONFIDENCE_FACTOR;
 }
 
@@ -770,8 +775,10 @@ function analyzeWindow(
   const { selected, hasBass, pedalPc, matches } = detection;
   let bestMatch: ChordMatch | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
+  let keyScale: KeyScale | undefined;
   for (const match of matches) {
-    const score = scoreMatch(match, weights, maxWeight, scaleOf(key), pedalPc);
+    keyScale ??= scaleOf(key);
+    const score = scoreMatch(match, weights, maxWeight, keyScale, pedalPc);
     if (score > bestScore) {
       bestScore = score;
       bestMatch = match;
@@ -1043,9 +1050,6 @@ export const CHANGE_COST = 0.35;
 
 /** How much of the change cost a maximally strong beat waives. */
 export const STRONG_BEAT_DISCOUNT = 0.5;
-
-/** The largest value {@link metricWeight} returns (a downbeat). */
-export const MAX_METRIC_WEIGHT = 3;
 
 /**
  * Score how well one lexicon candidate explains a slot's weights.
@@ -1530,11 +1534,6 @@ function spanIsClean(
   return lastExclusive <= dirtyFrom || first >= dirtyTo;
 }
 
-/** Identity of a key, for keying the per-span chord cache. */
-function keyId(key: KeyScale): string {
-  return `${key.rootPc}:${key.modeMask12}`;
-}
-
 /** Cache key of one settled span read in one key. */
 function windowId(startBeat: number, endBeat: number, key: KeyScale): string {
   return `${startBeat}|${endBeat}|${keyId(key)}`;
@@ -1621,7 +1620,7 @@ export function analyzeTimeline(
   // What the passes below read is the sequence in onset order, so that is what
   // is built: none of them asks which note sounds at a beat, and an index would
   // charge every analysis for lookups it never makes.
-  const sounding = sortedNoteEvents(notes.filter((note) => note.durationBeat > 0));
+  const sounding = sortedNoteEvents(dropSilentNotes(notes));
   const totalBeats = opts.totalBeats ?? latestSoundingEnd(sounding);
   assertRange(
     totalBeats,
@@ -1661,7 +1660,7 @@ export function analyzeTimeline(
     opts.key !== undefined
       ? statedKeyRegions(resolveKey(opts.key), musicStart, totalBeats)
       : keyTimelineFromNotes(sounding, { meters, totalBeats, budget });
-  const prevailingKey = prevailingKeyOf(keys) ?? resolveKey(majorKey(0));
+  const prevailingKey = prevailingKeyOrDefault(keys);
   const keyAt = keyLookup(keys, prevailingKey);
   // The pitch classes of the key in force. A window's chord is chosen by how
   // its notes score against those, and the cache is keyed on them; the
@@ -1911,14 +1910,14 @@ export function detectCadences(timeline: ChordTimeline, key: KeyContext): Cadenc
     if (!prev || !cur) {
       continue;
     }
-    if (Math.abs(cur.startBeat - prev.endBeat) > BEAT_EPS) {
+    if (!sameInstant(prev.endBeat, cur.startBeat)) {
       continue; // A rest separates the chords; no cadential motion across it.
     }
     // The chord before the pair, when it sounded straight into it: a six-four
     // across a rest was not still sounding when the dominant arrived.
     const before = timeline.segments[i - 2];
     const approach =
-      before !== undefined && Math.abs(prev.startBeat - before.endBeat) <= BEAT_EPS
+      before !== undefined && sameInstant(before.endBeat, prev.startBeat)
         ? before.chord
         : undefined;
     const key = keyAt(cur.startBeat);
@@ -1935,7 +1934,7 @@ export function detectCadences(timeline: ChordTimeline, key: KeyContext): Cadenc
     // chord already gives that resolution.
     if (cadence.type === 'half' && isCadentialSixFour(prev.chord, cur.chord, key)) {
       const next = timeline.segments[i + 1];
-      if (next !== undefined && Math.abs(next.startBeat - cur.endBeat) <= BEAT_EPS) {
+      if (next !== undefined && sameInstant(cur.endBeat, next.startBeat)) {
         const onward = detectCadence(cur.chord, next.chord, keyAt(next.startBeat)).type;
         if (onward === 'authentic' || onward === 'deceptive') {
           continue;

@@ -56,9 +56,13 @@ struct WindowWeights {
   double totalWeight = 0;
   /** The single largest pitch-class weight. */
   double maxWeight = 0;
-  /** Lowest sounding MIDI pitch, or +Infinity when the window is empty. */
-  double lowestPitch = 0;
 };
+
+/** How many beats of a note sound inside `[window_start, window_end)` (`noteOverlap`). */
+double note_overlap(const NoteEvent& note, double window_start, double window_end);
+
+/** Whether a note starts inside `[window_start, window_end)` (`onsetInWindow`). */
+bool onset_in_window(const NoteEvent& note, double window_start, double window_end);
 
 /**
  * Weigh the pitch classes sounding across `[window_start, window_end)` (`windowWeights`). `notes`

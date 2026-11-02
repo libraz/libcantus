@@ -197,10 +197,9 @@ Nullable<MotifRelation> relate_lines(const std::vector<LineNote>& model,
   bool backward = retro_profile && same_numbers(*retro_profile, *answer_profile);
   double semitones = answer.front().pitch - model.front().pitch;
   SpelledInterval interval = interval_between(model.front().pitch, answer.front().pitch, key);
-  double gap = answer.front().startBeat - end_beat_of(model);
   // A sequence follows its model immediately; anything further off is a restatement somewhere else
   // in the piece.
-  bool sequence = gap >= -HUMANIZE_ADJACENCY && gap <= HUMANIZE_ADJACENCY;
+  bool sequence = adjacent(end_beat_of(model), answer.front().startBeat);
   double time_ratio = stretch_ratio(model_gaps, answer_gaps);
   bool stretched = std::fabs(time_ratio - 1) > BEAT_EPS;
   std::vector<PitchShape> shapes = pitch_shapes(intervals_of(model), intervals_of(answer));

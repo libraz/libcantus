@@ -7,11 +7,13 @@
 #include <cmath>
 #include <string>
 
+#include "analyze/adjacency.h"
 #include "analyze/melody/internal.h"
 #include "analyze/melody/motifs.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/validation.h"
+#include "js/math.h"
 #include "js/number.h"
 
 namespace cantus {
@@ -63,14 +65,19 @@ MotifGraph graph_of_nodes(std::vector<GraphNodeInfo> infos, const KeySource* key
                           std::optional<double> budget, double variation_threshold) {
   std::stable_sort(infos.begin(), infos.end(), [](const GraphNodeInfo& a, const GraphNodeInfo& b) {
     double by_onset = a.node.startBeat - b.node.startBeat;
-    double order = by_onset != 0 && !std::isnan(by_onset)
-                       ? by_onset
-                       : static_cast<double>(a.node.motif) - static_cast<double>(b.node.motif);
-    return order < 0;
+    return js::or_else(by_onset,
+                       static_cast<double>(a.node.motif) - static_cast<double>(b.node.motif)) < 0;
   });
 
   auto node_count = static_cast<double>(infos.size());
   assert_generation_budget(node_count * node_count, "motif graph comparisons", budget);
+
+  // Each node's line, read once rather than once per pair it takes part in.
+  std::vector<std::vector<LineNote>> lines;
+  lines.reserve(infos.size());
+  for (const GraphNodeInfo& info : infos) {
+    lines.push_back(line_of(info.data.notes));
+  }
 
   MotifGraph graph;
   for (std::size_t to = 1; to < infos.size(); ++to) {
@@ -79,8 +86,7 @@ MotifGraph graph_of_nodes(std::vector<GraphNodeInfo> infos, const KeySource* key
       Candidate candidate;
       candidate.index = from;
       candidate.startBeat = infos[from].node.startBeat;
-      candidate.relation =
-          relate_lines(line_of(infos[from].data.notes), line_of(infos[to].data.notes), key_source);
+      candidate.relation = relate_lines(lines[from], lines[to], key_source);
       candidate.similarity = melodic_similarity(infos[from].data, infos[to].data);
       if (!best || better_parent(candidate, *best)) {
         best = std::move(candidate);
@@ -115,10 +121,9 @@ MotifGraph motif_graph(const std::vector<NoteEvent>& line, const std::vector<Mot
     const MotifData& motif = motifs[mi];
     for (std::size_t oi = 0; oi < motif.occurrences.size(); ++oi) {
       const MotifOccurrence& occurrence = motif.occurrences[oi];
-      bool on_line =
-          occurrence.noteIndex + motif.notes.size() <= ordered.size() &&
-          occurrence.noteIndex < ordered.size() &&
-          std::fabs(ordered[occurrence.noteIndex].startBeat - occurrence.startBeat) <= BEAT_EPS;
+      bool on_line = occurrence.noteIndex + motif.notes.size() <= ordered.size() &&
+                     occurrence.noteIndex < ordered.size() &&
+                     same_instant(ordered[occurrence.noteIndex].startBeat, occurrence.startBeat);
       if (!on_line) {
         throw InvalidInputError(
             "motif occurrence motifs[" + js::to_string(static_cast<double>(mi)) + "].occurrences[" +

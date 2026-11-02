@@ -10,8 +10,8 @@ inline constexpr double HUMANIZE_ADJACENCY = 0.05;
 /** MAX_VELOCITY of ts/src/analyze/histogram.ts. */
 inline constexpr double MAX_VELOCITY = 127;
 
-/** ACCENT_DIVISOR of ts/src/analyze/histogram.ts. */
-inline constexpr double ACCENT_DIVISOR = 3;
+/** MAX_METRIC_WEIGHT of ts/src/analyze/histogram.ts. */
+inline constexpr double MAX_METRIC_WEIGHT = 3;
 
 }  // namespace cantus
 

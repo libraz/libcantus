@@ -11,6 +11,7 @@
 #include "cantus/analyze/timeline.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
+#include "core/event_index/order.h"
 #include "core/validation/validation.h"
 #include "js/math.h"
 #include "js/number.h"
@@ -46,9 +47,10 @@ struct FreeLane {
   int last_pitch;
 };
 
-std::vector<std::optional<std::size_t>> pair_with_free_lanes(const std::vector<VoiceNote>& block,
+std::vector<std::optional<std::size_t>> pair_with_free_lanes(const std::vector<VoiceNote>& ordered,
+                                                             std::size_t first,
+                                                             std::size_t note_count,
                                                              const std::vector<FreeLane>& lanes) {
-  const std::size_t note_count = block.size();
   const std::size_t lane_count = lanes.size();
   std::vector<std::optional<std::size_t>> assignment(note_count);
   if (lane_count == 0) {
@@ -74,7 +76,7 @@ std::vector<std::optional<std::size_t>> pair_with_free_lanes(const std::vector<V
         choice = 2;
       }
       double distance = std::fabs(static_cast<double>(lanes[j - 1].last_pitch) -
-                                  static_cast<double>(block[i - 1].pitch));
+                                  static_cast<double>(ordered[first + i - 1].pitch));
       double paired = cost[(i - 1) * width + j - 1] + distance;
       if (distance <= kMaxLaneLeap && paired < best) {
         best = paired;
@@ -143,8 +145,7 @@ std::vector<std::vector<VoiceNote>> split_into_sub_voices(const std::vector<Voic
     }
     // Notes struck together form a vertical slice, so their lanes are chosen as a whole.
     if (end - start > 1) {
-      std::vector<VoiceNote> block(ordered.begin() + static_cast<std::ptrdiff_t>(start),
-                                   ordered.begin() + static_cast<std::ptrdiff_t>(end));
+      const std::size_t block_size = end - start;
       std::vector<FreeLane> free_lanes;
       for (std::size_t lane = 0; lane < lanes.size(); ++lane) {
         if (!lanes[lane].empty() &&
@@ -155,7 +156,8 @@ std::vector<std::vector<VoiceNote>> split_into_sub_voices(const std::vector<Voic
       std::stable_sort(
           free_lanes.begin(), free_lanes.end(),
           [](const FreeLane& a, const FreeLane& b) { return a.last_pitch - b.last_pitch < 0; });
-      std::vector<std::optional<std::size_t>> assignment = pair_with_free_lanes(block, free_lanes);
+      std::vector<std::optional<std::size_t>> assignment =
+          pair_with_free_lanes(ordered, start, block_size, free_lanes);
       // Every lane the slice takes is settled before a note is placed.
       std::set<std::size_t> taken;
       for (const std::optional<std::size_t>& lane : assignment) {
@@ -163,7 +165,7 @@ std::vector<std::vector<VoiceNote>> split_into_sub_voices(const std::vector<Voic
           taken.insert(*lane);
         }
       }
-      for (std::size_t index = 0; index < block.size(); ++index) {
+      for (std::size_t index = 0; index < block_size; ++index) {
         std::size_t note = start + index;
         if (assignment[index]) {
           lanes[*assignment[index]].push_back(note);
@@ -227,7 +229,7 @@ const PreparedNote* PreparedVoice::at(double beat) const {
 }
 
 bool covers(const PreparedNote& note, double beat) {
-  return beat >= note.startBeat - BEAT_EPS && beat < note.endBeat - BEAT_EPS;
+  return within_beats(beat, note.startBeat, note.endBeat);
 }
 
 bool is_percussion(const std::optional<TrackRole>& role) { return role == TrackRole::kDrums; }
@@ -321,17 +323,11 @@ std::vector<PreparedTrack> prepare_tracks(const std::vector<ArrangementTrack>& t
   std::vector<PreparedTrack> out;
   for (std::size_t index = 0; index < tracks.size(); ++index) {
     const ArrangementTrack& track = tracks[index];
-    std::vector<std::size_t> order;
-    for (std::size_t original = 0; original < track.notes.size(); ++original) {
-      if (track.notes[original].durationBeat > 0) {
-        order.push_back(original);
-      }
-    }
+    std::vector<std::size_t> order = sounding_indices(track.notes);
     std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
       double by_start = track.notes[a].startBeat - track.notes[b].startBeat;
-      return (by_start != 0 && !std::isnan(by_start)
-                  ? by_start
-                  : static_cast<double>(track.notes[a].pitch) - track.notes[b].pitch) < 0;
+      return js::or_else(by_start,
+                         static_cast<double>(track.notes[a].pitch) - track.notes[b].pitch) < 0;
     });
     std::vector<VoiceNote> ordered;
     for (std::size_t original : order) {

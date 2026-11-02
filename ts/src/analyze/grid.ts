@@ -112,3 +112,35 @@ export function latestSoundingEnd(notes: readonly NoteEvent[], fallback = 0): nu
 export function barGridStart(firstOnset: number, meter: MeterLike): number {
   return gridOriginOf(firstOnset, beatsPerBarAt(firstOnset, meter)).startBeat;
 }
+
+/**
+ * The span a chord timeline and the notes under it share: where its bars start
+ * and where the music stops sounding.
+ *
+ * The start is the bar-grid start of the earlier of the first onset and the
+ * first segment; the end is the later of the last note's end and the last
+ * segment's end, or 0 for neither.
+ *
+ * @param sounding The sounding notes of the span.
+ * @param segments The timeline's chord segments, in beat order.
+ * @param meter A single signature, or the piece's meter map.
+ * @returns The span's first beat and the end of its music.
+ */
+export function timelineSpan(
+  sounding: readonly NoteEvent[],
+  segments: readonly { startBeat: number; endBeat: number }[],
+  meter: MeterLike,
+): { startBeat: number; notesEnd: number } {
+  const firstSegment = segments[0];
+  const lastSegment = segments[segments.length - 1];
+  const firstOnset = firstSoundingBeat(sounding, firstSegment?.startBeat ?? 0);
+  const startBeat = barGridStart(
+    Math.min(firstOnset, firstSegment?.startBeat ?? firstOnset),
+    meter,
+  );
+  const latestEnd = Math.max(
+    lastSegment?.endBeat ?? Number.NEGATIVE_INFINITY,
+    latestSoundingEnd(sounding, Number.NEGATIVE_INFINITY),
+  );
+  return { startBeat, notesEnd: Number.isFinite(latestEnd) ? latestEnd : 0 };
+}

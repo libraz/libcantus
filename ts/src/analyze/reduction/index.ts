@@ -36,7 +36,7 @@ import { isDominantChordOf } from '../../theory/tendency/index.js';
 // Segment boundaries are computed, so the end of one and the start of the next
 // meet to within rounding rather than exactly; a real gap is a rest, and chords
 // either side of a rest embellish nothing.
-import { BEAT_EPS } from '../adjacency.js';
+import { sameInstant } from '../adjacency.js';
 import { isCadentialSixFour } from '../functional/cadence.js';
 import type { CadenceResult } from '../functional/index.js';
 import { detectCadence } from '../functional/index.js';
@@ -147,7 +147,7 @@ function isStep(distance: number): boolean {
 
 /** Whether two segments touch, so that the motion between them is heard. */
 function touches(before: ChordSegment, after: ChordSegment): boolean {
-  return Math.abs(after.startBeat - before.endBeat) <= BEAT_EPS;
+  return sameInstant(before.endBeat, after.startBeat);
 }
 
 /**

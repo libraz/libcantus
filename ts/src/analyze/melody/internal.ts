@@ -9,8 +9,8 @@
  */
 
 import type { NoteEvent } from '../../core/types.js';
-import { assertNoteEvents, assertRecord } from '../../core/validation/index.js';
-import { BEAT_EPS } from '../adjacency.js';
+import { assertNoteEvents, assertRecord, dropSilentNotes } from '../../core/validation/index.js';
+import { BEAT_EPS, sameInstant } from '../adjacency.js';
 import { latestSoundingEnd } from '../grid.js';
 import type { MotifData } from './motifs.js';
 
@@ -59,15 +59,15 @@ export function orderedNotes(
   budget?: number,
 ): readonly NoteEvent[] {
   assertNoteEvents(notes, name, { allowNonPositiveDuration: true, budget });
-  const sounding = notes
-    .filter((note) => note.durationBeat > 0)
-    .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
+  const sounding = dropSilentNotes(notes).sort(
+    (a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch,
+  );
   const line: NoteEvent[] = [];
   for (const note of sounding) {
     const previous = line[line.length - 1];
     // Sorted low to high within an onset, so the last note to arrive at one is
     // its top voice.
-    if (previous !== undefined && Math.abs(note.startBeat - previous.startBeat) <= BEAT_EPS) {
+    if (previous !== undefined && sameInstant(note.startBeat, previous.startBeat)) {
       line[line.length - 1] = note;
       continue;
     }

@@ -12,13 +12,16 @@ import { metricWeight } from '../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
 import { assertGenerationBudget } from '../core/validation/index.js';
-import { BEAT_EPS } from './adjacency.js';
+import { BEAT_EPS, withinBeats } from './adjacency.js';
 
 /** Loudest a MIDI velocity goes, which is what a velocity is read against. */
 export const MAX_VELOCITY = 127;
 
-/** How much a metric accent may add to a note's weight, as a divisor of it. */
-export const ACCENT_DIVISOR = 3;
+/**
+ * The largest value {@link metricWeight} returns (a downbeat), which is also
+ * what a note's metric accent is read against: the strongest beat adds 1.
+ */
+export const MAX_METRIC_WEIGHT = 3;
 
 /**
  * How much one note counts towards a pitch-class histogram.
@@ -40,7 +43,8 @@ export const ACCENT_DIVISOR = 3;
  */
 export function noteWeight(note: NoteEvent, beats: number, meter?: MeterLike): number {
   const velocityFactor = note.velocity !== undefined ? note.velocity / MAX_VELOCITY : 1;
-  const accent = meter === undefined ? 1 : 1 + metricWeight(note.startBeat, meter) / ACCENT_DIVISOR;
+  const accent =
+    meter === undefined ? 1 : 1 + metricWeight(note.startBeat, meter) / MAX_METRIC_WEIGHT;
   return beats * velocityFactor * accent;
 }
 
@@ -106,9 +110,35 @@ export type WindowWeights = {
   totalWeight: number;
   /** The single largest pitch-class weight. */
   maxWeight: number;
-  /** Lowest sounding MIDI pitch, or +Infinity when the window is empty. */
-  lowestPitch: number;
 };
+
+/**
+ * How many beats of a note sound inside `[windowStart, windowEnd)`; zero or
+ * negative where it does not reach the window.
+ *
+ * @param note The note to measure.
+ * @param windowStart First beat of the window.
+ * @param windowEnd End of the window, exclusive.
+ * @returns The overlap in beats.
+ */
+export function noteOverlap(note: NoteEvent, windowStart: number, windowEnd: number): number {
+  return (
+    Math.min(note.startBeat + note.durationBeat, windowEnd) - Math.max(note.startBeat, windowStart)
+  );
+}
+
+/**
+ * Whether a note starts inside `[windowStart, windowEnd)`, the test that
+ * decides whether its metric accent counts in the window.
+ *
+ * @param note The note to place.
+ * @param windowStart First beat of the window.
+ * @param windowEnd End of the window, exclusive.
+ * @returns True when the onset is in the window.
+ */
+export function onsetInWindow(note: NoteEvent, windowStart: number, windowEnd: number): boolean {
+  return withinBeats(note.startBeat, windowStart, windowEnd);
+}
 
 /**
  * Weigh the pitch classes sounding across `[windowStart, windowEnd)`.
@@ -138,29 +168,20 @@ export function windowWeights(
   meter: MeterLike,
 ): WindowWeights {
   const weights = new Array<number>(12).fill(0);
-  let lowestPitch = Number.POSITIVE_INFINITY;
   for (const note of notes) {
-    const noteEnd = note.startBeat + note.durationBeat;
-    const overlap = Math.min(noteEnd, windowEnd) - Math.max(note.startBeat, windowStart);
+    const overlap = noteOverlap(note, windowStart, windowEnd);
     if (overlap <= BEAT_EPS) {
       continue;
     }
-    const onsetInWindow =
-      note.startBeat >= windowStart - BEAT_EPS && note.startBeat < windowEnd - BEAT_EPS;
     const pc = pitchClass(note.pitch);
     // The accent is asked for only where the onset falls in the window: a note
     // held across the boundary is already counted for its part of it.
-    const weight = noteWeight(note, overlap, onsetInWindow ? meter : undefined);
+    const weight = noteWeight(
+      note,
+      overlap,
+      onsetInWindow(note, windowStart, windowEnd) ? meter : undefined,
+    );
     weights[pc] = (weights[pc] ?? 0) + weight;
-    // A note the histogram does not count cannot be the bass either. A velocity
-    // of zero is a note event the library accepts — a note-off written as one,
-    // a muted ghost layer — and it weighs nothing, so a lowest note taken from
-    // it named a pitch class the histogram had never heard of: the reading that
-    // follows then found no bass among the pitches it selected and dropped the
-    // inversion, the slash bass and the augmented-sixth accounting with it.
-    if (weight > BEAT_EPS && note.pitch < lowestPitch) {
-      lowestPitch = note.pitch;
-    }
   }
   let totalWeight = 0;
   let maxWeight = 0;
@@ -168,5 +189,5 @@ export function windowWeights(
     totalWeight += w;
     maxWeight = Math.max(maxWeight, w);
   }
-  return { weights, totalWeight, maxWeight, lowestPitch };
+  return { weights, totalWeight, maxWeight };
 }

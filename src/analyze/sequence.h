@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "analyze/form/internal.h"
 #include "js/math.h"
 
 namespace cantus {
@@ -25,8 +26,9 @@ double graded_edit_distance(const std::vector<T>& a, const std::vector<T>& b, Co
   for (std::size_t i = 0; i < previous.size(); ++i) {
     previous[i] = static_cast<double>(i) * gap;
   }
+  // Two rows, swapped: every cell of `row` is written before it is read.
+  std::vector<double> row(b.size() + 1);
   for (std::size_t i = 1; i <= a.size(); ++i) {
-    std::vector<double> row(b.size() + 1);
     row[0] = static_cast<double>(i) * gap;
     for (std::size_t j = 1; j <= b.size(); ++j) {
       double substitution = previous[j - 1] + cost(a[i - 1], b[j - 1]);
@@ -34,7 +36,7 @@ double graded_edit_distance(const std::vector<T>& a, const std::vector<T>& b, Co
       double insertion = row[j - 1] + gap;
       row[j] = js::min(substitution, deletion, insertion);
     }
-    previous = std::move(row);
+    previous.swap(row);
   }
   return previous[b.size()];
 }

@@ -12,6 +12,7 @@
 #include "analyze/functional/tonicization.h"
 #include "analyze/voice/voice.h"
 #include "cantus/core/pitch.h"
+#include "js/math.h"
 #include "theory/tendency/tendency.h"
 
 namespace cantus {
@@ -82,7 +83,7 @@ std::vector<double> salience_floors(const std::vector<double>& durations) {
   std::iota(order.begin(), order.end(), 0);
   std::stable_sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) {
     double by_length = durations[a] - durations[b];
-    return (by_length != 0 && !std::isnan(by_length) ? by_length : static_cast<double>(a) - b) < 0;
+    return js::or_else(by_length, static_cast<double>(a) - b) < 0;
   });
   std::vector<std::size_t> rank_of(durations.size(), 0);
   for (std::size_t rank = 0; rank < order.size(); ++rank) {
@@ -244,7 +245,7 @@ ReductionLevel level_of(const Reason& reason) {
 
 /** Whether two segments touch, so that the motion between them is heard (`touches`). */
 bool touches(const SegmentSpan& before, const SegmentSpan& after) {
-  return std::fabs(after.startBeat - before.endBeat) <= BEAT_EPS;
+  return same_instant(before.endBeat, after.startBeat);
 }
 
 }  // namespace
@@ -337,10 +338,7 @@ std::vector<ReducedChord> reduce_progression(const ChordTimeline& timeline, cons
   assert_chord_timeline(timeline);
   KeyAtBeat key_at = key_scale_at(key);
   ReductionBasis basis = opts.basis.value_or(ReductionBasis::kFunction);
-  std::vector<SegmentSpan> spans;
-  for (const ChordSegment& segment : timeline.segments) {
-    spans.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
-  }
+  std::vector<SegmentSpan> spans = spans_of(timeline.segments);
   ChordSource chord_at = [&](std::size_t index) -> const Chord& {
     return timeline.segments[index].chord;
   };

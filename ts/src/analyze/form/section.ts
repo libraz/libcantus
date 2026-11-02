@@ -18,8 +18,9 @@ import {
   assertNoteEvents,
   assertPositiveInt,
   assertRange,
+  dropSilentNotes,
 } from '../../core/validation/index.js';
-import { BEAT_EPS } from '../adjacency.js';
+import { withinBeats } from '../adjacency.js';
 import { barGridStart, latestSoundingEnd } from '../grid.js';
 import { windowWeights } from '../histogram.js';
 import { melodicSimilarity } from '../melody/index.js';
@@ -231,7 +232,7 @@ export function sectionsFromNotes(
     allowNonPositiveDuration: true,
     budget: opts.budget,
   });
-  const sounding = notes.filter((note) => note.durationBeat > 0);
+  const sounding = dropSilentNotes(notes);
   // The pickup rule the whole analysis shares: a note a millibeat before the
   // downbeat is playing it, and only one a whole bar early opens a pickup.
   const firstSounding = firstSoundingBeat(sounding);
@@ -265,6 +266,8 @@ export function sectionsFromNotes(
   assertGenerationBudget(unitCount * unitCount, 'form section comparisons', opts.budget);
   assertGenerationBudget(unitCount * sounding.length, 'form section unit notes', opts.budget);
 
+  // Sorted once: the sort is stable, so each unit's slice keeps this order.
+  const ordered = [...sounding].sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
   const units: Unit[] = [];
   for (let index = 0; index < unitCount; index += 1) {
     const barStart = startBar + index * unitBars;
@@ -277,11 +280,7 @@ export function sectionsFromNotes(
     // The opening unit holds everything before its end: a note a millibeat
     // early sounds in it even though the grid starts on the downbeat.
     const fromBeat = index === 0 ? Math.min(firstSounding, startBeat) : startBeat;
-    const unitNotes = sounding
-      .filter(
-        (note) => note.startBeat >= fromBeat - BEAT_EPS && note.startBeat < endBeat - BEAT_EPS,
-      )
-      .sort((a, b) => a.startBeat - b.startBeat || a.pitch - b.pitch);
+    const unitNotes = ordered.filter((note) => withinBeats(note.startBeat, fromBeat, endBeat));
     units.push({
       startBeat,
       endBeat,

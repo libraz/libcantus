@@ -10,6 +10,7 @@
 #include <set>
 #include <string_view>
 
+#include "analyze/melody/similarity.h"
 #include "analyze/sequence.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/validation.h"
@@ -116,12 +117,28 @@ std::string simple_degree_token(const std::string& roman) {
   return token;
 }
 
+/** A progression chord with its degree token read once, not per alignment cell. */
+struct DegreeChord {
+  std::string roman;
+  HarmonicFunction function;
+  std::string degree;
+};
+
+std::vector<DegreeChord> with_degrees(const std::vector<ProgressionChord>& chords) {
+  std::vector<DegreeChord> out;
+  out.reserve(chords.size());
+  for (const ProgressionChord& chord : chords) {
+    out.push_back(DegreeChord{chord.roman, chord.function, roman_degree_token(chord.roman)});
+  }
+  return out;
+}
+
 /** Substitution cost of one chord for another in the progression alignment (`chordCost`). */
-double chord_cost(const ProgressionChord& x, const ProgressionChord& y) {
+double chord_cost(const DegreeChord& x, const DegreeChord& y) {
   if (x.roman == y.roman) {
     return 0;
   }
-  if (roman_degree_token(x.roman) == roman_degree_token(y.roman)) {
+  if (x.degree == y.degree) {
     return SAME_DEGREE_COST;
   }
   return x.function == y.function ? SAME_FUNCTION_COST : 1;
@@ -148,8 +165,8 @@ std::vector<KeyToken> key_tokens(const std::vector<KeyScale>& keys) {
   double home = keys.empty() ? 0 : keys[0].rootPc;
   std::vector<KeyToken> out;
   for (const KeyScale& key : keys) {
-    out.push_back(KeyToken{std::fmod(std::fmod(key.rootPc - home, 12) + 12, 12),
-                           static_cast<double>(key.modeMask12)});
+    out.push_back(
+        KeyToken{js::floor_mod(key.rootPc - home, 12), static_cast<double>(key.modeMask12)});
   }
   return out;
 }
@@ -193,7 +210,7 @@ double best_match_mean(const std::vector<Cell>& from, const std::vector<Cell>& t
   for (const Cell& motif : from) {
     double best = 0;
     for (const Cell& other : to) {
-      best = js::max(best, compare_melodies(motif.cell, other.cell).pitchSimilarity);
+      best = js::max(best, pitch_similarity_of(motif.cell, other.cell));
     }
     weighted += motif.occurrences * best;
     weight += motif.occurrences;
@@ -220,7 +237,7 @@ double coverage_of(const MotifGraph& graph, double span_beats) {
   }
   std::stable_sort(spans.begin(), spans.end(), [](const auto& x, const auto& y) {
     double by_start = x.first - y.first;
-    return (by_start != 0 && !std::isnan(by_start) ? by_start : x.second - y.second) < 0;
+    return js::or_else(by_start, x.second - y.second) < 0;
   });
   double covered = 0;
   double run_start = spans[0].first;
@@ -365,7 +382,7 @@ Nullable<double> progression_similarity(const std::vector<ProgressionChord>& a,
                                         std::optional<double> budget) {
   assert_generation_budget(static_cast<double>(a.size()) * static_cast<double>(b.size()),
                            "reference progression alignment", budget);
-  return aligned_similarity(a, b, chord_cost, PROGRESSION_GAP);
+  return aligned_similarity(with_degrees(a), with_degrees(b), chord_cost, PROGRESSION_GAP);
 }
 
 Nullable<double> function_similarity(const std::vector<TimedFunction>& a,

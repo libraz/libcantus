@@ -5,7 +5,8 @@
 
 import type { MeterMap } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import { BEAT_EPS } from '../adjacency.js';
+import { BEAT_EPS, withinBeats } from '../adjacency.js';
+import { clamp01 } from '../form/internal.js';
 import { melodicContour } from '../melody/contour.js';
 import { rhythmOver } from '../rhythm/index.js';
 import type { ReferencePhraseMelody } from './types.js';
@@ -35,7 +36,7 @@ export function phraseMelody(
   budget: number | undefined,
 ): ReferencePhraseMelody | null {
   const inside = line
-    .filter((note) => note.startBeat >= startBeat - BEAT_EPS && note.startBeat < endBeat - BEAT_EPS)
+    .filter((note) => withinBeats(note.startBeat, startBeat, endBeat))
     .map((note) => ({
       ...note,
       durationBeat: Math.min(note.startBeat + note.durationBeat, endBeat) - note.startBeat,
@@ -73,7 +74,7 @@ export function phraseMelody(
     high: peak.pitch,
     mean: weightedMean(inside),
     peakPitch: peak.pitch,
-    peakPosition: Math.min(1, Math.max(0, (peak.startBeat - startBeat) / length)),
+    peakPosition: clamp01((peak.startBeat - startBeat) / length),
     outline,
     onsetDensity: rhythm.onsetDensity,
     restRatio: rhythm.restRatio,

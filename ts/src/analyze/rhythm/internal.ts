@@ -47,7 +47,7 @@ export const IOI_EXPONENT_STEP = 0.5;
 export function ioiBinIndex(ioi: number): number {
   const exponent = Math.min(
     IOI_MAX_EXPONENT,
-    Math.max(IOI_MIN_EXPONENT, Math.round(2 * Math.log2(ioi)) / 2),
+    Math.max(IOI_MIN_EXPONENT, Math.round(Math.log2(ioi) / IOI_EXPONENT_STEP) * IOI_EXPONENT_STEP),
   );
   return Math.round((exponent - IOI_MIN_EXPONENT) / IOI_EXPONENT_STEP);
 }

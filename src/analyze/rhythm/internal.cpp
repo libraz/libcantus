@@ -30,8 +30,9 @@ int rhythm_level(double beat_in_quarters, const MeterArg& meters) {
 }
 
 int ioi_bin_index(double ioi) {
-  double exponent =
-      js::min(IOI_MAX_EXPONENT, js::max(IOI_MIN_EXPONENT, js::round(2 * js::log2(ioi)) / 2));
+  double exponent = js::min(
+      IOI_MAX_EXPONENT,
+      js::max(IOI_MIN_EXPONENT, js::round(js::log2(ioi) / IOI_EXPONENT_STEP) * IOI_EXPONENT_STEP));
   return static_cast<int>(js::round((exponent - IOI_MIN_EXPONENT) / IOI_EXPONENT_STEP));
 }
 

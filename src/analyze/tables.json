@@ -12,7 +12,7 @@
     },
     {
       "module": "analyze/histogram.ts",
-      "export": "ACCENT_DIVISOR",
+      "export": "MAX_METRIC_WEIGHT",
       "cxx_type": "double"
     }
   ]

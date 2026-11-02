@@ -18,7 +18,7 @@ import {
   assertRecord,
 } from '../../core/validation/index.js';
 import type { SpelledKeyLike } from '../../theory/scale/index.js';
-import { BEAT_EPS } from '../adjacency.js';
+import { sameInstant } from '../adjacency.js';
 import { orderedNotes } from './internal.js';
 import type { MotifData, MotifOccurrence } from './motifs.js';
 import { motifFromNotes } from './motifs.js';
@@ -214,7 +214,7 @@ export function motifGraph(
         Number.isInteger(noteIndex) &&
         noteIndex >= 0 &&
         noteIndex + notes.length <= ordered.length &&
-        Math.abs((ordered[noteIndex]?.startBeat ?? Number.NaN) - occurrence.startBeat) <= BEAT_EPS;
+        sameInstant(ordered[noteIndex]?.startBeat ?? Number.NaN, occurrence.startBeat);
       if (!onLine) {
         throw new InvalidInputError(
           `motif occurrence motifs[${mi}].occurrences[${oi}] does not lie on the line`,

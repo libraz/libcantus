@@ -69,12 +69,7 @@ std::vector<FormSection> sections_from_notes(const std::vector<NoteEvent>& notes
   note_options.allowNonPositiveDuration = true;
   note_options.budget = opts.budget;
   assert_note_events(notes, "section notes", note_options);
-  std::vector<NoteEvent> sounding;
-  for (const NoteEvent& note : notes) {
-    if (note.durationBeat > 0) {
-      sounding.push_back(note);
-    }
-  }
+  std::vector<NoteEvent> sounding = drop_silent_notes(notes);
   // The pickup rule the whole analysis shares.
   double first_sounding = first_sounding_beat(sounding);
   double first_onset = bar_grid_start(first_sounding, meters);
@@ -103,6 +98,12 @@ std::vector<FormSection> sections_from_notes(const std::vector<NoteEvent>& notes
   assert_generation_budget(unit_count * static_cast<double>(sounding.size()),
                            "form section unit notes", opts.budget);
 
+  // Sorted once: the sort is stable, so each unit's slice keeps this order.
+  std::vector<NoteEvent> ordered = sounding;
+  std::stable_sort(ordered.begin(), ordered.end(), [](const NoteEvent& a, const NoteEvent& b) {
+    double by_start = a.startBeat - b.startBeat;
+    return js::or_else(by_start, a.pitch - b.pitch) < 0;
+  });
   std::vector<Unit> units;
   for (double index = 0; index < unit_count; index += 1) {
     double bar_start = start_bar + index * unit_bars;
@@ -116,17 +117,11 @@ std::vector<FormSection> sections_from_notes(const std::vector<NoteEvent>& notes
     unit.endBeat = end_beat;
     // The opening unit holds everything before its end: a note a millibeat early sounds in it.
     double from_beat = index == 0 ? js::min(first_sounding, start_beat) : start_beat;
-    for (const NoteEvent& note : sounding) {
-      if (note.startBeat >= from_beat - BEAT_EPS && note.startBeat < end_beat - BEAT_EPS) {
+    for (const NoteEvent& note : ordered) {
+      if (within_beats(note.startBeat, from_beat, end_beat)) {
         unit.notes.push_back(note);
       }
     }
-    std::stable_sort(
-        unit.notes.begin(), unit.notes.end(), [](const NoteEvent& a, const NoteEvent& b) {
-          double by_start = a.startBeat - b.startBeat;
-          double order = by_start != 0 && !std::isnan(by_start) ? by_start : a.pitch - b.pitch;
-          return order < 0;
-        });
     unit.weights = window_weights(unit.notes, nullptr, start_beat, end_beat, meters).weights;
     units.push_back(std::move(unit));
   }

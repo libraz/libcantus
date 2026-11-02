@@ -7,8 +7,10 @@
 #include <limits>
 #include <string>
 
+#include "analyze/adjacency.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/validation.h"
+#include "core/event_index/order.h"
 #include "js/format.h"
 #include "js/math.h"
 
@@ -25,25 +27,17 @@ std::vector<LineNote> line_of(const std::vector<NoteEvent>& notes) {
 }
 
 std::vector<std::size_t> ordered_indices(const std::vector<NoteEvent>& notes) {
-  std::vector<std::size_t> sounding;
-  for (std::size_t i = 0; i < notes.size(); ++i) {
-    if (notes[i].durationBeat > 0) {
-      sounding.push_back(i);
-    }
-  }
+  std::vector<std::size_t> sounding = sounding_indices(notes);
   std::stable_sort(sounding.begin(), sounding.end(), [&](std::size_t a, std::size_t b) {
     double by_onset = notes[a].startBeat - notes[b].startBeat;
     // `a.startBeat - b.startBeat || a.pitch - b.pitch`
-    double order = by_onset != 0 && !std::isnan(by_onset)
-                       ? by_onset
-                       : static_cast<double>(notes[a].pitch) - static_cast<double>(notes[b].pitch);
-    return order < 0;
+    return js::or_else(by_onset, static_cast<double>(notes[a].pitch) -
+                                     static_cast<double>(notes[b].pitch)) < 0;
   });
   std::vector<std::size_t> line;
   for (std::size_t index : sounding) {
     // Sorted low to high within an onset, so the last note to arrive at one is its top voice.
-    if (!line.empty() &&
-        std::fabs(notes[index].startBeat - notes[line.back()].startBeat) <= BEAT_EPS) {
+    if (!line.empty() && same_instant(notes[index].startBeat, notes[line.back()].startBeat)) {
       line.back() = index;
       continue;
     }

@@ -6,10 +6,13 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 
 #include "analyze/adjacency.h"
+#include "analyze/form/internal.h"
 #include "analyze/functional/augmented_sixth.h"
 #include "analyze/functional/cadence.h"
 #include "analyze/grid.h"
@@ -74,12 +77,16 @@ const Lexicon& lexicon() {
 }
 
 bool is_slash_upper_quality(ChordQuality quality) {
-  for (std::string_view name : kSlashUpperQualityNames) {
-    if (parse_chord_quality(name) == quality) {
-      return true;
+  static const std::set<ChordQuality> upper = [] {
+    std::set<ChordQuality> out;
+    for (std::string_view name : kSlashUpperQualityNames) {
+      if (std::optional<ChordQuality> parsed = parse_chord_quality(name)) {
+        out.insert(*parsed);
+      }
     }
-  }
-  return false;
+    return out;
+  }();
+  return upper.count(quality) > 0;
 }
 
 /** `slotOfBeat`: the index of the slot containing `beat`, unclamped. */
@@ -202,8 +209,7 @@ bool bass_sounds_only_below(const std::vector<NoteEvent>& all,
   double highest_bass = -std::numeric_limits<double>::infinity();
   for (std::size_t index : selection) {
     const NoteEvent& note = all[index];
-    double overlap = js::min(note.startBeat + note.durationBeat, window_end) -
-                     js::max(note.startBeat, window_start);
+    double overlap = note_overlap(note, window_start, window_end);
     if (overlap <= BEAT_EPS) {
       continue;
     }
@@ -233,14 +239,13 @@ double window_bass(const std::vector<NoteEvent>& all, const std::vector<std::siz
   double first_sounding = std::numeric_limits<double>::infinity();
   for (std::size_t index : selection) {
     const NoteEvent& note = all[index];
-    double overlap = js::min(note.startBeat + note.durationBeat, window_end) -
-                     js::max(note.startBeat, window_start);
+    double overlap = note_overlap(note, window_start, window_end);
     if (overlap <= BEAT_EPS) {
       continue;
     }
-    bool onset_in_window =
-        note.startBeat >= window_start - BEAT_EPS && note.startBeat < window_end - BEAT_EPS;
-    if (note_weight(note, overlap, onset_in_window ? &meters : nullptr) <= BEAT_EPS) {
+    if (note_weight(note, overlap,
+                    onset_in_window(note, window_start, window_end) ? &meters : nullptr) <=
+        BEAT_EPS) {
       continue;
     }
     counted.push_back(Counted{&note, overlap});
@@ -268,7 +273,7 @@ double chord_confidence(const Chord& chord, const std::array<double, 12>& weight
     }
   }
   double raw = total_weight > 0 ? chord_weight / total_weight : 0;
-  double confidence = js::min(1, js::max(0, raw));
+  double confidence = clamp01(raw);
   return exact ? confidence : confidence * INEXACT_CONFIDENCE_FACTOR;
 }
 
@@ -334,8 +339,7 @@ std::optional<WindowChord> analyze_window(const std::vector<NoteEvent>& all,
   std::stable_sort(ranked.begin(), ranked.end(), [](const Ranked& a, const Ranked& b) {
     double by_weight = b.weight - a.weight;
     // `b.weight - a.weight || a.pc - b.pc`.
-    double order = by_weight != 0 && !std::isnan(by_weight) ? by_weight : a.pc - b.pc;
-    return order < 0;
+    return js::or_else(by_weight, a.pc - b.pc) < 0;
   });
   int bass_pc = pitch_class_of(
       window_bass(all, selection, window_start, window_end, meters, harmonic_rhythm));
@@ -550,7 +554,7 @@ std::vector<BoundarySpan> choose_boundaries(BoundaryTables& tables, std::size_t 
     double slot_start = beat_of_slot(grid, static_cast<double>(from + i));
     double accent = metric_weight(slot_start, meters);
     double penalty =
-        change_cost * (1 - (TIMELINE_STRONG_BEAT_DISCOUNT * accent) / TIMELINE_MAX_METRIC_WEIGHT);
+        change_cost * (1 - (TIMELINE_STRONG_BEAT_DISCOUNT * accent) / MAX_METRIC_WEIGHT);
     std::size_t row_base = (from + i) * lex_size;
     double change = cheapest + penalty;
     for (std::size_t c = 0; c < lex_size; ++c) {
@@ -920,13 +924,7 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
   }
   assert_note_events(notes, "timeline notes", note_options);
   // Zero/negative-length notes never sound; drop them before any inference.
-  std::vector<NoteEvent> audible;
-  for (const NoteEvent& note : notes) {
-    if (note.durationBeat > 0) {
-      audible.push_back(note);
-    }
-  }
-  std::vector<NoteEvent> sounding = sorted_note_events(audible);
+  std::vector<NoteEvent> sounding = sorted_note_events(drop_silent_notes(notes));
   double total_beats = opts.totalBeats.value_or(latest_sounding_end(sounding));
   assert_range(total_beats, js::min(0, first_sounding_beat(sounding)), kMaxSafeInteger,
                "timeline totalBeats");
@@ -953,8 +951,7 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
     key_options.budget = budget;
     keys = key_timeline_from_notes(sounding, key_options);
   }
-  Nullable<ResolvedKey> prevailing = prevailing_key_of(keys);
-  ResolvedKey prevailing_key = prevailing ? *prevailing : resolve_key(major_key(0));
+  ResolvedKey prevailing_key = prevailing_key_or_default(keys);
   KeyLookup key_at(keys, prevailing_key);
 
   std::vector<ChordSegment> segments;
@@ -1123,13 +1120,13 @@ std::vector<CadenceHit> detect_cadences_over(const std::vector<SegmentSpan>& seg
   for (std::size_t i = 1; i < segments.size(); ++i) {
     const SegmentSpan& prev = segments[i - 1];
     const SegmentSpan& cur = segments[i];
-    if (std::fabs(cur.startBeat - prev.endBeat) > BEAT_EPS) {
+    if (!same_instant(prev.endBeat, cur.startBeat)) {
       continue;  // A rest separates the chords; no cadential motion across it.
     }
     // The chord before the pair, when it sounded straight into it: a six-four across a rest was
     // not still sounding when the dominant arrived.
     std::optional<std::size_t> before;
-    if (i >= 2 && std::fabs(prev.startBeat - segments[i - 2].endBeat) <= BEAT_EPS) {
+    if (i >= 2 && same_instant(segments[i - 2].endBeat, prev.startBeat)) {
       before = i - 2;
     }
     KeyScale key = key_at(cur.startBeat);
@@ -1148,8 +1145,7 @@ std::vector<CadenceHit> detect_cadences_over(const std::vector<SegmentSpan>& seg
     // once, at the arrival.
     if (*cadence.type == CadenceType::kHalf &&
         is_cadential_six_four(chords.raw(i - 1), chords.raw(i), key)) {
-      if (i + 1 < segments.size() &&
-          std::fabs(segments[i + 1].startBeat - cur.endBeat) <= BEAT_EPS) {
+      if (i + 1 < segments.size() && same_instant(cur.endBeat, segments[i + 1].startBeat)) {
         KeyScale onward_key = key_at(segments[i + 1].startBeat);
         const Chord& onward_from = chords.checked(i);
         const Chord& onward_to = chords.checked(i + 1);
@@ -1177,10 +1173,7 @@ std::vector<CadenceHit> detect_cadences(const ChordTimeline& timeline, const Key
   // A cadence belongs to the key it arrives in, so a modulating piece is asked for the key at the
   // arrival beat rather than for one key for the whole span.
   KeyAtBeat key_at = key_scale_at(key);
-  std::vector<SegmentSpan> spans;
-  for (const ChordSegment& segment : timeline.segments) {
-    spans.push_back(SegmentSpan{segment.startBeat, segment.endBeat});
-  }
+  std::vector<SegmentSpan> spans = spans_of(timeline.segments);
   ChordSource chord_at = [&](std::size_t index) -> const Chord& {
     return timeline.segments[index].chord;
   };

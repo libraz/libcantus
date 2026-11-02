@@ -25,7 +25,7 @@ import {
   type VoiceSnapshot,
 } from '../../theory/safety/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
-import { majorKey, type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
+import { type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { BEAT_EPS, sameInstant } from '../adjacency.js';
 import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import {
@@ -34,6 +34,7 @@ import {
   keyLookup,
   keyTimelineFromNotes,
   prevailingKeyOf,
+  prevailingKeyOrDefault,
 } from '../keys/index.js';
 import {
   analyzeTimeline,
@@ -228,7 +229,7 @@ function callerTimeline(
   return {
     timeline,
     keys,
-    prevailingKey: prevailingKeyOf(keys) ?? resolveKey(majorKey(0)),
+    prevailingKey: prevailingKeyOrDefault(keys),
     segmentConfidence: timeline.segments.map(() => 0),
   };
 }

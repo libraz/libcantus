@@ -279,12 +279,7 @@ RhythmAnalysis rhythm_over(const std::vector<NoteEvent>& notes, const RhythmAnal
   note_options.allowNonPositiveDuration = true;
   note_options.budget = opts.budget;
   assert_note_events(notes, "rhythm notes", note_options);
-  std::vector<NoteEvent> sounding;
-  for (const NoteEvent& note : notes) {
-    if (note.durationBeat > 0) {
-      sounding.push_back(note);
-    }
-  }
+  std::vector<NoteEvent> sounding = drop_silent_notes(notes);
   double start_beat = window_start.value_or(bar_grid_start(first_sounding_beat(sounding), meters));
   double end_beat = resolve_span_end(opts.totalBeats, start_beat, latest_sounding_end(sounding),
                                      "rhythm totalBeats");
@@ -342,7 +337,7 @@ RhythmAnalysis rhythm_over(const std::vector<NoteEvent>& notes, const RhythmAnal
     }
     BarPositionProfile& profile = profiles[found->second];
     double slots = profile.slotsPerBar;
-    double slot_index = std::fmod(std::fmod(onset.slot, slots) + slots, slots);
+    double slot_index = js::floor_mod(onset.slot, slots);
     profile.shares[static_cast<std::size_t>(slot_index)] += 1;
     profile.onsets += 1;
   }

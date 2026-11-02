@@ -38,6 +38,9 @@ struct SegmentSpan {
   double endBeat = 0;
 };
 
+/** The beats of every segment of a chord timeline, in order. */
+std::vector<SegmentSpan> spans_of(const std::vector<ChordSegment>& segments);
+
 /** The chord of the segment at an index; called only for the segments the search keeps. */
 using ChordSource = std::function<const Chord&(std::size_t)>;
 
@@ -80,6 +83,12 @@ void attach_pivots(std::vector<KeyRegion>& regions, const std::vector<ChordSegme
  */
 std::optional<std::size_t> prevailing_key_index(
     const std::vector<std::pair<std::string, double>>& regions);
+
+/** prevailing_key_of(), or C major when there are no regions (`prevailingKeyOrDefault`). */
+ResolvedKey prevailing_key_or_default(const std::vector<KeyRegion>& regions);
+
+/** Identity of a key by the pitch classes it holds (`keyId`). */
+std::string key_id(const KeyScale& scale);
 
 /**
  * The key in force at a beat over a run of regions in beat order, or `fallback` outside every
