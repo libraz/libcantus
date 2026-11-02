@@ -20,14 +20,6 @@ namespace cantus {
 
 namespace {
 
-std::string at(std::string_view name, std::size_t index) {
-  return std::string(name) + "[" + index_text(index) + "]";
-}
-
-std::string with(std::string_view name, std::string_view suffix) {
-  return std::string(name) + std::string(suffix);
-}
-
 double clamp_index(std::size_t count) { return js::max(static_cast<double>(count) - 1, 0.0); }
 
 void check_mass_distribution(const std::vector<double>& shares, double length,
@@ -35,75 +27,76 @@ void check_mass_distribution(const std::vector<double>& shares, double length,
   assert_plan_mass_length(static_cast<double>(shares.size()), length, name);
   double sum = 0;
   for (std::size_t index = 0; index < shares.size(); ++index) {
-    double share = assert_finite_number(shares[index], at(name, index));
-    assert_plan_mass_share(share, at(name, index));
+    double share = assert_finite_number(shares[index], indexed_name(name, index));
+    assert_plan_mass_share(share, indexed_name(name, index));
     sum += share;
   }
   assert_plan_mass_sum(sum, name);
 }
 
 void check_section(const PlannedSection& section, std::string_view name) {
-  double start_beat = assert_finite_number(section.startBeat, with(name, ".startBeat"));
-  double end_beat = assert_finite_number(section.endBeat, with(name, ".endBeat"));
+  double start_beat = assert_finite_number(section.startBeat, join_name(name, ".startBeat"));
+  double end_beat = assert_finite_number(section.endBeat, join_name(name, ".endBeat"));
   assert_plan_span_order(start_beat, end_beat, name);
 }
 
 void check_phrase(const PlannedPhrase& phrase, std::string_view name, std::size_t section_count,
                   std::size_t motif_count) {
-  double start_beat = assert_finite_number(phrase.startBeat, with(name, ".startBeat"));
-  double end_beat = assert_finite_number(phrase.endBeat, with(name, ".endBeat"));
+  double start_beat = assert_finite_number(phrase.startBeat, join_name(name, ".startBeat"));
+  double end_beat = assert_finite_number(phrase.endBeat, join_name(name, ".endBeat"));
   assert_plan_span_order(start_beat, end_beat, name);
   if (phrase.section) {
-    assert_integer(*phrase.section, with(name, ".section"), 0, clamp_index(section_count));
+    assert_integer(*phrase.section, join_name(name, ".section"), 0, clamp_index(section_count));
   }
-  assert_range(phrase.peakPosition, 0, 1, with(name, ".peakPosition"));
-  assert_midi_pitch(phrase.register_.low, with(name, ".register.low"));
-  assert_midi_pitch(phrase.register_.high, with(name, ".register.high"));
-  assert_range(phrase.register_.mean, 0, 127, with(name, ".register.mean"));
-  assert_range(phrase.onsetDensity, 0, kMaxSafeInteger, with(name, ".onsetDensity"));
+  assert_range(phrase.peakPosition, 0, 1, join_name(name, ".peakPosition"));
+  assert_midi_pitch(phrase.register_.low, join_name(name, ".register.low"));
+  assert_midi_pitch(phrase.register_.high, join_name(name, ".register.high"));
+  assert_range(phrase.register_.mean, 0, 127, join_name(name, ".register.mean"));
+  assert_range(phrase.onsetDensity, 0, kMaxSafeInteger, join_name(name, ".onsetDensity"));
   for (std::size_t index = 0; index < phrase.motifs.size(); ++index) {
-    assert_integer(phrase.motifs[index], at(with(name, ".motifs"), index), 0,
+    assert_integer(phrase.motifs[index], indexed_name(join_name(name, ".motifs"), index), 0,
                    clamp_index(motif_count));
   }
 }
 
 void check_chord(const PlannedChord& chord, std::string_view name,
                  const std::vector<ResolvedKey>& keys) {
-  double start_beat = assert_finite_number(chord.startBeat, with(name, ".startBeat"));
-  double end_beat = assert_finite_number(chord.endBeat, with(name, ".endBeat"));
+  double start_beat = assert_finite_number(chord.startBeat, join_name(name, ".startBeat"));
+  double end_beat = assert_finite_number(chord.endBeat, join_name(name, ".endBeat"));
   assert_plan_span_order(start_beat, end_beat, name);
-  double key_index = assert_integer(chord.key, with(name, ".key"), 0, clamp_index(keys.size()));
+  double key_index =
+      assert_integer(chord.key, join_name(name, ".key"), 0, clamp_index(keys.size()));
   assert_plan_roman(chord.roman, keys[static_cast<std::size_t>(key_index)], name);
 }
 
 void check_relation(const MotifRelationSummary& relation, std::string_view name) {
   if (relation.kind == MotifRelationKind::kTonalTransposition) {
     // The one kind a generator cannot replay from `semitones` alone.
-    assert_finite_number(relation.degrees.value_or(std::nan("")), with(name, ".degrees"));
+    assert_finite_number(relation.degrees.value_or(std::nan("")), join_name(name, ".degrees"));
   } else if (relation.degrees) {
-    assert_finite_number(*relation.degrees, with(name, ".degrees"));
+    assert_finite_number(*relation.degrees, join_name(name, ".degrees"));
   }
 }
 
 void check_motif(const PlannedMotif& motif, std::string_view name, std::size_t own_index,
                  std::size_t motif_count, std::size_t phrase_count) {
-  assert_integer(motif.phrase, with(name, ".phrase"), 0, clamp_index(phrase_count));
-  double start_beat = assert_finite_number(motif.startBeat, with(name, ".startBeat"));
-  double end_beat = assert_finite_number(motif.endBeat, with(name, ".endBeat"));
+  assert_integer(motif.phrase, join_name(name, ".phrase"), 0, clamp_index(phrase_count));
+  double start_beat = assert_finite_number(motif.startBeat, join_name(name, ".startBeat"));
+  double end_beat = assert_finite_number(motif.endBeat, join_name(name, ".endBeat"));
   assert_plan_span_order(start_beat, end_beat, name);
-  assert_positive_int(motif.notes, with(name, ".notes"));
+  assert_positive_int(motif.notes, join_name(name, ".notes"));
   std::optional<double> from;
   if (motif.from) {
-    from = assert_integer(*motif.from, with(name, ".from"), 0, clamp_index(motif_count));
+    from = assert_integer(*motif.from, join_name(name, ".from"), 0, clamp_index(motif_count));
   }
   if (from) {
     assert_plan_source_before(*from, static_cast<double>(own_index), name);
   }
   if (motif.relation) {
-    assert_finite_number(motif.relation->semitones, with(name, ".relation.semitones"));
-    check_relation(*motif.relation, with(name, ".relation"));
-    assert_finite_number(motif.relation->timeRatio, with(name, ".relation.timeRatio"));
-    assert_plan_time_ratio(motif.relation->timeRatio, with(name, ".relation"));
+    assert_finite_number(motif.relation->semitones, join_name(name, ".relation.semitones"));
+    check_relation(*motif.relation, join_name(name, ".relation"));
+    assert_finite_number(motif.relation->timeRatio, join_name(name, ".relation.timeRatio"));
+    assert_plan_time_ratio(motif.relation->timeRatio, join_name(name, ".relation"));
   }
   if (!from) {
     assert_plan_root_has_no_relation(!motif.relation.has_value(), name);
@@ -113,8 +106,9 @@ void check_motif(const PlannedMotif& motif, std::string_view name, std::size_t o
     assert_plan_rhythm_length(motif.notes, static_cast<double>(motif.rhythm->size()), name);
     double total = 0;
     for (std::size_t index = 0; index < motif.rhythm->size(); ++index) {
-      double gap = assert_finite_number((*motif.rhythm)[index], at(with(name, ".rhythm"), index));
-      assert_plan_rhythm_gap(gap, at(with(name, ".rhythm"), index));
+      double gap = assert_finite_number((*motif.rhythm)[index],
+                                        indexed_name(join_name(name, ".rhythm"), index));
+      assert_plan_rhythm_gap(gap, indexed_name(join_name(name, ".rhythm"), index));
       total += gap;
     }
     assert_plan_rhythm_total(total, end_beat - start_beat, name);
@@ -229,41 +223,41 @@ void assert_plan_version(const std::string& received, bool matches, std::string_
 const CompositionPlan& assert_composition_plan(const CompositionPlan& plan, std::string_view name) {
   assert_plan_version(js::to_string(plan.planVersion), plan.planVersion == COMPOSITION_PLAN_VERSION,
                       name);
-  assert_integer(plan.seed, with(name, ".seed"), 0, 4294967295.0);
-  assert_integer(plan.algorithmVersion, with(name, ".algorithmVersion"), MIN_ALGORITHM_VERSION,
+  assert_integer(plan.seed, join_name(name, ".seed"), 0, 4294967295.0);
+  assert_integer(plan.algorithmVersion, join_name(name, ".algorithmVersion"), MIN_ALGORITHM_VERSION,
                  ALGORITHM_VERSION);
   if (plan.keys.empty()) {
     throw InvalidInputError(std::string(name) +
                             ".keys must hold at least one key; received an empty array");
   }
   for (std::size_t index = 0; index < plan.keys.size(); ++index) {
-    assert_plan_key(KeyArg(plan.keys[index]), at(with(name, ".keys"), index));
+    assert_plan_key(KeyArg(plan.keys[index]), indexed_name(join_name(name, ".keys"), index));
   }
-  assert_meter_map(plan.meters, with(name, ".meters"));
-  double span_start = assert_finite_number(plan.span.startBeat, with(name, ".span.startBeat"));
-  double span_end = assert_finite_number(plan.span.endBeat, with(name, ".span.endBeat"));
-  assert_plan_span_order(span_start, span_end, with(name, ".span"));
-  assert_range(plan.span.bars, 0, kMaxSafeInteger, with(name, ".span.bars"));
+  assert_meter_map(plan.meters, join_name(name, ".meters"));
+  double span_start = assert_finite_number(plan.span.startBeat, join_name(name, ".span.startBeat"));
+  double span_end = assert_finite_number(plan.span.endBeat, join_name(name, ".span.endBeat"));
+  assert_plan_span_order(span_start, span_end, join_name(name, ".span"));
+  assert_range(plan.span.bars, 0, kMaxSafeInteger, join_name(name, ".span.bars"));
 
   for (std::size_t index = 0; index < plan.sections.size(); ++index) {
-    check_section(plan.sections[index], at(with(name, ".sections"), index));
+    check_section(plan.sections[index], indexed_name(join_name(name, ".sections"), index));
   }
   for (std::size_t index = 0; index < plan.phrases.size(); ++index) {
-    check_phrase(plan.phrases[index], at(with(name, ".phrases"), index), plan.sections.size(),
-                 plan.motifs.size());
+    check_phrase(plan.phrases[index], indexed_name(join_name(name, ".phrases"), index),
+                 plan.sections.size(), plan.motifs.size());
   }
   for (std::size_t index = 0; index < plan.harmony.size(); ++index) {
-    check_chord(plan.harmony[index], at(with(name, ".harmony"), index), plan.keys);
+    check_chord(plan.harmony[index], indexed_name(join_name(name, ".harmony"), index), plan.keys);
   }
   for (std::size_t index = 0; index < plan.motifs.size(); ++index) {
-    check_motif(plan.motifs[index], at(with(name, ".motifs"), index), index, plan.motifs.size(),
-                plan.phrases.size());
+    check_motif(plan.motifs[index], indexed_name(join_name(name, ".motifs"), index), index,
+                plan.motifs.size(), plan.phrases.size());
   }
-  check_mass_distribution(plan.rhythm.onsetLevels, 6, with(name, ".rhythm.onsetLevels"));
+  check_mass_distribution(plan.rhythm.onsetLevels, 6, join_name(name, ".rhythm.onsetLevels"));
   check_mass_distribution(plan.rhythm.interOnsetShares,
                           static_cast<double>(rhythm_ioi_bins().size()),
-                          with(name, ".rhythm.interOnsetShares"));
-  assert_range(plan.rhythm.syncopation, 0, 1, with(name, ".rhythm.syncopation"));
+                          join_name(name, ".rhythm.interOnsetShares"));
+  assert_range(plan.rhythm.syncopation, 0, 1, join_name(name, ".rhythm.syncopation"));
   return plan;
 }
 

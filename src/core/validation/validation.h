@@ -61,6 +61,11 @@ std::string describe_rejected(const json::Value& v);
 /** The decimal text of an index, as `${index}` writes it. */
 std::string index_text(std::size_t index);
 
+/** `${name}[${index}]`, the name TS gives an element of a checked array. */
+inline std::string indexed_name(std::string_view name, std::size_t index) {
+  return join_name(name, "[") + index_text(index) + "]";
+}
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_CORE_VALIDATION_VALIDATION_H_

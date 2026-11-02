@@ -133,11 +133,6 @@ double assert_positive_int(const json::Value& value, std::string_view name,
 /** `assertPositiveInt` with a cap from the wire. */
 double assert_positive_int(const json::Value& value, std::string_view name, const json::Value& max);
 
-/** `${name}[${index}]`, the name TS gives an element of a checked array. */
-inline std::string indexed_name(std::string_view name, std::size_t index) {
-  return join_name(name, "[") + index_text(index) + "]";
-}
-
 /** `assertRange` with bounds the library supplies. */
 double assert_range(const json::Value& value, double min, double max, std::string_view name);
 
