@@ -23,20 +23,9 @@ namespace {
 
 /** `Number.MIN_VALUE`. */
 
-/** The note-event check a score holds its notes to: zero-length notes are accepted. */
-NoteEventAssertOptions score_note_options() {
-  NoteEventAssertOptions options;
-  options.allowNonPositiveDuration = true;
-  return options;
-}
-
 /** The notes checked and copied, in time order, ties broken by pitch (`orderNotes`). */
 std::vector<NoteEvent> order_notes(const std::vector<NoteEvent>& notes, std::string_view name) {
-  std::vector<NoteEvent> out;
-  assert_note_events(notes, name, score_note_options());
-  for (const NoteEvent& note : notes) {
-    out.push_back(copy_note_event(note));
-  }
+  std::vector<NoteEvent> out = copy_checked_notes(notes, name);
   std::stable_sort(out.begin(), out.end(), [](const NoteEvent& a, const NoteEvent& b) {
     double order = a.startBeat - b.startBeat;
     if (order == 0) {
@@ -56,11 +45,7 @@ MeterMap copy_meters(const MeterMap& meters) {
   for (const MeterChange& change : meters) {
     MeterChange copy;
     copy.startBeat = without_negative_zero(change.startBeat);
-    copy.ts.numerator = change.ts.numerator;
-    copy.ts.denominator = change.ts.denominator;
-    if (change.ts.grouping) {
-      copy.ts.grouping = change.ts.grouping;
-    }
+    copy.ts = change.ts;
     out.push_back(copy);
   }
   return out;
@@ -569,10 +554,7 @@ bool same_note(const NoteEvent& a, const NoteEvent& b) {
 }
 
 bool same_meter(const MeterChange& a, const MeterChange& b) {
-  std::vector<int> mine = a.ts.grouping.value_or(std::vector<int>{});
-  std::vector<int> theirs = b.ts.grouping.value_or(std::vector<int>{});
-  return a.startBeat == b.startBeat && a.ts.numerator == b.ts.numerator &&
-         a.ts.denominator == b.ts.denominator && mine == theirs;
+  return a.startBeat == b.startBeat && same_time_signature(a.ts, b.ts);
 }
 
 bool same_key(const std::optional<ResolvedKey>& a, const std::optional<ResolvedKey>& b) {

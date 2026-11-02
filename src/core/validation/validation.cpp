@@ -36,6 +36,19 @@ std::size_t table_length(double rows, double columns, std::string_view name,
   return static_cast<std::size_t>(length);
 }
 
+/** Whether a note event passes `assert_note_event`, decided without building any name. */
+bool note_event_holds(const NoteEvent& event, const NoteEventAssertOptions& options) noexcept {
+  double min_start_beat = options.minStartBeat.value_or(-kMaxSafeInteger);
+  if (event.pitch < 0 || event.pitch > 127 || !std::isfinite(min_start_beat) ||
+      !std::isfinite(event.startBeat) || event.startBeat < min_start_beat ||
+      event.startBeat > kMaxSafeInteger || !std::isfinite(event.durationBeat) ||
+      (!options.allowNonPositiveDuration.value_or(false) && event.durationBeat <= 0) ||
+      event.durationBeat < -kMaxSafeInteger || event.durationBeat > kMaxSafeInteger) {
+    return false;
+  }
+  return !event.velocity || (*event.velocity >= 0 && *event.velocity <= 127);
+}
+
 }  // namespace
 
 bool is_safe_integer(double value) noexcept {
@@ -238,7 +251,10 @@ const std::vector<NoteEvent>& assert_note_events(const std::vector<NoteEvent>& e
   assert_generation_budget(static_cast<double>(events.size()), join_name(name, " count"),
                            options.budget);
   for (std::size_t i = 0; i < events.size(); ++i) {
-    assert_note_event(events[i], std::string(name) + "[" + index_text(i) + "]", options);
+    // The element name is built only for an event that fails.
+    if (!note_event_holds(events[i], options)) {
+      assert_note_event(events[i], std::string(name) + "[" + index_text(i) + "]", options);
+    }
   }
   return events;
 }

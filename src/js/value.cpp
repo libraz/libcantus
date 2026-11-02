@@ -114,6 +114,25 @@ bool is_text(const json::Value& v) {
   return true;
 }
 
+/** The TypeError a BigInt mixed with another type raises. */
+[[noreturn]] void throw_bigint_mix() {
+  throw TypeError("Cannot mix BigInt and other types, use explicit conversions");
+}
+
+/** Refuse a BigInt operand of arithmetic against a number. */
+void refuse_bigint(const json::Value& v) {
+  if (type_of(v) == "bigint") {
+    throw_bigint_mix();
+  }
+}
+
+/** Relational order of two text operands, by UTF-16 code unit. */
+int compare_text(const json::Value& lhs, const json::Value& rhs) {
+  std::string a = lhs.kind() == json::Kind::kString ? lhs.as_string() : template_string(lhs);
+  std::string b = rhs.kind() == json::Kind::kString ? rhs.as_string() : template_string(rhs);
+  return utf16_compare(a, b);
+}
+
 }  // namespace
 
 json::Value add(const json::Value& lhs, const json::Value& rhs) {
@@ -121,18 +140,14 @@ json::Value add(const json::Value& lhs, const json::Value& rhs) {
     return json::Value(template_string(lhs) + template_string(rhs));
   }
   for (const json::Value* operand : {&lhs, &rhs}) {
-    if (type_of(*operand) == "bigint") {
-      throw TypeError("Cannot mix BigInt and other types, use explicit conversions");
-    }
+    refuse_bigint(*operand);
   }
   return json::Value(to_number(lhs) + to_number(rhs));
 }
 
 bool greater_than(const json::Value& lhs, const json::Value& rhs) {
   if (is_text(lhs) && is_text(rhs)) {
-    std::string a = lhs.kind() == json::Kind::kString ? lhs.as_string() : template_string(lhs);
-    std::string b = rhs.kind() == json::Kind::kString ? rhs.as_string() : template_string(rhs);
-    return utf16_compare(a, b) > 0;
+    return compare_text(lhs, rhs) > 0;
   }
   return to_number(lhs) > to_number(rhs);
 }
@@ -155,8 +170,7 @@ json::Value add_number(double lhs, const json::Value& rhs) {
   const json::Object& o = rhs.as_object();
   if (o.contains("$n")) return json::Value(lhs + tag_number(o));
   if (o.contains("$u")) return json::Value(std::nan(""));
-  if (o.contains("$big"))
-    throw TypeError("Cannot mix BigInt and other types, use explicit conversions");
+  if (o.contains("$big")) throw_bigint_mix();
   if (o.contains("$sym")) throw TypeError("Cannot convert a Symbol value to a number");
   return json::Value(to_string(lhs) + template_string(rhs));
 }
@@ -225,24 +239,18 @@ bool less_than(const json::Value& lhs, const json::Value& rhs) { return greater_
 
 bool less_equal(const json::Value& lhs, const json::Value& rhs) {
   if (is_text(lhs) && is_text(rhs)) {
-    std::string a = lhs.kind() == json::Kind::kString ? lhs.as_string() : template_string(lhs);
-    std::string b = rhs.kind() == json::Kind::kString ? rhs.as_string() : template_string(rhs);
-    return utf16_compare(a, b) <= 0;
+    return compare_text(lhs, rhs) <= 0;
   }
   return to_number(lhs) <= to_number(rhs);
 }
 
 double subtract(const json::Value& v, double n) {
-  if (type_of(v) == "bigint") {
-    throw TypeError("Cannot mix BigInt and other types, use explicit conversions");
-  }
+  refuse_bigint(v);
   return to_number(v) - n;
 }
 
 double multiply(const json::Value& v, double factor) {
-  if (type_of(v) == "bigint") {
-    throw TypeError("Cannot mix BigInt and other types, use explicit conversions");
-  }
+  refuse_bigint(v);
   return to_number(v) * factor;
 }
 

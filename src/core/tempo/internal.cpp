@@ -8,19 +8,25 @@ namespace cantus {
 
 namespace {
 
-/** Index of the last entry of `ascending` not above `value`, or 0 (`segmentBy`). */
-std::size_t segment_by(const std::vector<double>& ascending, double value) {
+/** Index of the last of `count` ascending values, read through `at`, not above `value`, or 0. */
+template <class At>
+std::size_t segment_by(std::size_t count, At at, double value) {
   std::ptrdiff_t low = 0;
-  std::ptrdiff_t high = static_cast<std::ptrdiff_t>(ascending.size()) - 1;
+  std::ptrdiff_t high = static_cast<std::ptrdiff_t>(count) - 1;
   while (low < high) {
     std::ptrdiff_t mid = (low + high + 1) >> 1;
-    if (ascending[static_cast<std::size_t>(mid)] <= value) {
+    if (at(static_cast<std::size_t>(mid)) <= value) {
       low = mid;
     } else {
       high = mid - 1;
     }
   }
   return static_cast<std::size_t>(low);
+}
+
+/** `segment_by` over a vector (`segmentBy`). */
+std::size_t segment_by(const std::vector<double>& ascending, double value) {
+  return segment_by(ascending.size(), [&ascending](std::size_t i) { return ascending[i]; }, value);
 }
 
 }  // namespace
@@ -42,7 +48,7 @@ TempoIndex tempo_index_of(const TempoMap& map) {
 }
 
 std::size_t tempo_segment_at(const TempoMap& map, double beat) {
-  return segment_by(tempo_index_of(map).startBeats, beat);
+  return segment_by(map.size(), [&map](std::size_t i) { return map[i].startBeat; }, beat);
 }
 
 double elapsed_seconds_at(const TempoMap& map, double beat) {

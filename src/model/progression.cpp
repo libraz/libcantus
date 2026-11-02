@@ -5,6 +5,7 @@
 
 #include "cantus/model/timeline.h"
 #include "js/number.h"
+#include "js/utf16.h"
 
 namespace cantus {
 
@@ -12,19 +13,6 @@ namespace {
 
 /** `ToIntegerOrInfinity` of an array index: NaN reads as 0, fractions are truncated. */
 double integer_or_infinity(double value) { return std::isnan(value) ? 0 : std::trunc(value); }
-
-/** A relative slice bound resolved against a length, as Array.prototype.slice resolves it. */
-std::size_t slice_bound(const std::optional<double>& bound, std::size_t length,
-                        std::size_t fallback) {
-  if (!bound) {
-    return fallback;
-  }
-  double relative = integer_or_infinity(*bound);
-  auto size = static_cast<double>(length);
-  double resolved = relative < 0 ? (relative + size < 0 ? 0 : relative + size)
-                                 : (relative > size ? size : relative);
-  return static_cast<std::size_t>(resolved);
-}
 
 }  // namespace
 
@@ -137,8 +125,8 @@ Progression Progression::filter(
 
 Progression Progression::slice(const std::optional<double>& start,
                                const std::optional<double>& end) const {
-  std::size_t from = slice_bound(start, chords_.size(), 0);
-  std::size_t to = slice_bound(end, chords_.size(), chords_.size());
+  std::size_t from = start ? js::relative_index(*start, chords_.size()) : 0;
+  std::size_t to = end ? js::relative_index(*end, chords_.size()) : chords_.size();
   std::vector<ChordValue> chords;
   for (std::size_t index = from; index < to; ++index) {
     chords.push_back(chords_[index]);

@@ -92,6 +92,20 @@ constexpr std::array<NamedLength, 4> kMaxLetterLength = {
 constexpr std::array<NamedLength, 4> kMaxAccidentalLength = {
 #include "core/pitch/max_accidental_length.gen.inc"
 };
+/** Whether the rows of a per-table array come in `NoteNameSystem` order, one per table. */
+template <class Row>
+constexpr bool in_system_order(const std::array<Row, 4>& rows) {
+  for (std::size_t i = 0; i < rows.size(); ++i) {
+    if (rows[i].table != kNoteNameSystemNames[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+static_assert(in_system_order(kModeWords) && in_system_order(kMaxLetterLength) &&
+                  in_system_order(kMaxAccidentalLength),
+              "the per-table rows are not in NoteNameSystem order");
+
 constexpr AccidentalWords kAccidentalWords =
 #include "core/pitch/accidental_words.gen.inc"
     ;
@@ -117,24 +131,13 @@ Text utf16(std::string_view s) { return js::to_utf16(s); }
 
 /** The mode word a table writes for a mode (`MODE_WORDS[table][mode]`). */
 std::string_view mode_word(NoteNameSystem table, KeyNameMode mode) {
-  std::string_view name = to_string(table);
-  for (const ModeWordsRow& row : kModeWords) {
-    if (row.table == name) {
-      return mode == KeyNameMode::kMajor ? row.words.major : row.words.minor;
-    }
-  }
-  return {};
+  const ModeWords& words = kModeWords[static_cast<std::size_t>(table)].words;
+  return mode == KeyNameMode::kMajor ? words.major : words.minor;
 }
 
 /** The value a NamedLength table gives for a table. */
 int named_length(const std::array<NamedLength, 4>& rows, NoteNameSystem table) {
-  std::string_view name = to_string(table);
-  for (const NamedLength& row : rows) {
-    if (row.table == name) {
-      return row.length;
-    }
-  }
-  return 0;
+  return rows[static_cast<std::size_t>(table)].length;
 }
 
 const MarkWords& marks_of(NoteNameSystem table) {
@@ -155,23 +158,16 @@ int letter_index(const std::array<std::string_view, kLetterCount>& letters, View
 /** Trim and collapse internal white space, so "do  diesis" reads as one name (`normalize`). */
 Text normalize(std::string_view text) {
   Text units = js::to_utf16(text);
-  std::size_t begin = 0;
-  std::size_t end = units.size();
-  while (begin < end && js::is_space(units[begin])) {
-    ++begin;
-  }
-  while (end > begin && js::is_space(units[end - 1])) {
-    --end;
-  }
+  View trimmed = js::trim_view(units);
   Text out;
-  for (std::size_t i = begin; i < end; ++i) {
-    if (js::is_space(units[i])) {
+  for (std::size_t i = 0; i < trimmed.size(); ++i) {
+    if (js::is_space(trimmed[i])) {
       out.push_back(u' ');
-      while (i + 1 < end && js::is_space(units[i + 1])) {
+      while (i + 1 < trimmed.size() && js::is_space(trimmed[i + 1])) {
         ++i;
       }
     } else {
-      out.push_back(units[i]);
+      out.push_back(trimmed[i]);
     }
   }
   return out;

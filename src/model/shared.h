@@ -8,9 +8,11 @@
 #ifndef CANTUS_SRC_MODEL_SHARED_H_
 #define CANTUS_SRC_MODEL_SHARED_H_
 
+#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "cantus/core/errors.h"
 #include "cantus/core/meter.h"
@@ -36,9 +38,6 @@ ParseResult<To> parse_failure_of(ParseResult<From>&& parsed) {
   throw std::logic_error("parse_failure_of: the parse succeeded");
 }
 
-/** A bare pitch class spelled as an octave-less note with a sharp/flat preference. */
-NoteData spell_pitch_class_bare(double pc, MidiSpelling spelling);
-
 /** Zero with its sign dropped, so `-0` never reaches the plain data (`withoutNegativeZero`). */
 inline double without_negative_zero(double value) { return value == 0 ? 0 : value; }
 
@@ -59,11 +58,30 @@ double span_end(const Runs&... runs) {
 NoteEvent copy_note_event(const NoteEvent& note);
 
 /**
+ * The note events checked and copied in the order given; zero-length notes are accepted, as they
+ * are everywhere on the analysis side.
+ */
+std::vector<NoteEvent> copy_checked_notes(const std::vector<NoteEvent>& notes,
+                                          std::string_view name,
+                                          std::optional<double> budget = std::nullopt);
+
+/** `{...mine, ...theirs}` over the fields a caller named. */
+template <class T>
+void lay_over(std::optional<T>& mine, const std::optional<T>& theirs) {
+  if (theirs) {
+    mine = theirs;
+  }
+}
+
+/**
  * A defensive copy of a time signature, checked the way every meter function checks it.
  * @throws InvalidInputError if the signature is not one the library accepts.
  */
 TimeSignature copy_time_signature(const TimeSignature& ts,
                                   std::string_view name = "time signature");
+
+/** Whether two signatures name the same meter, an absent grouping equal to an empty one. */
+bool same_time_signature(const TimeSignature& a, const TimeSignature& b);
 
 }  // namespace cantus
 

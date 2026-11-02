@@ -39,6 +39,19 @@ export type TuningTable = {
  */
 export const TWELVE_TET: TuningTable = Object.freeze({ refStep: 69, refFreq: 440, divisions: 12 });
 
+/** Cents in one octave, the unit a step count and a frequency ratio are converted through. */
+const CENTS_PER_OCTAVE = 1200;
+
+/** Cents from `low` up to `high`, both already known to be positive and finite. */
+function centsOfRatio(high: number, low: number): number {
+  return CENTS_PER_OCTAVE * (Math.log2(high) - Math.log2(low));
+}
+
+/** The value, once it is a positive finite number the library holds. */
+function assertPositiveFinite(value: number, name: string): number {
+  return assertRange(value, Number.MIN_VALUE, Number.MAX_VALUE, name);
+}
+
 function assertTuning(tuning: TuningTable): TuningTable {
   // The shape is checked before any field is read: a value from JSON or a
   // plugin host may be null or a number, and reading a reference step off it
@@ -49,7 +62,7 @@ function assertTuning(tuning: TuningTable): TuningTable {
     );
   }
   assertFiniteNumber(tuning.refStep, 'tuning.refStep');
-  assertRange(tuning.refFreq, Number.MIN_VALUE, Number.MAX_VALUE, 'tuning.refFreq');
+  assertPositiveFinite(tuning.refFreq, 'tuning.refFreq');
   assertPositiveInt(tuning.divisions, 'tuning.divisions');
   return tuning;
 }
@@ -69,9 +82,13 @@ function assertTuning(tuning: TuningTable): TuningTable {
  * ```
  * @category Pitch & Intervals
  */
-export function edo(n: number, refFreq = 440, refStep = 69): TuningTable {
+export function edo(
+  n: number,
+  refFreq = TWELVE_TET.refFreq,
+  refStep = TWELVE_TET.refStep,
+): TuningTable {
   assertPositiveInt(n, 'EDO divisions');
-  assertRange(refFreq, Number.MIN_VALUE, Number.MAX_VALUE, 'reference frequency');
+  assertPositiveFinite(refFreq, 'reference frequency');
   assertFiniteNumber(refStep, 'reference step');
   return { refStep, refFreq, divisions: n };
 }
@@ -94,7 +111,7 @@ export function frequencyOf(step: number, tuning: TuningTable = TWELVE_TET): num
   assertFiniteNumber(step, 'step');
   assertTuning(tuning);
   const result = tuning.refFreq * 2 ** ((step - tuning.refStep) / tuning.divisions);
-  return assertRange(result, Number.MIN_VALUE, Number.MAX_VALUE, 'frequency result');
+  return assertPositiveFinite(result, 'frequency result');
 }
 
 /**
@@ -107,7 +124,7 @@ export function frequencyOf(step: number, tuning: TuningTable = TWELVE_TET): num
  * @category Pitch & Intervals
  */
 export function nearestStep(freq: number, tuning: TuningTable = TWELVE_TET): number {
-  assertRange(freq, Number.MIN_VALUE, Number.MAX_VALUE, 'frequency');
+  assertPositiveFinite(freq, 'frequency');
   assertTuning(tuning);
   return Math.round(tuning.refStep + tuning.divisions * Math.log2(freq / tuning.refFreq));
 }
@@ -130,7 +147,7 @@ export function nearestStep(freq: number, tuning: TuningTable = TWELVE_TET): num
  * @category Pitch & Intervals
  */
 export function stepOf(freq: number, tuning: TuningTable = TWELVE_TET): number {
-  assertRange(freq, Number.MIN_VALUE, Number.MAX_VALUE, 'frequency');
+  assertPositiveFinite(freq, 'frequency');
   assertTuning(tuning);
   return tuning.refStep + tuning.divisions * Math.log2(freq / tuning.refFreq);
 }
@@ -167,7 +184,7 @@ export function centsFromNearestStep(freq: number, tuning: TuningTable = TWELVE_
 export function stepsOfCents(cents: number, tuning: TuningTable = TWELVE_TET): number {
   assertFiniteNumber(cents, 'cents');
   assertTuning(tuning);
-  return assertFiniteNumber((cents * tuning.divisions) / 1200, 'steps result');
+  return assertFiniteNumber((cents * tuning.divisions) / CENTS_PER_OCTAVE, 'steps result');
 }
 
 /**
@@ -188,8 +205,8 @@ export function stepsOfCents(cents: number, tuning: TuningTable = TWELVE_TET): n
  */
 export function centsToRatio(cents: number): number {
   assertFiniteNumber(cents, 'cents');
-  const result = 2 ** (cents / 1200);
-  return assertRange(result, Number.MIN_VALUE, Number.MAX_VALUE, 'ratio result');
+  const result = 2 ** (cents / CENTS_PER_OCTAVE);
+  return assertPositiveFinite(result, 'ratio result');
 }
 
 /**
@@ -201,9 +218,9 @@ export function centsToRatio(cents: number): number {
  * @category Pitch & Intervals
  */
 export function centsBetweenFreq(a: number, b: number): number {
-  assertRange(a, Number.MIN_VALUE, Number.MAX_VALUE, 'first frequency');
-  assertRange(b, Number.MIN_VALUE, Number.MAX_VALUE, 'second frequency');
-  return 1200 * (Math.log2(b) - Math.log2(a));
+  assertPositiveFinite(a, 'first frequency');
+  assertPositiveFinite(b, 'second frequency');
+  return centsOfRatio(b, a);
 }
 
 /**
@@ -217,7 +234,7 @@ export function centsBetweenFreq(a: number, b: number): number {
 export function centsOfSteps(steps: number, tuning: TuningTable = TWELVE_TET): number {
   assertFiniteNumber(steps, 'steps');
   assertTuning(tuning);
-  return assertFiniteNumber((steps * 1200) / tuning.divisions, 'cents result');
+  return assertFiniteNumber((steps * CENTS_PER_OCTAVE) / tuning.divisions, 'cents result');
 }
 
 /**
@@ -230,9 +247,9 @@ export function centsOfSteps(steps: number, tuning: TuningTable = TWELVE_TET): n
  * @category Pitch & Intervals
  */
 export function ratioToCents(numerator: number, denominator: number): number {
-  assertRange(numerator, Number.MIN_VALUE, Number.MAX_VALUE, 'ratio numerator');
-  assertRange(denominator, Number.MIN_VALUE, Number.MAX_VALUE, 'ratio denominator');
-  return 1200 * (Math.log2(numerator) - Math.log2(denominator));
+  assertPositiveFinite(numerator, 'ratio numerator');
+  assertPositiveFinite(denominator, 'ratio denominator');
+  return centsOfRatio(numerator, denominator);
 }
 
 /** One entry of {@link JUST_RATIOS}: a numerator and a denominator, frozen. */

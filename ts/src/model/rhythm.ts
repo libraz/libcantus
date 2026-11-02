@@ -31,6 +31,7 @@ import {
   assertDataObject,
   assertDataObjects,
   copyTimeSignature,
+  sameTimeSignature,
   withoutNegativeZero,
 } from './shared.js';
 
@@ -460,7 +461,7 @@ export class Rhythm {
     return (
       mine.events.length === theirs.events.length &&
       mine.events.every((event, index) => sameEvent(event, theirs.events[index])) &&
-      sameSignature(mine.ts, theirs.ts)
+      sameTimeSignature(mine.ts, theirs.ts)
     );
   }
 
@@ -491,17 +492,5 @@ export class Rhythm {
 function sameEvent(event: RhythmEvent, other: RhythmEvent | undefined): boolean {
   return (
     other !== undefined && event.position === other.position && event.duration === other.duration
-  );
-}
-
-/** Whether two signatures name the same meter, grouping included. */
-function sameSignature(ts: TimeSignature, other: TimeSignature): boolean {
-  const grouping = ts.grouping ?? [];
-  const theirs = other.grouping ?? [];
-  return (
-    ts.numerator === other.numerator &&
-    ts.denominator === other.denominator &&
-    grouping.length === theirs.length &&
-    grouping.every((entry, index) => entry === theirs[index])
   );
 }

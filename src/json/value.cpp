@@ -33,6 +33,9 @@ bool array_index(std::string_view key, std::uint32_t& out) {
   return true;
 }
 
+/** The hash a key is indexed under. */
+std::size_t key_hash(std::string_view key) { return std::hash<std::string_view>{}(key); }
+
 }  // namespace
 
 ParseError::ParseError(const std::string& message, std::size_t offset)
@@ -60,10 +63,10 @@ void Object::ensure_index() const {
   if (members_.size() < kIndexThreshold || index_) {
     return;
   }
-  index_ = std::make_unique<std::unordered_map<std::string, std::size_t>>();
+  index_ = std::make_unique<std::unordered_multimap<std::size_t, std::size_t>>();
   index_->reserve(members_.size());
   for (std::size_t i = 0; i < members_.size(); ++i) {
-    index_->emplace(members_[i].key, i);
+    index_->emplace(key_hash(members_[i].key), i);
   }
 }
 
@@ -77,8 +80,13 @@ std::ptrdiff_t Object::index_of(std::string_view key) const {
     return -1;
   }
   ensure_index();
-  auto it = index_->find(std::string(key));
-  return it == index_->end() ? -1 : static_cast<std::ptrdiff_t>(it->second);
+  auto [first, last] = index_->equal_range(key_hash(key));
+  for (auto it = first; it != last; ++it) {
+    if (members_[it->second].key == key) {
+      return static_cast<std::ptrdiff_t>(it->second);
+    }
+  }
+  return -1;
 }
 
 const Value* Object::find(std::string_view key) const {
@@ -159,7 +167,7 @@ void Object::set(std::string key, Value value) {
   }
   if (pos == members_.size()) {
     if (index_) {
-      index_->emplace(key, pos);
+      index_->emplace(key_hash(key), pos);
     }
     members_.push_back(Member{std::move(key), std::move(value)});
   } else {

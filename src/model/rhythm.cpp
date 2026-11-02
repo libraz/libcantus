@@ -110,13 +110,13 @@ std::vector<SourcedGridEvent> to_grid(const std::vector<RhythmEvent>& events) {
 /** The onsets a transform returned, read back as a pattern over the same span (`fromGrid`). */
 std::vector<RhythmEvent> from_grid(const std::vector<SourcedGridEvent>& events, double span_beats) {
   std::vector<double> positions;
+  positions.reserve(events.size());
   for (const SourcedGridEvent& event : events) {
-    double position = event.step * STEP_BEATS;
-    if (std::find(positions.begin(), positions.end(), position) == positions.end()) {
-      positions.push_back(position);
-    }
+    positions.push_back(event.step * STEP_BEATS);
   }
+  // A stable sort keeps the first of equal positions (`-0` and `0` among them) for unique to keep.
   std::stable_sort(positions.begin(), positions.end());
+  positions.erase(std::unique(positions.begin(), positions.end()), positions.end());
   std::vector<RhythmEvent> out;
   for (std::size_t index = 0; index < positions.size(); ++index) {
     double next = index + 1 < positions.size() ? positions[index + 1] : span_beats;
@@ -264,10 +264,7 @@ bool Rhythm::equals(const Rhythm& other) const {
       return false;
     }
   }
-  std::vector<int> grouping = data_.ts.grouping.value_or(std::vector<int>{});
-  std::vector<int> other_grouping = theirs.ts.grouping.value_or(std::vector<int>{});
-  return data_.ts.numerator == theirs.ts.numerator &&
-         data_.ts.denominator == theirs.ts.denominator && grouping == other_grouping;
+  return same_time_signature(data_.ts, theirs.ts);
 }
 
 }  // namespace cantus

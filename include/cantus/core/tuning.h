@@ -31,7 +31,7 @@ struct JustRatio {
  * An equal division of the octave into `n` steps (`edo`).
  * @throws InvalidInputError if `n` is not a positive integer or a reference is out of range.
  */
-TuningTable edo(int n, double ref_freq = 440, double ref_step = 69);
+TuningTable edo(int n, double ref_freq = TWELVE_TET.refFreq, double ref_step = TWELVE_TET.refStep);
 
 /** Frequency in Hz of a step (`frequencyOf`). */
 double frequency_of(double step, const TuningTable& tuning = TWELVE_TET);

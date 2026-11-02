@@ -2,6 +2,7 @@
 
 #include "core/tempo/tempo.h"
 
+#include <cmath>
 #include <limits>
 #include <string>
 
@@ -25,6 +26,11 @@ const TempoMap& assert_tempo_map(const TempoMap& map, std::string_view name = "t
                            MAX_TEMPO_CHANGES);
   for (std::size_t index = 0; index < map.size(); ++index) {
     const TempoEvent& event = map[index];
+    // The element name is built only for an event that fails.
+    if (std::isfinite(event.startBeat) && std::isfinite(event.bpm) && event.bpm >= MIN_TEMPO_BPM &&
+        event.bpm <= MAX_TEMPO_BPM && (index == 0 || event.startBeat > map[index - 1].startBeat)) {
+      continue;
+    }
     std::string at = std::string(name) + "[" + index_text(index) + "]";
     assert_finite_number(event.startBeat, at + ".startBeat");
     assert_range(event.bpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM, at + ".bpm");

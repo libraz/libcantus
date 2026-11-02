@@ -26,19 +26,16 @@ export type TempoIndex = {
    * accelerando sounds otherwise re-adds every tempo change in the piece.
    */
   secondsBefore: number[];
-  /** Whether the map had passed validation when the index was built. */
-  validated: boolean;
 };
 
 export const SECONDS_PER_MINUTE = 60;
 
 /**
- * Indexes held against the identity of the map they describe.
+ * Indexes of validated maps, held against the identity of the map they describe.
  *
  * A caller keeps its own array and may write to it after the library has read
  * it, so an index is only trusted while every entry still reads as it did when
- * the index was built. Anything else rebuilds, and a map that had passed
- * validation is validated again.
+ * the index was built. Anything else is validated again.
  */
 const INDEX_CACHE = new WeakMap<TempoMap, TempoIndex>();
 
@@ -61,8 +58,8 @@ function describesMap(index: TempoIndex, map: TempoMap): boolean {
   return true;
 }
 
-/** Build and cache the index of a map, recording whether it is validated. */
-function buildTempoIndex(map: TempoMap, validated: boolean): TempoIndex {
+/** Build the index of a validated map and cache it. */
+function buildTempoIndex(map: TempoMap): TempoIndex {
   const startBeats: number[] = [];
   const bpms: number[] = [];
   const secondsBefore: number[] = [];
@@ -81,19 +78,13 @@ function buildTempoIndex(map: TempoMap, validated: boolean): TempoIndex {
     bpms.push(event.bpm);
     secondsBefore.push(elapsed);
   }
-  const index: TempoIndex = { startBeats, bpms, secondsBefore, validated };
+  const index: TempoIndex = { startBeats, bpms, secondsBefore };
   INDEX_CACHE.set(map, index);
   return index;
 }
 
-/** The index of `map`, rebuilt when the caller has written to the array since. */
-export function tempoIndexOf(map: TempoMap): TempoIndex {
-  const cached = INDEX_CACHE.get(map);
-  return cached !== undefined && describesMap(cached, map) ? cached : buildTempoIndex(map, false);
-}
-
 /**
- * Whether the map has already passed validation and is unchanged since.
+ * The index of a map that has already passed validation and is unchanged since.
  *
  * What this still pays on every call is a comparison per entry: an array the
  * caller keeps says nothing about whether it has been written to since, so the
@@ -101,14 +92,14 @@ export function tempoIndexOf(map: TempoMap): TempoIndex {
  * read it. What it saves is the validation itself — the range checks, the
  * ordering, and the error messages built to describe them.
  */
-export function isValidatedTempoMap(map: TempoMap): boolean {
+export function validatedTempoIndex(map: TempoMap): TempoIndex | undefined {
   const cached = INDEX_CACHE.get(map);
-  return cached?.validated === true && describesMap(cached, map);
+  return cached !== undefined && describesMap(cached, map) ? cached : undefined;
 }
 
-/** Record that a map passed validation, and snapshot it. */
-export function rememberValidatedTempoMap(map: TempoMap): void {
-  buildTempoIndex(map, true);
+/** Snapshot a map that passed validation, and remember it. */
+export function rememberValidatedTempoMap(map: TempoMap): TempoIndex {
+  return buildTempoIndex(map);
 }
 
 /**
@@ -118,12 +109,12 @@ export function rememberValidatedTempoMap(map: TempoMap): void {
  * before the first entry answers with entry 0: a pickup is played at the tempo
  * of the piece it leads into, and the map names no other one to play it at.
  *
- * @param map A validated tempo map.
+ * @param index The index of a validated tempo map.
  * @param beat The beat to place.
  * @returns The index of the entry whose tempo holds at `beat`.
  */
-export function tempoSegmentAt(map: TempoMap, beat: number): number {
-  return segmentBy(tempoIndexOf(map).startBeats, beat);
+export function tempoSegmentIn(index: TempoIndex, beat: number): number {
+  return segmentBy(index.startBeats, beat);
 }
 
 /**
@@ -134,15 +125,10 @@ export function tempoSegmentAt(map: TempoMap, beat: number): number {
  * the part of the segment holding `beat` is added last. A beat before the origin
  * comes back negative, at the opening tempo.
  *
- * @param map A validated tempo map.
+ * @param index The index of a validated tempo map.
  * @param beat The beat to place in time.
  * @returns Elapsed seconds, 0 at the map's first event.
  */
-export function elapsedSecondsAt(map: TempoMap, beat: number): number {
-  return elapsedSecondsIn(tempoIndexOf(map), beat);
-}
-
-/** Seconds from the origin to `beat`, against an index already in hand. */
 export function elapsedSecondsIn(index: TempoIndex, beat: number): number {
   const at = segmentBy(index.startBeats, beat);
   const start = index.startBeats[at] ?? 0;
@@ -152,17 +138,12 @@ export function elapsedSecondsIn(index: TempoIndex, beat: number): number {
 
 /**
  * Beat reached after `seconds` from the map's origin — the inverse of
- * {@link elapsedSecondsAt}, read off the same prefix sums.
+ * {@link elapsedSecondsIn}, read off the same prefix sums.
  *
- * @param map A validated tempo map.
+ * @param index The index of a validated tempo map.
  * @param seconds Elapsed seconds; negative for a position before the origin.
  * @returns The position in quarter-note beats.
  */
-export function beatAtElapsedSeconds(map: TempoMap, seconds: number): number {
-  return beatAtElapsedIn(tempoIndexOf(map), seconds);
-}
-
-/** The beat reached after `seconds`, against an index already in hand. */
 export function beatAtElapsedIn(index: TempoIndex, seconds: number): number {
   const at = segmentBy(index.secondsBefore, seconds);
   const start = index.startBeats[at] ?? 0;

@@ -30,10 +30,23 @@ constexpr std::array<JustRatioRow, 13> kJustRatios = {
 #include "core/tuning/just_ratios.gen.inc"
 };
 
+/** Cents in one octave (`CENTS_PER_OCTAVE`). */
+constexpr double kCentsPerOctave = 1200;
+
+/** Cents from `low` up to `high`, both already known to be positive and finite (`centsOfRatio`). */
+double cents_of_ratio(double high, double low) {
+  return kCentsPerOctave * (js::log2(high) - js::log2(low));
+}
+
+/** The value, once it is a positive finite number the library holds (`assertPositiveFinite`). */
+double assert_positive_finite(double value, std::string_view name) {
+  return assert_range(value, kMinValue, kMaxValue, name);
+}
+
 /** Validate a tuning table's fields in the order TS reads them (`assertTuning`). */
 void assert_tuning(const TuningTable& tuning) {
   assert_finite_number(tuning.refStep, "tuning.refStep");
-  assert_range(tuning.refFreq, kMinValue, kMaxValue, "tuning.refFreq");
+  assert_positive_finite(tuning.refFreq, "tuning.refFreq");
   assert_positive_int(tuning.divisions, "tuning.divisions");
 }
 
@@ -45,7 +58,7 @@ const TuningTable TWELVE_TET =
 
 TuningTable edo(int n, double ref_freq, double ref_step) {
   assert_positive_int(n, "EDO divisions");
-  assert_range(ref_freq, kMinValue, kMaxValue, "reference frequency");
+  assert_positive_finite(ref_freq, "reference frequency");
   assert_finite_number(ref_step, "reference step");
   return TuningTable{ref_step, ref_freq, n};
 }
@@ -54,17 +67,17 @@ double frequency_of(double step, const TuningTable& tuning) {
   assert_finite_number(step, "step");
   assert_tuning(tuning);
   double result = tuning.refFreq * js::pow(2, (step - tuning.refStep) / tuning.divisions);
-  return assert_range(result, kMinValue, kMaxValue, "frequency result");
+  return assert_positive_finite(result, "frequency result");
 }
 
 double nearest_step(double freq, const TuningTable& tuning) {
-  assert_range(freq, kMinValue, kMaxValue, "frequency");
+  assert_positive_finite(freq, "frequency");
   assert_tuning(tuning);
   return js::round(tuning.refStep + tuning.divisions * js::log2(freq / tuning.refFreq));
 }
 
 double step_of(double freq, const TuningTable& tuning) {
-  assert_range(freq, kMinValue, kMaxValue, "frequency");
+  assert_positive_finite(freq, "frequency");
   assert_tuning(tuning);
   return tuning.refStep + tuning.divisions * js::log2(freq / tuning.refFreq);
 }
@@ -77,31 +90,31 @@ double cents_from_nearest_step(double freq, const TuningTable& tuning) {
 double steps_of_cents(double cents, const TuningTable& tuning) {
   assert_finite_number(cents, "cents");
   assert_tuning(tuning);
-  return assert_finite_number((cents * tuning.divisions) / 1200, "steps result");
+  return assert_finite_number((cents * tuning.divisions) / kCentsPerOctave, "steps result");
 }
 
 double cents_to_ratio(double cents) {
   assert_finite_number(cents, "cents");
-  double result = js::pow(2, cents / 1200);
-  return assert_range(result, kMinValue, kMaxValue, "ratio result");
+  double result = js::pow(2, cents / kCentsPerOctave);
+  return assert_positive_finite(result, "ratio result");
 }
 
 double cents_between_freq(double a, double b) {
-  assert_range(a, kMinValue, kMaxValue, "first frequency");
-  assert_range(b, kMinValue, kMaxValue, "second frequency");
-  return 1200 * (js::log2(b) - js::log2(a));
+  assert_positive_finite(a, "first frequency");
+  assert_positive_finite(b, "second frequency");
+  return cents_of_ratio(b, a);
 }
 
 double cents_of_steps(double steps, const TuningTable& tuning) {
   assert_finite_number(steps, "steps");
   assert_tuning(tuning);
-  return assert_finite_number((steps * 1200) / tuning.divisions, "cents result");
+  return assert_finite_number((steps * kCentsPerOctave) / tuning.divisions, "cents result");
 }
 
 double ratio_to_cents(double numerator, double denominator) {
-  assert_range(numerator, kMinValue, kMaxValue, "ratio numerator");
-  assert_range(denominator, kMinValue, kMaxValue, "ratio denominator");
-  return 1200 * (js::log2(numerator) - js::log2(denominator));
+  assert_positive_finite(numerator, "ratio numerator");
+  assert_positive_finite(denominator, "ratio denominator");
+  return cents_of_ratio(numerator, denominator);
 }
 
 JustRatio just_ratio(int semitone_class) {

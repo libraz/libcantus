@@ -96,8 +96,11 @@ class Object {
   std::size_t index_position(std::uint32_t n) const;
 
   std::vector<Member> members_;
-  /** Lazily built key-to-position index for large objects; dropped when positions shift. */
-  mutable std::unique_ptr<std::unordered_map<std::string, std::size_t>> index_;
+  /**
+   * Lazily built index for large objects, from the hash of a key to its position (looked up by
+   * string_view without building a std::string); dropped when positions shift.
+   */
+  mutable std::unique_ptr<std::unordered_multimap<std::size_t, std::size_t>> index_;
 };
 
 /** Kind of a JSON value. */

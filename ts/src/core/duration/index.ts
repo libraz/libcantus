@@ -180,17 +180,30 @@ function beatQuarters(options: { beatUnit?: NoteValue | DurationData }): number 
   return quartersOf(assertDuration(options.beatUnit, 'beatUnit'));
 }
 
+/** Every spelling {@link beatsToDuration} tries, in preference order, with its length. */
+const SPELLINGS: readonly {
+  base: NoteValue;
+  dots: number;
+  tuplet: Tuplet | undefined;
+  quarters: number;
+}[] = SPELLED_TUPLETS.flatMap((tuplet) =>
+  Array.from({ length: MAX_SPELLED_DOTS + 1 }, (_, dots) => dots).flatMap((dots) =>
+    NOTE_VALUES.map((base) => ({
+      base,
+      dots,
+      tuplet,
+      quarters: quartersOfParts(base, dots, tuplet),
+    })),
+  ),
+);
+
 /** The conventional spelling of a length in quarter notes, if it has one. */
 function spellQuarters(quarters: number): SpelledDuration | undefined {
-  for (const tuplet of SPELLED_TUPLETS) {
-    for (let dots = 0; dots <= MAX_SPELLED_DOTS; dots += 1) {
-      for (const base of NOTE_VALUES) {
-        if (Math.abs(quartersOfParts(base, dots, tuplet) - quarters) <= EPS) {
-          return tuplet === undefined
-            ? { base, dots }
-            : { base, dots, tuplet: { actual: tuplet.actual, normal: tuplet.normal } };
-        }
-      }
+  for (const { base, dots, tuplet, quarters: length } of SPELLINGS) {
+    if (Math.abs(length - quarters) <= EPS) {
+      return tuplet === undefined
+        ? { base, dots }
+        : { base, dots, tuplet: { actual: tuplet.actual, normal: tuplet.normal } };
     }
   }
   return undefined;

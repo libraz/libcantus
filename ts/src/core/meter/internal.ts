@@ -134,6 +134,15 @@ export function isMeterMap(meter: MeterData): meter is MeterMap {
   return Array.isArray(meter);
 }
 
+/**
+ * The meter assumed when a caller names none.
+ *
+ * Frozen, and copied on the way out of every function that hands a default
+ * meter back: a shared default that a caller can write to is a default the
+ * whole process then reads differently.
+ */
+export const DEFAULT_TS: TimeSignature = Object.freeze({ numerator: 4, denominator: 4 });
+
 /** A fresh signature, sharing neither its object nor its grouping array. */
 export function copyTimeSignature(ts: TimeSignature): TimeSignature {
   return ts.grouping === undefined
@@ -148,7 +157,7 @@ export function copyMeterMap(map: MeterMap): MeterMap {
     const entry = map[i];
     copy[i] =
       entry === undefined
-        ? { startBeat: 0, ts: { numerator: 4, denominator: 4 } }
+        ? { startBeat: 0, ts: copyTimeSignature(DEFAULT_TS) }
         : { startBeat: entry.startBeat, ts: copyTimeSignature(entry.ts) };
   }
   return copy;
@@ -315,7 +324,7 @@ export function meterSegments(map: MeterMap): MeterSegment[] {
     const barAnchor = i === 0 ? 0 : startBeat;
     segments[i] = {
       startBeat,
-      ts: entry === undefined ? { numerator: 4, denominator: 4 } : copyTimeSignature(entry.ts),
+      ts: copyTimeSignature(entry === undefined ? DEFAULT_TS : entry.ts),
       barAnchor,
       barBeats: barLen,
       barsBefore: bars,

@@ -47,6 +47,16 @@ constexpr std::array<NamedQuarters, NOTE_VALUES.size()> kNoteValueQuarters = {
 };
 static_assert(!kNoteValueQuarters.back().name.empty(),
               "NOTE_VALUE_QUARTERS and NoteValue disagree");
+static_assert(
+    [] {
+      for (std::size_t i = 0; i < kNoteValueQuarters.size(); ++i) {
+        if (kNoteValueQuarters[i].name != kNoteValueNames[i]) {
+          return false;
+        }
+      }
+      return true;
+    }(),
+    "NOTE_VALUE_QUARTERS is not in NoteValue order");
 
 constexpr std::array<TupletSlot, 4> kSpelledTuplets = {
 #include "core/duration/spelled_tuplets.gen.inc"
@@ -54,13 +64,7 @@ constexpr std::array<TupletSlot, 4> kSpelledTuplets = {
 
 /** Length of each base value in quarter notes (`NOTE_VALUE_QUARTERS[base]`). */
 double base_quarters(NoteValue base) {
-  std::string_view name = to_string(base);
-  for (const NamedQuarters& row : kNoteValueQuarters) {
-    if (row.name == name) {
-      return row.quarters;
-    }
-  }
-  return 0;
+  return kNoteValueQuarters[static_cast<std::size_t>(base)].quarters;
 }
 
 /** Length in quarter notes of a base value with dots and an optional tuplet. */

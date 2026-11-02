@@ -13,29 +13,6 @@ namespace cantus {
 
 namespace {
 
-/** The bar arithmetic of one meter map (`MeterIndex`), derived per question. */
-struct MeterIndex {
-  std::vector<double> startBeats;
-  /** Beat each entry's bars are counted from. */
-  std::vector<double> barAnchors;
-  /** Bar length of each entry's signature. */
-  std::vector<double> barBeats;
-  /** Bars completed before each entry. */
-  std::vector<double> barsBefore;
-};
-
-/** The index arrays of meter_segments(). */
-MeterIndex build_meter_index(const MeterMap& map) {
-  MeterIndex index;
-  for (const MeterSegment& segment : meter_segments(map)) {
-    index.startBeats.push_back(segment.startBeat);
-    index.barAnchors.push_back(segment.barAnchor);
-    index.barBeats.push_back(segment.barBeats);
-    index.barsBefore.push_back(segment.barsBefore);
-  }
-  return index;
-}
-
 /** Index of the last key at or before `value`, at least 0; the keys strictly increase. */
 std::size_t last_at_or_before(const std::vector<double>& keys, double value) {
   std::int64_t low = 1;
@@ -54,6 +31,17 @@ std::size_t last_at_or_before(const std::vector<double>& keys, double value) {
 }
 
 }  // namespace
+
+MeterIndex build_meter_index(const MeterMap& map) {
+  MeterIndex index;
+  for (const MeterSegment& segment : meter_segments(map)) {
+    index.startBeats.push_back(segment.startBeat);
+    index.barAnchors.push_back(segment.barAnchor);
+    index.barBeats.push_back(segment.barBeats);
+    index.barsBefore.push_back(segment.barsBefore);
+  }
+  return index;
+}
 
 std::vector<MeterSegment> meter_segments(const MeterMap& map) {
   std::vector<MeterSegment> segments;
@@ -148,12 +136,11 @@ std::optional<std::vector<double>> pulse_grouping_of(const TimeSignature& ts) {
 
 double bar_beats_of(const TimeSignature& ts) { return ts.numerator * unit_beats_of(ts); }
 
-std::size_t entry_index_of(const MeterMap& map, double beat) {
-  return last_at_or_before(build_meter_index(map).startBeats, beat + BEAT_EPS);
+std::size_t entry_index_in(const MeterIndex& index, double beat) {
+  return last_at_or_before(index.startBeats, beat + BEAT_EPS);
 }
 
-double bar_start_of(const MeterMap& map, double beat) {
-  MeterIndex index = build_meter_index(map);
+double bar_start_in(const MeterIndex& index, double beat) {
   std::size_t at = last_at_or_before(index.startBeats, beat + BEAT_EPS);
   double anchor = index.barAnchors[at];
   double bar_len = index.barBeats[at];
@@ -163,18 +150,16 @@ double bar_start_of(const MeterMap& map, double beat) {
   return anchor + std::floor((beat - anchor) / bar_len + BEAT_EPS) * bar_len;
 }
 
-double bar_length_of(const MeterMap& map, double beat) {
-  MeterIndex index = build_meter_index(map);
+double bar_length_in(const MeterIndex& index, double beat) {
   std::size_t at = last_at_or_before(index.startBeats, beat + BEAT_EPS);
   double full = index.barBeats[at];
   if (at + 1 >= index.startBeats.size()) {
     return full;
   }
-  return js::min(full, index.startBeats[at + 1] - bar_start_of(map, beat));
+  return js::min(full, index.startBeats[at + 1] - bar_start_in(index, beat));
 }
 
-double bar_index_of(const MeterMap& map, double beat) {
-  MeterIndex index = build_meter_index(map);
+double bar_index_in(const MeterIndex& index, double beat) {
   std::size_t at = last_at_or_before(index.startBeats, beat + BEAT_EPS);
   double anchor = index.barAnchors[at];
   double bar_len = index.barBeats[at];
@@ -184,10 +169,29 @@ double bar_index_of(const MeterMap& map, double beat) {
   return index.barsBefore[at] + std::floor((beat - anchor) / bar_len + BEAT_EPS);
 }
 
-double beat_of_bar_index(const MeterMap& map, double bar_index) {
-  MeterIndex index = build_meter_index(map);
+double beat_of_bar_index_in(const MeterIndex& index, double bar_index) {
   std::size_t at = last_at_or_before(index.barsBefore, bar_index);
   return index.barAnchors[at] + (bar_index - index.barsBefore[at]) * index.barBeats[at];
+}
+
+std::size_t entry_index_of(const MeterMap& map, double beat) {
+  return entry_index_in(build_meter_index(map), beat);
+}
+
+double bar_start_of(const MeterMap& map, double beat) {
+  return bar_start_in(build_meter_index(map), beat);
+}
+
+double bar_length_of(const MeterMap& map, double beat) {
+  return bar_length_in(build_meter_index(map), beat);
+}
+
+double bar_index_of(const MeterMap& map, double beat) {
+  return bar_index_in(build_meter_index(map), beat);
+}
+
+double beat_of_bar_index(const MeterMap& map, double bar_index) {
+  return beat_of_bar_index_in(build_meter_index(map), bar_index);
 }
 
 }  // namespace cantus

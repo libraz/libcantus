@@ -18,6 +18,9 @@ export type IndexedNoteEvent = {
   readonly endBeat: number;
 };
 
+/** The tie-breaks an index accepts, in the order an error lists them. */
+const ONSET_TIE_BREAKS = ['highest', 'lowest', 'last'] as const;
+
 /**
  * Which note wins when several sound from the same onset.
  *
@@ -29,7 +32,7 @@ export type IndexedNoteEvent = {
  *
  * @category Core
  */
-export type OnsetTieBreak = 'highest' | 'lowest' | 'last';
+export type OnsetTieBreak = (typeof ONSET_TIE_BREAKS)[number];
 
 /**
  * Binary-searchable, stable-sorted index over note onsets and active spans.
@@ -126,7 +129,7 @@ export function createNoteEventIndex(
   const tieBreak: OnsetTieBreak =
     asked.tieBreak === undefined || asked.tieBreak === null
       ? 'highest'
-      : assertOneOf(asked.tieBreak, ['highest', 'lowest', 'last'], 'options.tieBreak');
+      : assertOneOf(asked.tieBreak, ONSET_TIE_BREAKS, 'options.tieBreak');
   // Each wrapper is frozen, not only the array and the note inside it: `endBeat`
   // is what the active-note search is built from, so a host that writes to it
   // would leave the index answering from a span nothing else knows about.

@@ -41,6 +41,12 @@ bool same_reach(const std::map<int, std::vector<Limb>>& a,
   return true;
 }
 
+/** The techniques a profile lists, without copying them. */
+const std::vector<Articulation>& articulations_of(const InstrumentProfile& profile) {
+  return std::visit(
+      [](const auto& p) -> const std::vector<Articulation>& { return p.articulations; }, profile);
+}
+
 }  // namespace
 
 std::string_view to_string(InstrumentKind kind) {
@@ -124,9 +130,9 @@ PlayabilityReport Instrument::playability(const std::vector<NoteEvent>& notes,
 }
 
 bool Instrument::equals(const Instrument& other) const {
-  InstrumentProfile theirs = other.data();
+  const InstrumentProfile& theirs = other.profile_;
   if (name() != other.name() || kind() != other.kind() || polyphony() != other.polyphony() ||
-      articulations() != other.articulations()) {
+      articulations_of(profile_) != articulations_of(theirs)) {
     return false;
   }
   if (const auto* a = std::get_if<StringedProfile>(&profile_)) {
@@ -136,8 +142,9 @@ bool Instrument::equals(const Instrument& other) const {
   }
   const auto& a = std::get<PercussionProfile>(profile_);
   const auto& b = std::get<PercussionProfile>(theirs);
+  static const std::vector<int> kNoOverdub;
   return a.limbs == b.limbs && same_reach(a.reach, b.reach) &&
-         a.overdub.value_or(std::vector<int>{}) == b.overdub.value_or(std::vector<int>{});
+         (a.overdub ? *a.overdub : kNoOverdub) == (b.overdub ? *b.overdub : kNoOverdub);
 }
 
 }  // namespace cantus

@@ -17,25 +17,11 @@ namespace {
 
 /** `Number.MIN_VALUE`. */
 
-/** A track's notes checked and copied, in the order they were given (`copyNotes`). */
-std::vector<NoteEvent> copy_notes(const std::vector<NoteEvent>& notes, const std::string& name,
-                                  std::optional<double> budget) {
-  NoteEventAssertOptions options;
-  options.allowNonPositiveDuration = true;
-  options.budget = budget;
-  std::vector<NoteEvent> out;
-  assert_note_events(notes, name, options);
-  for (const NoteEvent& note : notes) {
-    out.push_back(copy_note_event(note));
-  }
-  return out;
-}
-
 /** Defensive copy of one track, its notes checked as they are copied (`copyTrack`). */
 ArrangementTrack copy_track(const ArrangementTrack& track, std::size_t index,
                             std::optional<double> budget) {
   ArrangementTrack copy;
-  copy.notes = copy_notes(track.notes, "tracks[" + index_text(index) + "].notes", budget);
+  copy.notes = copy_checked_notes(track.notes, "tracks[" + index_text(index) + "].notes", budget);
   copy.name = track.name;
   copy.role = track.role;
   return copy;
@@ -198,14 +184,6 @@ TensionOptions analysis_options_of(const std::optional<ArrangementSetup>& given,
     opts.meters = MeterArg(resolve_meters(options, "arrangement meters"));
   }
   return opts;
-}
-
-/** `{...mine, ...theirs}` over the fields a caller named. */
-template <class T>
-void lay_over(std::optional<T>& mine, const std::optional<T>& theirs) {
-  if (theirs) {
-    mine = theirs;
-  }
 }
 
 //--------------------------------------------------------------------------------------------
@@ -381,11 +359,18 @@ TensionOptions layered(const ArrangementOptions& mine, const TensionOptions& the
   return out;
 }
 
+/** The timeline an analysis reports; its span is read back off the chords and the keys. */
+Timeline timeline_of(const ArrangementAnalysis& analysis) {
+  TimelineData data{analysis.timeline.segments, span_end(analysis.timeline.segments, analysis.keys),
+                    analysis.keys, std::nullopt};
+  return Timeline::from_data(data);
+}
+
 }  // namespace
 
 ArrangementAnalysis Arrangement::analysis() const {
   ArrangementAnalysis analysis = session().analysis();
-  analysis.timeline = timeline().chord_timeline();
+  analysis.timeline = timeline_of(analysis).chord_timeline();
   return analysis;
 }
 
@@ -421,7 +406,7 @@ Arrangement Arrangement::update(const std::vector<TrackEdit>& edits) const {
   for (std::size_t index = 0; index < edits.size(); ++index) {
     copied.push_back(TrackEdit{
         edits[index].trackIndex,
-        copy_notes(edits[index].notes, "edits[" + index_text(index) + "].notes", budget)});
+        copy_checked_notes(edits[index].notes, "edits[" + index_text(index) + "].notes", budget)});
   }
   ArrangementSession next = session().update(copied);
   return Arrangement(ArrangementData{next.tracks(), data_.settings});
@@ -439,13 +424,7 @@ ArrangementAnalysis Arrangement::analyze(const std::optional<ArrangementSetup>& 
   return analyze_arrangement(data_.tracks, layered(analysis_options(), analysis_options_of(opts)));
 }
 
-Timeline Arrangement::timeline() const {
-  ArrangementAnalysis analysis = session().analysis();
-  // The analysis reports where the chords and the keys end, so the span is read back off them.
-  TimelineData data{analysis.timeline.segments, span_end(analysis.timeline.segments, analysis.keys),
-                    analysis.keys, std::nullopt};
-  return Timeline::from_data(data);
-}
+Timeline Arrangement::timeline() const { return timeline_of(session().analysis()); }
 
 ReferenceProfile Arrangement::reference(std::optional<double> budget) const {
   const std::optional<std::vector<double>> harmony_tracks =
@@ -471,7 +450,7 @@ ReferenceProfile Arrangement::reference(std::optional<double> budget) const {
   } else if (data_.settings && data_.settings->ts) {
     opts.meters = MeterArg(*data_.settings->ts);
   }
-  opts.totalBeats = timeline().total_beats();
+  opts.totalBeats = timeline_of(analysis).total_beats();
   if (!melody.empty()) {
     opts.melody = std::move(melody);
   }

@@ -7,6 +7,7 @@
 #include "cantus/core/validation.h"
 #include "cantus/model/instrument.h"
 #include "js/math.h"
+#include "model/shared.h"
 
 namespace cantus {
 
@@ -124,14 +125,6 @@ ComposerOptions options_of(const ComposerData& data) {
   }
   options.vocabulary = data.vocabulary;
   return options;
-}
-
-/** `{...mine, ...theirs}` over the fields a patch names. */
-template <class T>
-void lay_over(std::optional<T>& mine, const std::optional<T>& theirs) {
-  if (theirs) {
-    mine = theirs;
-  }
 }
 
 }  // namespace

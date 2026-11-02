@@ -102,15 +102,14 @@ bool is_released(double end_beat, double beat) {
 
 /** The passage as a timeline of attacks, built once for every check (`timelineOf`). */
 std::vector<Attack> timeline_of(const Analysis& state) {
-  std::vector<std::size_t> sounding_list = sounding_indices(state.notes);
-  std::set<std::size_t> sounding(sounding_list.begin(), sounding_list.end());
   std::vector<Attack> attacks;
   std::vector<TimedNote> active;
   for (std::size_t index : state.order) {
-    if (sounding.count(index) == 0) {
+    const NoteEvent& note = state.notes[index];
+    // The drop_silent_notes() predicate (`soundingIndices`).
+    if (!(note.durationBeat > 0)) {
       continue;
     }
-    const NoteEvent& note = state.notes[index];
     if (attacks.empty() ||
         note.startBeat - attacks.back().startBeat > SIMULTANEITY_BEATS + BEAT_EPS) {
       double at = note.startBeat;
@@ -205,8 +204,8 @@ void check_shift_speed(Analysis& state, const std::string& name, const HandPosit
 }
 
 /** Layer 2: one hand cannot span that many frets at once. */
-void check_stretch(Analysis& state, const StringedProfile& profile, const Attack& attack) {
-  std::vector<std::size_t> sounding = sounding_at(attack);
+void check_stretch(Analysis& state, const StringedProfile& profile, const Attack& attack,
+                   const std::vector<std::size_t>& sounding) {
   std::vector<double> frets;
   for (std::size_t member : sounding) {
     const std::optional<StringFingering>& fingering = state.placements[member].fingering;
@@ -219,11 +218,10 @@ void check_stretch(Analysis& state, const StringedProfile& profile, const Attack
   }
   double span = js::max(frets) - js::min(frets);
   if (span > profile.maxStretch) {
-    state.issues.push_back(PlayabilityIssue{PlayabilityIssueType::kStretchTooWide, 2,
-                                            sorted(std::move(sounding)), attack.startBeat, true,
-                                            "a " + num(span) + "-fret stretch exceeds the " +
-                                                num(profile.maxStretch) +
-                                                " frets one hand spans on " + profile.name});
+    state.issues.push_back(PlayabilityIssue{
+        PlayabilityIssueType::kStretchTooWide, 2, sorted(sounding), attack.startBeat, true,
+        "a " + num(span) + "-fret stretch exceeds the " + num(profile.maxStretch) +
+            " frets one hand spans on " + profile.name});
   }
 }
 
@@ -304,9 +302,12 @@ AttackPlacement place_greedily(const std::vector<NeckMember>& members, const Ori
     }
     const std::vector<StringFingering>& pool = open.empty() ? member.candidates : open;
     StringFingering chosen = pool.front();
+    double chosen_cost = fingering_cost(chosen, from);
     for (std::size_t k = 1; k < pool.size(); ++k) {
-      if (fingering_cost(pool[k], from) < fingering_cost(chosen, from)) {
+      double cost = fingering_cost(pool[k], from);
+      if (cost < chosen_cost) {
         chosen = pool[k];
+        chosen_cost = cost;
       }
     }
     out.picks.push_back(chosen);
@@ -496,9 +497,10 @@ void place_on_neck(Analysis& state, const StringedProfile& profile,
   }
 
   for (const Attack& attack : attacks) {
-    check_stretch(state, profile, attack);
+    std::vector<std::size_t> sounding = sounding_at(attack);
+    check_stretch(state, profile, attack, sounding);
     check_polyphony(state, profile.name, profile.polyphony,
-                    Group{attack.startBeat, sounding_at(attack)});
+                    Group{attack.startBeat, std::move(sounding)});
   }
 }
 
@@ -681,7 +683,7 @@ double difficulty_of(const std::vector<Attack>& attacks, double movement,
   if (!std::isfinite(span_beats) || span_beats <= BEAT_EPS) {
     return MIN_DIFFICULTY;
   }
-  double seconds = (span_beats * 60) / (bpm ? *bpm : REFERENCE_BPM);
+  double seconds = (span_beats * SECONDS_PER_MINUTE) / (bpm ? *bpm : REFERENCE_BPM);
   double rate = movement / seconds;
   double scaled =
       MIN_DIFFICULTY + (MAX_DIFFICULTY - MIN_DIFFICULTY) * (1 - js::exp(-rate / DIFFICULTY_SCALE));
@@ -715,7 +717,7 @@ PlayabilityReport playability(const std::vector<NoteEvent>& notes,
   note_options.allowNonPositiveDuration = true;
   assert_note_events(notes, "playability notes", note_options);
   if (bpm) {
-    assert_range(*bpm, kMinValue, 1000, "playability bpm");
+    assert_range(*bpm, kMinValue, MAX_TEMPO_BPM, "playability bpm");
   }
   // The profile is read before answering, whether or not a note would expose a contradiction.
   InstrumentProfile instrument = to_instrument_profile(profile, "playability profile");
@@ -727,7 +729,7 @@ PlayabilityReport playability(const std::vector<NoteEvent>& notes,
     state.placements[i].note = i;
   }
   if (bpm) {
-    state.secondsPerBeat = 60 / *bpm;
+    state.secondsPerBeat = SECONDS_PER_MINUTE / *bpm;
   }
 
   std::vector<Attack> attacks = timeline_of(state);

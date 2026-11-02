@@ -44,6 +44,7 @@ import type { InstrumentProfile, InstrumentProfileLike } from '../core/instrumen
 import { toInstrumentProfile } from '../core/instrument/profile.js';
 import type { BarPosition, MeterLike, MeterMap, TimeSignature } from '../core/meter/index.js';
 import { beatToBarPosition, meterAt, resolveMeters } from '../core/meter/index.js';
+import { copyTimeSignature } from '../core/meter/internal.js';
 import type { IntervalLike } from '../core/pitch/index.js';
 import { toSpelledInterval } from '../core/pitch/index.js';
 import type { TempoMap } from '../core/tempo/index.js';
@@ -83,6 +84,7 @@ import {
   assertNoteEventArray,
   copyNoteEvent,
   copyPlain,
+  sameTimeSignature,
   withoutNegativeZero,
 } from './shared.js';
 import { copyKeyRegion, Timeline } from './timeline.js';
@@ -138,15 +140,13 @@ function orderNotes(notes: readonly NoteEvent[], name: string): NoteEvent[] {
 function copyMeters(meters: MeterMap): MeterMap {
   return assertDataObjects<MeterMap[number]>(meters, 'score meters').map((change) => {
     assertDataObject(change.ts, 'score meters ts');
-    const ts: TimeSignature = {
-      numerator: change.ts.numerator,
-      denominator: change.ts.denominator,
-    };
-    if (change.ts.grouping !== undefined) {
-      ts.grouping = [...change.ts.grouping];
-    }
-    return { startBeat: withoutNegativeZero(change.startBeat), ts };
+    return { startBeat: withoutNegativeZero(change.startBeat), ts: copyTimeSignature(change.ts) };
   });
+}
+
+/** A copy of a tempo map, its entries read as they stand. */
+function cloneTempo(tempo: TempoMap): TempoMap {
+  return tempo.map((event) => ({ startBeat: event.startBeat, bpm: event.bpm }));
 }
 
 /**
@@ -371,7 +371,7 @@ export class Score {
 
   /** The tempo map the notes are read against. */
   get tempo(): TempoMap {
-    return this.#data.tempo.map((event) => ({ startBeat: event.startBeat, bpm: event.bpm }));
+    return cloneTempo(this.#data.tempo);
   }
 
   /**
@@ -1156,7 +1156,7 @@ export class Score {
     const copy: ScoreData = {
       notes: this.#data.notes.map(copyNoteEvent),
       meters: copyMeters(this.#data.meters),
-      tempo: this.#data.tempo.map((event) => ({ startBeat: event.startBeat, bpm: event.bpm })),
+      tempo: cloneTempo(this.#data.tempo),
     };
     if (this.#key !== undefined) {
       copy.key = this.#key.toJSON();
@@ -1295,14 +1295,7 @@ function sameMeter(change: MeterMap[number], other: MeterMap[number] | undefined
   if (other === undefined || change.startBeat !== other.startBeat) {
     return false;
   }
-  const grouping = change.ts.grouping ?? [];
-  const theirs = other.ts.grouping ?? [];
-  return (
-    change.ts.numerator === other.ts.numerator &&
-    change.ts.denominator === other.ts.denominator &&
-    grouping.length === theirs.length &&
-    grouping.every((entry, index) => entry === theirs[index])
-  );
+  return sameTimeSignature(change.ts, other.ts);
 }
 
 /** Whether two scores were read in the same key, one having none included. */

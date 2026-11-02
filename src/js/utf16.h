@@ -78,8 +78,14 @@ std::string utf16_slice(std::string_view s, double start, std::optional<double> 
 /** Sign of `a < b` / `a > b` as JS compares strings: by UTF-16 code unit. */
 int utf16_compare(std::string_view a, std::string_view b);
 
+/** ES ToIntegerOrInfinity, then the relative-index clamp `slice` applies against `length`. */
+std::size_t relative_index(double v, std::size_t length);
+
 /** Whether a code unit is white space to `String.prototype.trim` and the regex class `\s`. */
 bool is_space(char16_t unit) noexcept;
+
+/** `s.trim()` of UTF-16 code units: the view without its leading and trailing white space. */
+std::u16string_view trim_view(std::u16string_view units) noexcept;
 
 /** `s.trim()`. */
 std::string trim(std::string_view s);

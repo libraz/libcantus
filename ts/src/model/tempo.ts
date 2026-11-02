@@ -2,25 +2,15 @@ import {
   beatsToSeconds,
   beatsToTicks,
   durationToSeconds,
+  MAX_BPM,
+  MIN_BPM,
   secondsToBeats,
   ticksToBeats,
 } from '../core/tempo/index.js';
 import { assertRange } from '../core/validation/index.js';
 import { assertDataObject } from './shared.js';
 
-/**
- * Upper bound on a tempo, the bound the tempo module and the generators
- * accept. A faster marking is a notation of a slower pulse, not a distinct
- * tempo.
- */
-export const MAX_BPM = 1000;
-
-/**
- * Lower bound on a tempo, the bound the tempo module accepts. One beat lasts
- * ten minutes here; anything slower is a corrupt or mis-scaled value rather
- * than a marking, and the conversions it feeds would overflow to infinity.
- */
-export const MIN_BPM = 0.1;
+export { MAX_BPM, MIN_BPM };
 
 /**
  * A constant tempo as plain data: quarter-note beats per minute.

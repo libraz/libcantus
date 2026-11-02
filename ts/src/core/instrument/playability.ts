@@ -1,5 +1,7 @@
 import { canonicalNoteOrder, soundingIndices } from '../event-index/order.js';
 import { BEAT_EPS } from '../meter/internal.js';
+import { MAX_BPM } from '../tempo/index.js';
+import { SECONDS_PER_MINUTE } from '../tempo/internal.js';
 import type { NoteEvent } from '../types.js';
 import { assertNoteEvents, assertRange } from '../validation/index.js';
 import {
@@ -168,7 +170,7 @@ export function playability(
 ): PlayabilityReport {
   assertNoteEvents(notes, 'playability notes', { allowNonPositiveDuration: true });
   if (bpm !== undefined) {
-    assertRange(bpm, Number.MIN_VALUE, 1000, 'playability bpm');
+    assertRange(bpm, Number.MIN_VALUE, MAX_BPM, 'playability bpm');
   }
   // The profile is read once here, as every sibling in the module reads it
   // before answering: a contradictory instrument is refused whether or not the
@@ -181,7 +183,7 @@ export function playability(
     placements: notes.map((_, index) => ({ note: index })),
     issues: [],
     movement: 0,
-    secondsPerBeat: bpm === undefined ? undefined : 60 / bpm,
+    secondsPerBeat: bpm === undefined ? undefined : SECONDS_PER_MINUTE / bpm,
   };
 
   const attacks = timelineOf(state);
@@ -374,9 +376,9 @@ function placeGreedily(
     }
     const pool = open.length > 0 ? open : member.candidates;
     const origin = from;
-    const chosen = pool.reduce((best, candidate) =>
-      fingeringCost(candidate, origin) < fingeringCost(best, origin) ? candidate : best,
-    );
+    const chosen = pool
+      .map((candidate) => ({ candidate, cost: fingeringCost(candidate, origin) }))
+      .reduce((best, entry) => (entry.cost < best.cost ? entry : best)).candidate;
     picks.push(chosen);
     free[chosen.string] = Number.POSITIVE_INFINITY;
     held[chosen.string] = member.index;
@@ -558,8 +560,9 @@ function placeOnNeck(
   }
 
   for (const attack of attacks) {
-    checkStretch(state, profile, attack);
-    checkPolyphony(state, profile, { startBeat: attack.startBeat, members: soundingAt(attack) });
+    const sounding = soundingAt(attack);
+    checkStretch(state, profile, attack, sounding);
+    checkPolyphony(state, profile, { startBeat: attack.startBeat, members: sounding });
   }
 }
 
@@ -625,8 +628,12 @@ function soundingAt(attack: Attack): number[] {
 }
 
 /** Layer 2: one hand cannot span that many frets at once. */
-function checkStretch(state: Analysis, profile: ValidatedStringedProfile, attack: Attack): void {
-  const sounding = soundingAt(attack);
+function checkStretch(
+  state: Analysis,
+  profile: ValidatedStringedProfile,
+  attack: Attack,
+  sounding: readonly number[],
+): void {
   const frets = sounding
     .map((member) => state.placements[member]?.fingering)
     .filter(
@@ -641,7 +648,7 @@ function checkStretch(state: Analysis, profile: ValidatedStringedProfile, attack
     state.issues.push({
       type: 'stretchTooWide',
       layer: 2,
-      notes: sounding.sort((a, b) => a - b),
+      notes: [...sounding].sort((a, b) => a - b),
       startBeat: attack.startBeat,
       impossible: true,
       message: `a ${span}-fret stretch exceeds the ${profile.maxStretch} frets one hand spans on ${profile.name}`,
@@ -888,7 +895,7 @@ function difficultyOf(
   if (!Number.isFinite(spanBeats) || spanBeats <= BEAT_EPS) {
     return MIN_DIFFICULTY;
   }
-  const seconds = (spanBeats * 60) / (bpm ?? REFERENCE_BPM);
+  const seconds = (spanBeats * SECONDS_PER_MINUTE) / (bpm ?? REFERENCE_BPM);
   const rate = state.movement / seconds;
   const scaled =
     MIN_DIFFICULTY + (MAX_DIFFICULTY - MIN_DIFFICULTY) * (1 - Math.exp(-rate / DIFFICULTY_SCALE));

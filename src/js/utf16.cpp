@@ -4,9 +4,6 @@
 
 namespace cantus::js {
 
-namespace {
-
-/** ES ToIntegerOrInfinity followed by the relative-index clamp `slice` applies. */
 std::size_t relative_index(double v, std::size_t length) {
   double len = static_cast<double>(length);
   double n = std::isnan(v) ? 0 : std::trunc(v);
@@ -18,16 +15,13 @@ std::size_t relative_index(double v, std::size_t length) {
   return static_cast<std::size_t>(n);
 }
 
-}  // namespace
-
 bool is_space(char16_t c) noexcept {
   return (c >= 0x09 && c <= 0x0D) || c == 0x20 || c == 0xA0 || c == 0x1680 ||
          (c >= 0x2000 && c <= 0x200A) || c == 0x2028 || c == 0x2029 || c == 0x202F || c == 0x205F ||
          c == 0x3000 || c == 0xFEFF;
 }
 
-std::string trim(std::string_view s) {
-  std::u16string units = to_utf16(s);
+std::u16string_view trim_view(std::u16string_view units) noexcept {
   std::size_t begin = 0;
   std::size_t end = units.size();
   while (begin < end && is_space(units[begin])) {
@@ -36,7 +30,12 @@ std::string trim(std::string_view s) {
   while (end > begin && is_space(units[end - 1])) {
     --end;
   }
-  return from_utf16(std::u16string_view(units).substr(begin, end - begin));
+  return units.substr(begin, end - begin);
+}
+
+std::string trim(std::string_view s) {
+  std::u16string units = to_utf16(s);
+  return from_utf16(trim_view(units));
 }
 
 void append_wtf8(std::string& out, std::uint32_t cp) {

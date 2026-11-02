@@ -61,6 +61,39 @@ struct MeterSegment {
  */
 std::vector<MeterSegment> meter_segments(const MeterMap& map);
 
+/**
+ * The bar arithmetic of one meter map (`MeterIndex`). The functions below that take a map build
+ * one per call; a caller asking several questions of one map builds it once and uses the `_in`
+ * forms.
+ */
+struct MeterIndex {
+  std::vector<double> startBeats;
+  /** Beat each entry's bars are counted from. */
+  std::vector<double> barAnchors;
+  /** Bar length of each entry's signature. */
+  std::vector<double> barBeats;
+  /** Bars completed before each entry. */
+  std::vector<double> barsBefore;
+};
+
+/** The index arrays of meter_segments(). */
+MeterIndex build_meter_index(const MeterMap& map);
+
+/** Index of the map entry in force at a beat. */
+std::size_t entry_index_in(const MeterIndex& index, double beat);
+
+/** Absolute beat at which the bar containing `beat` begins. */
+double bar_start_in(const MeterIndex& index, double beat);
+
+/** Length of the bar containing `beat`, shortened by a following change. */
+double bar_length_in(const MeterIndex& index, double beat);
+
+/** Bar index of a beat, counting the bar at beat 0 as bar 0. */
+double bar_index_in(const MeterIndex& index, double beat);
+
+/** Absolute beat at which bar `bar_index` begins. */
+double beat_of_bar_index_in(const MeterIndex& index, double bar_index);
+
 /** Index of the map entry in force at a beat. */
 std::size_t entry_index_of(const MeterMap& map, double beat);
 

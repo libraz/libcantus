@@ -1,13 +1,10 @@
 #include "model/shared.h"
 
+#include <vector>
+
 #include "cantus/core/validation.h"
 
 namespace cantus {
-
-NoteData spell_pitch_class_bare(double pc, MidiSpelling spelling) {
-  NoteData spelled = midi_to_note(60 + pitch_class_of(pc), spelling);
-  return NoteData{spelled.letter, spelled.alter, std::nullopt};
-}
 
 NoteEvent copy_note_event(const NoteEvent& note) {
   NoteEvent copy;
@@ -23,6 +20,19 @@ NoteEvent copy_note_event(const NoteEvent& note) {
   return copy;
 }
 
+std::vector<NoteEvent> copy_checked_notes(const std::vector<NoteEvent>& notes,
+                                          std::string_view name, std::optional<double> budget) {
+  NoteEventAssertOptions options;
+  options.allowNonPositiveDuration = true;
+  options.budget = budget;
+  std::vector<NoteEvent> out;
+  assert_note_events(notes, name, options);
+  for (const NoteEvent& note : notes) {
+    out.push_back(copy_note_event(note));
+  }
+  return out;
+}
+
 TimeSignature copy_time_signature(const TimeSignature& ts, std::string_view name) {
   assert_time_signature(ts, name);
   TimeSignature copy;
@@ -32,6 +42,13 @@ TimeSignature copy_time_signature(const TimeSignature& ts, std::string_view name
     copy.grouping = *ts.grouping;
   }
   return copy;
+}
+
+bool same_time_signature(const TimeSignature& a, const TimeSignature& b) {
+  static const std::vector<int> kNoGrouping;
+  const std::vector<int>& mine = a.grouping ? *a.grouping : kNoGrouping;
+  const std::vector<int>& theirs = b.grouping ? *b.grouping : kNoGrouping;
+  return a.numerator == b.numerator && a.denominator == b.denominator && mine == theirs;
 }
 
 }  // namespace cantus

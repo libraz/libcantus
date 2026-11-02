@@ -19,27 +19,7 @@ constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 constexpr double kInfinity = std::numeric_limits<double>::infinity();
 
 /** ES StrWhiteSpaceChar: WhiteSpace or LineTerminator. */
-bool is_js_space(std::uint32_t cp) {
-  switch (cp) {
-    case 0x09:
-    case 0x0A:
-    case 0x0B:
-    case 0x0C:
-    case 0x0D:
-    case 0x20:
-    case 0xA0:
-    case 0x1680:
-    case 0x2028:
-    case 0x2029:
-    case 0x202F:
-    case 0x205F:
-    case 0x3000:
-    case 0xFEFF:
-      return true;
-    default:
-      return cp >= 0x2000 && cp <= 0x200A;
-  }
-}
+bool is_js_space(std::uint32_t cp) { return cp <= 0xFFFF && is_space(static_cast<char16_t>(cp)); }
 
 /** Offset of the first non-space code point at or after `i`. */
 std::size_t skip_space(std::string_view s, std::size_t i) {

@@ -49,26 +49,11 @@ bool is_multiple(double value, double unit) {
   return std::fabs(ratio - js::round(ratio)) < BEAT_EPS;
 }
 
-/** A code unit `\s` matches. */
-bool is_js_space(char16_t c) {
-  return (c >= 0x09 && c <= 0x0D) || c == 0x20 || c == 0xA0 || c == 0x1680 ||
-         (c >= 0x2000 && c <= 0x200A) || c == 0x2028 || c == 0x2029 || c == 0x202F || c == 0x205F ||
-         c == 0x3000 || c == 0xFEFF;
-}
-
 bool is_ascii_digit(char16_t c) { return c >= u'0' && c <= u'9'; }
 
 /** `Number.parseInt(token.trim(), 10)` of a run of `\d` between `\s`. */
 double parse_token(std::u16string_view token) {
-  std::size_t begin = 0;
-  std::size_t end = token.size();
-  while (begin < end && is_js_space(token[begin])) {
-    ++begin;
-  }
-  while (end > begin && is_js_space(token[end - 1])) {
-    --end;
-  }
-  return js::parse_int(js::from_utf16(token.substr(begin, end - begin)), 10);
+  return js::parse_int(js::from_utf16(js::trim_view(token)), 10);
 }
 
 /**
@@ -80,7 +65,7 @@ TimeSignature read_time_signature(std::string_view text) {
   std::u16string u = js::to_utf16(text);
   std::size_t i = 0;
   auto skip_space = [&] {
-    while (i < u.size() && is_js_space(u[i])) {
+    while (i < u.size() && js::is_space(u[i])) {
       ++i;
     }
   };
@@ -167,51 +152,66 @@ TimeSignature read_time_signature(std::string_view text) {
   return ts;
 }
 
+/** The bar index of a resolved map, built once for all the questions asked of it. */
+std::optional<MeterIndex> index_of(const MeterData& meter) {
+  if (const auto* map = std::get_if<MeterMap>(&meter)) {
+    return build_meter_index(*map);
+  }
+  return std::nullopt;
+}
+
 /** The signature in force at a beat of resolved meter data (`meterAtChecked`). */
-const TimeSignature& meter_at_checked(double beat, const MeterData& meter) {
+const TimeSignature& meter_at_checked(double beat, const MeterData& meter,
+                                      const std::optional<MeterIndex>& index) {
   if (const auto* ts = std::get_if<TimeSignature>(&meter)) {
     return *ts;
   }
   const MeterMap& map = std::get<MeterMap>(meter);
-  return map[entry_index_of(map, beat)].ts;
+  return map[entry_index_in(*index, beat)].ts;
 }
 
 /** The single signature a meter names; a map reads as its opening one (`readSignature`). */
 TimeSignature read_signature(const MeterArg& value, std::string_view name) {
   MeterData resolved = read_meter_data(value, name);
-  return meter_at_checked(0, resolved);
+  return meter_at_checked(0, resolved, index_of(resolved));
 }
 
-double bar_start_checked(double beat, const MeterData& meter) {
-  if (const auto* map = std::get_if<MeterMap>(&meter)) {
-    return bar_start_of(*map, beat);
+double bar_start_checked(double beat, const MeterData& meter,
+                         const std::optional<MeterIndex>& index) {
+  if (is_meter_map(meter)) {
+    return bar_start_in(*index, beat);
   }
   double bar_len = bar_beats_of(std::get<TimeSignature>(meter));
   return std::floor(beat / bar_len + BEAT_EPS) * bar_len;
 }
 
-double bar_index_checked(double beat, const MeterData& meter) {
-  if (const auto* map = std::get_if<MeterMap>(&meter)) {
-    return bar_index_of(*map, beat);
+double bar_index_checked(double beat, const MeterData& meter,
+                         const std::optional<MeterIndex>& index) {
+  if (is_meter_map(meter)) {
+    return bar_index_in(*index, beat);
   }
   return std::floor(beat / bar_beats_of(std::get<TimeSignature>(meter)) + BEAT_EPS);
 }
 
-BarPosition bar_position_checked(double beat, const MeterData& meter) {
-  return BarPosition{bar_index_checked(beat, meter), beat - bar_start_checked(beat, meter)};
+BarPosition bar_position_checked(double beat, const MeterData& meter,
+                                 const std::optional<MeterIndex>& index) {
+  return BarPosition{bar_index_checked(beat, meter, index),
+                     beat - bar_start_checked(beat, meter, index)};
 }
 
 /** The signature governing a bar index (`meterAtBarChecked`). */
-const TimeSignature& meter_at_bar_checked(double bar, const MeterData& meter) {
-  if (const auto* map = std::get_if<MeterMap>(&meter)) {
+const TimeSignature& meter_at_bar_checked(double bar, const MeterData& meter,
+                                          const std::optional<MeterIndex>& index) {
+  if (is_meter_map(meter)) {
     assert_finite_number(bar, "position.bar");
-    return meter_at_checked(beat_of_bar_index(*map, bar), meter);
+    return meter_at_checked(beat_of_bar_index_in(*index, bar), meter, index);
   }
   return std::get<TimeSignature>(meter);
 }
 
-double pulse_checked(const BarPosition& pos, const MeterData& meter) {
-  return pos.beat / pulse_beats_of(meter_at_bar_checked(pos.bar, meter)) + 1;
+double pulse_checked(const BarPosition& pos, const MeterData& meter,
+                     const std::optional<MeterIndex>& index) {
+  return pos.beat / pulse_beats_of(meter_at_bar_checked(pos.bar, meter, index)) + 1;
 }
 
 /** Whether `pulse_index` is the head pulse of one of the groups. */
@@ -313,17 +313,20 @@ double beats_per_bar(const MeterArg& ts) { return bar_beats_of(read_signature(ts
 
 TimeSignature meter_at(double beat_in_quarters, const MeterArg& meter) {
   assert_finite_number(beat_in_quarters, "beat");
-  return meter_at_checked(beat_in_quarters, read_meter_data(meter));
+  MeterData data = read_meter_data(meter);
+  return meter_at_checked(beat_in_quarters, data, index_of(data));
 }
 
 double bar_start_beat(double beat_in_quarters, const MeterArg& meter) {
   assert_finite_number(beat_in_quarters, "beat");
-  return bar_start_checked(beat_in_quarters, read_meter_data(meter));
+  MeterData data = read_meter_data(meter);
+  return bar_start_checked(beat_in_quarters, data, index_of(data));
 }
 
 double bar_index_at(double beat_in_quarters, const MeterArg& meter) {
   assert_finite_number(beat_in_quarters, "beat");
-  return bar_index_checked(beat_in_quarters, read_meter_data(meter));
+  MeterData data = read_meter_data(meter);
+  return bar_index_checked(beat_in_quarters, data, index_of(data));
 }
 
 double beats_per_bar_at(double beat_in_quarters, const MeterArg& meter) {
@@ -357,7 +360,8 @@ int pulses_per_bar(const MeterArg& ts) {
 
 BarPosition beat_to_bar_position(double beat_in_quarters, const MeterArg& meter) {
   assert_finite_number(beat_in_quarters, "beat");
-  return bar_position_checked(beat_in_quarters, read_meter_data(meter));
+  MeterData data = read_meter_data(meter);
+  return bar_position_checked(beat_in_quarters, data, index_of(data));
 }
 
 double pulse_beats(const MeterArg& ts) { return pulse_beats_of(read_signature(ts, "ts")); }
@@ -366,25 +370,26 @@ double bar_position_to_pulse(const BarPosition& pos, const MeterArg& meter) {
   // The bar is checked before the meter is read, whichever form the meter came in.
   assert_integer(pos.bar, "position.bar");
   assert_finite_number(pos.beat, "position.beat");
-  return pulse_checked(pos, read_meter_data(meter));
+  MeterData data = read_meter_data(meter);
+  return pulse_checked(pos, data, index_of(data));
 }
 
 std::string format_bar_position(double beat_in_quarters, const MeterArg& meter, int decimals) {
   assert_integer(decimals, "decimals", 0, 100);
   assert_finite_number(beat_in_quarters, "beat");
   MeterData resolved = read_meter_data(meter);
-  BarPosition position = bar_position_checked(beat_in_quarters, resolved);
-  const TimeSignature& ts = meter_at_checked(beat_in_quarters, resolved);
-  double pulse = pulse_checked(position, MeterData(ts));
+  std::optional<MeterIndex> index = index_of(resolved);
+  BarPosition position = bar_position_checked(beat_in_quarters, resolved, index);
+  const TimeSignature& ts = meter_at_checked(beat_in_quarters, resolved, index);
+  double pulse = pulse_checked(position, MeterData(ts), std::nullopt);
   double rounded = js::number(js::to_fixed(pulse, decimals));
-  double bar_length = is_meter_map(resolved)
-                          ? bar_length_of(std::get<MeterMap>(resolved), beat_in_quarters)
-                          : bar_beats_of(std::get<TimeSignature>(resolved));
+  double bar_length = index ? bar_length_in(*index, beat_in_quarters)
+                            : bar_beats_of(std::get<TimeSignature>(resolved));
   // A short bar keeps the felt beats it started; anything past them belongs to the next bar.
   double pulses_in_bar = std::ceil(bar_length / pulse_beats_of(ts) - BEAT_EPS);
   if (rounded >= pulses_in_bar + 1) {
-    double next_bar =
-        bar_index_checked(bar_start_checked(beat_in_quarters, resolved) + bar_length, resolved);
+    double next_bar = bar_index_checked(
+        bar_start_checked(beat_in_quarters, resolved, index) + bar_length, resolved, index);
     return num(next_bar + 1) + ".1";
   }
   double whole_pulse = std::floor(rounded);
@@ -406,8 +411,9 @@ double bar_position_to_beat(const BarPosition& pos, const MeterArg& meter) {
 int metric_weight(double beat_in_quarters, const MeterArg& meter) {
   assert_finite_number(beat_in_quarters, "beat");
   MeterData resolved = read_meter_data(meter);
-  const TimeSignature& ts = meter_at_checked(beat_in_quarters, resolved);
-  double beat = beat_in_quarters - bar_start_checked(beat_in_quarters, resolved);
+  std::optional<MeterIndex> index = index_of(resolved);
+  const TimeSignature& ts = meter_at_checked(beat_in_quarters, resolved, index);
+  double beat = beat_in_quarters - bar_start_checked(beat_in_quarters, resolved, index);
   double pulse = pulse_beats_of(ts);
   if (!is_multiple(beat, pulse)) {
     return 0;

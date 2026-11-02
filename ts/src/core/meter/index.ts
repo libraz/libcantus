@@ -31,6 +31,7 @@ import {
   beatOfBarIndex,
   copyMeterData,
   copyTimeSignature,
+  DEFAULT_TS,
   entryIndexOf,
   groupingSumOf,
   isAdditiveReading,
@@ -240,14 +241,7 @@ export type BarPosition = {
   beat: number;
 };
 
-/**
- * The meter assumed when a caller names none.
- *
- * Frozen, and copied on the way out of every function that hands a default
- * meter back: a shared default that a caller can write to is a default the
- * whole process then reads differently.
- */
-export const DEFAULT_TS: TimeSignature = Object.freeze({ numerator: 4, denominator: 4 });
+export { DEFAULT_TS };
 
 /**
  * How far {@link metricGridUnit} divides a pulse to land on a meter change.

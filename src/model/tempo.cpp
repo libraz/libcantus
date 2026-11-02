@@ -14,7 +14,7 @@ TempoMap map_of(double bpm) { return TempoMap{TempoEvent{0, bpm}}; }
 
 }  // namespace
 
-Tempo::Tempo(double bpm) : bpm_(assert_range(bpm, MIN_MODEL_BPM, MAX_MODEL_BPM, "bpm")) {}
+Tempo::Tempo(double bpm) : bpm_(assert_range(bpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM, "bpm")) {}
 
 Tempo Tempo::of(double bpm) { return Tempo(bpm); }
 

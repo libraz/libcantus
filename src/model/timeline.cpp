@@ -225,13 +225,13 @@ std::vector<TimelineRoman> Timeline::roman(const std::optional<KeyArg>& key,
   if (key) {
     given = resolve_key(*key);
   }
-  std::optional<ResolvedKey> fallback;
+  std::optional<KeyLookup> lookup;
   if (!given) {
-    fallback = prevailing_key();
+    lookup.emplace(keys_, prevailing_key());
   }
   std::vector<TimelineRoman> out;
   for (const ChordSegment& segment : segments_) {
-    ResolvedKey at = given ? *given : KeyLookup(keys_, *fallback)(segment.startBeat);
+    const ResolvedKey& at = given ? *given : (*lookup)(segment.startBeat);
     out.push_back(
         TimelineRoman{segment.startBeat, segment.endBeat, chord_to_roman(segment.chord, at, opts)});
   }

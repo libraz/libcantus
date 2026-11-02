@@ -17,16 +17,14 @@ import {
   assertRange,
   describeRejected,
 } from '../validation/index.js';
+import type { TempoIndex } from './internal.js';
 import {
   beatAtElapsedIn,
-  beatAtElapsedSeconds,
-  elapsedSecondsAt,
   elapsedSecondsIn,
-  isValidatedTempoMap,
   rememberValidatedTempoMap,
   SECONDS_PER_MINUTE,
-  tempoIndexOf,
-  tempoSegmentAt,
+  tempoSegmentIn,
+  validatedTempoIndex,
 } from './internal.js';
 
 /**
@@ -93,8 +91,10 @@ export const MAX_TEMPO_CHANGES = 100_000;
  *
  * An unsorted map is rejected rather than sorted: reordering it would silently
  * accept a data error, and two entries on the same beat name no segment at all.
+ *
+ * @returns The index the conversions read the validated map through.
  */
-function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoMap {
+function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoIndex {
   if (!Array.isArray(map) || map.length === 0) {
     throw new InvalidInputError(`${name} must hold at least one tempo event`);
   }
@@ -102,8 +102,9 @@ function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoMap {
   // A map is re-validated on every conversion asked of it, so a pass over a
   // piece pays for the whole map per note unless a map it has already read is
   // recognized as one. The meter map is read the same way.
-  if (isValidatedTempoMap(map)) {
-    return map;
+  const known = validatedTempoIndex(map);
+  if (known !== undefined) {
+    return known;
   }
   for (let index = 0; index < map.length; index += 1) {
     const event = map[index];
@@ -126,8 +127,7 @@ function assertTempoMap(map: TempoMap, name = 'tempo map'): TempoMap {
       );
     }
   }
-  rememberValidatedTempoMap(map);
-  return map;
+  return rememberValidatedTempoMap(map);
 }
 
 /** The map's first event, which is its time origin. */
@@ -149,25 +149,26 @@ function firstEvent(map: TempoMap): TempoEvent {
  * it. What it costs is the segments the span actually crosses, which is what
  * the span is made of.
  */
-function integrateSeconds(map: TempoMap, fromBeat: number, toBeat: number): number {
+function integrateSeconds(map: TempoIndex, fromBeat: number, toBeat: number): number {
   if (toBeat < fromBeat) {
     return -integrateSeconds(map, toBeat, fromBeat);
   }
   let seconds = 0;
-  for (let index = tempoSegmentAt(map, fromBeat); index < map.length; index += 1) {
-    const event = map[index];
-    if (event === undefined) {
+  for (let index = tempoSegmentIn(map, fromBeat); index < map.startBeats.length; index += 1) {
+    const startBeat = map.startBeats[index];
+    const bpm = map.bpms[index];
+    if (startBeat === undefined || bpm === undefined) {
       continue;
     }
     // The opening tempo reaches back before the beat it is marked on: a pickup
     // is played at the tempo of the piece it leads into, and the map names no
     // other one to play it at.
-    const segmentStart = index === 0 ? Number.NEGATIVE_INFINITY : event.startBeat;
-    const segmentEnd = map[index + 1]?.startBeat ?? Number.POSITIVE_INFINITY;
+    const segmentStart = index === 0 ? Number.NEGATIVE_INFINITY : startBeat;
+    const segmentEnd = map.startBeats[index + 1] ?? Number.POSITIVE_INFINITY;
     const low = Math.max(fromBeat, segmentStart);
     const high = Math.min(toBeat, segmentEnd);
     if (high > low) {
-      seconds += ((high - low) * SECONDS_PER_MINUTE) / event.bpm;
+      seconds += ((high - low) * SECONDS_PER_MINUTE) / bpm;
     }
     if (toBeat <= segmentEnd) {
       break;
@@ -201,11 +202,11 @@ function integrateSeconds(map: TempoMap, fromBeat: number, toBeat: number): numb
  */
 export function beatsToSeconds(beat: number, map: TempoMap): number {
   assertFiniteNumber(beat, 'beat');
-  assertTempoMap(map);
+  const index = assertTempoMap(map);
   // The origin-to-beat integral crosses every segment before `beat`, so a pass
   // that asks it of every note re-adds the whole map per note. The sum of the
   // whole segments is the map's own, made once and read here.
-  return elapsedSecondsAt(map, beat);
+  return elapsedSecondsIn(index, beat);
 }
 
 /**
@@ -227,11 +228,11 @@ export function beatsToSeconds(beat: number, map: TempoMap): number {
  */
 export function secondsToBeats(seconds: number, map: TempoMap): number {
   assertFiniteNumber(seconds, 'seconds');
-  assertTempoMap(map);
+  const index = assertTempoMap(map);
   // Before the origin only the opening tempo is in force, which is the segment
   // {@link beatsToSeconds} integrates backwards over; the prefix sums place a
   // negative elapsed time there without a case of its own.
-  return beatAtElapsedSeconds(map, seconds);
+  return beatAtElapsedIn(index, seconds);
 }
 
 /**
@@ -259,8 +260,8 @@ export function secondsToBeats(seconds: number, map: TempoMap): number {
 export function durationToSeconds(startBeat: number, lengthBeats: number, map: TempoMap): number {
   assertFiniteNumber(startBeat, 'startBeat');
   assertRange(lengthBeats, 0, Number.MAX_SAFE_INTEGER, 'lengthBeats');
-  assertTempoMap(map);
-  return integrateSeconds(map, startBeat, startBeat + lengthBeats);
+  const index = assertTempoMap(map);
+  return integrateSeconds(index, startBeat, startBeat + lengthBeats);
 }
 
 /**
@@ -282,8 +283,8 @@ export function durationToSeconds(startBeat: number, lengthBeats: number, map: T
  */
 export function tempoAt(beat: number, map: TempoMap): number {
   assertFiniteNumber(beat, 'beat');
-  assertTempoMap(map);
-  return map[tempoSegmentAt(map, beat)]?.bpm ?? firstEvent(map).bpm;
+  const index = assertTempoMap(map);
+  return index.bpms[tempoSegmentIn(index, beat)] ?? firstEvent(map).bpm;
 }
 
 /** A reader that converts many positions against one tempo map. */
@@ -312,8 +313,7 @@ export type TempoReader = {
  * @returns The conversions, reading one snapshot of the map.
  */
 export function tempoReader(map: TempoMap): TempoReader {
-  assertTempoMap(map);
-  const index = tempoIndexOf(map);
+  const index = assertTempoMap(map);
   return {
     secondsAt: (beat) => elapsedSecondsIn(index, assertFiniteNumber(beat, 'beat')),
     beatAt: (seconds) => beatAtElapsedIn(index, assertFiniteNumber(seconds, 'seconds')),

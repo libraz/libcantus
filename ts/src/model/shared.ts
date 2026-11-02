@@ -1,6 +1,5 @@
 import { InvalidInputError } from '../core/errors/index.js';
 import type { TimeSignature } from '../core/meter/index.js';
-import { midiToNote, pitchClassOf as mod12, type Note as NoteData } from '../core/pitch/index.js';
 import type { NoteEvent } from '../core/types.js';
 import type { NoteEventAssertOptions } from '../core/validation/index.js';
 import {
@@ -154,12 +153,6 @@ function isKeyShaped(value: unknown): boolean {
   return 'scale' in value || 'toJSON' in value || ('rootPc' in value && 'modeMask12' in value);
 }
 
-/** Spell a bare pitch class as an octave-less note with a sharp/flat preference. */
-export function spellPitchClassBare(pc: number, spelling: 'sharp' | 'flat'): NoteData {
-  const spelled = midiToNote(60 + mod12(pc), spelling);
-  return { letter: spelled.letter, alter: spelled.alter };
-}
-
 /** Zero with its sign dropped, so `-0` never reaches the plain data. */
 export function withoutNegativeZero(value: number): number {
   return value === 0 ? 0 : value;
@@ -200,6 +193,18 @@ export function copyNoteEvent(note: NoteEvent): NoteEvent {
     copy.articulation = note.articulation;
   }
   return copy;
+}
+
+/** Whether two signatures name the same meter, grouping included. */
+export function sameTimeSignature(signature: TimeSignature, other: TimeSignature): boolean {
+  const grouping = signature.grouping ?? [];
+  const theirs = other.grouping ?? [];
+  return (
+    signature.numerator === other.numerator &&
+    signature.denominator === other.denominator &&
+    grouping.length === theirs.length &&
+    grouping.every((entry, index) => entry === theirs[index])
+  );
 }
 
 /**

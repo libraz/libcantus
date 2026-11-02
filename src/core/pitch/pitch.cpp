@@ -368,15 +368,7 @@ int interval_semitones(int number, std::string_view quality) {
 ParseResult<SpelledInterval> try_parse_interval(std::string_view name) {
   try {
     std::u16string units = js::to_utf16(name);
-    std::size_t begin = 0;
-    std::size_t end = units.size();
-    while (begin < end && js::is_space(units[begin])) {
-      ++begin;
-    }
-    while (end > begin && js::is_space(units[end - 1])) {
-      --end;
-    }
-    std::optional<IntervalName> match = match_interval_name(units.substr(begin, end - begin));
+    std::optional<IntervalName> match = match_interval_name(std::u16string(js::trim_view(units)));
     double number = match ? js::number(match->digits) : std::nan("");
     if (!match || !std::isfinite(number)) {
       throw InvalidInputError(

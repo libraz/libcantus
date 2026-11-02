@@ -584,11 +584,16 @@ function isPerfectNumber(simpleNumber: number): boolean {
   return simpleNumber === 1 || simpleNumber === 4 || simpleNumber === 5;
 }
 
-/** Quality label from a diatonic number and its actual semitone span. */
-function qualityFromSpan(numberValue: number, semitones: number): IntervalQualityLabel {
+/** A diatonic number's simple number and the span of its perfect or major form. */
+function splitNumber(numberValue: number): { simple: number; reference: number } {
   const octaves = Math.floor((numberValue - 1) / 7);
   const simple = numberValue - 7 * octaves;
-  const reference = (SIMPLE_REFERENCE[simple] ?? 0) + 12 * octaves;
+  return { simple, reference: (SIMPLE_REFERENCE[simple] ?? 0) + 12 * octaves };
+}
+
+/** Quality label from a diatonic number and its actual semitone span. */
+function qualityFromSpan(numberValue: number, semitones: number): IntervalQualityLabel {
+  const { simple, reference } = splitNumber(numberValue);
   const delta = semitones - reference;
   // A fourth or fifth between the extreme alterations deviates by one more than
   // twice the alteration limit: both accidentals plus the natural tritone offset.
@@ -645,9 +650,7 @@ export const MAX_INTERVAL_NUMBER = 7 * (2 * MAX_OCTAVE) + 6 + 1;
  */
 export function intervalSemitones(numberValue: number, quality: IntervalQualityLabel): number {
   assertInteger(numberValue, 'interval number', 1, MAX_INTERVAL_NUMBER);
-  const octaves = Math.floor((numberValue - 1) / 7);
-  const simple = numberValue - 7 * octaves;
-  const reference = (SIMPLE_REFERENCE[simple] ?? 0) + 12 * octaves;
+  const { simple, reference } = splitNumber(numberValue);
   const perfect = isPerfectNumber(simple);
   if (quality === 'P' || quality === 'M') {
     if (perfect !== (quality === 'P')) {

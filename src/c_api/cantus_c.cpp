@@ -29,6 +29,17 @@ bool emit(const std::string& s, char** out_json, size_t* out_len) noexcept {
   return true;
 }
 
+/** Clear the out-parameters that are given; false when either is missing. */
+bool init_outputs(char** out_json, size_t* out_len) noexcept {
+  if (out_json != nullptr) {
+    *out_json = nullptr;
+  }
+  if (out_len != nullptr) {
+    *out_len = 0;
+  }
+  return out_json != nullptr && out_len != nullptr;
+}
+
 CantusStatus finish(const cantus::ops::Result& result, char** out_json, size_t* out_len) noexcept {
   return emit(result.json, out_json, out_len) ? result.status : CANTUS_INTERNAL;
 }
@@ -40,13 +51,7 @@ extern "C" {
 CantusStatus cantus_call(const char* op, size_t op_len, const char* args_json, size_t args_len,
                          CantusCallbackFn cb, void* cb_ctx, char** out_json,
                          size_t* out_len) noexcept {
-  if (out_json != nullptr) {
-    *out_json = nullptr;
-  }
-  if (out_len != nullptr) {
-    *out_len = 0;
-  }
-  if (out_json == nullptr || out_len == nullptr) {
+  if (!init_outputs(out_json, out_len)) {
     return CANTUS_BAD_REQUEST;
   }
   try {
@@ -76,13 +81,7 @@ uint32_t cantus_algorithm_version(void) noexcept { return cantus::ALGORITHM_VERS
 uint32_t cantus_abi_version(void) noexcept { return CANTUS_ABI_VERSION; }
 
 CantusStatus cantus_list_ops(char** out_json, size_t* out_len) noexcept {
-  if (out_json != nullptr) {
-    *out_json = nullptr;
-  }
-  if (out_len != nullptr) {
-    *out_len = 0;
-  }
-  if (out_json == nullptr || out_len == nullptr) {
+  if (!init_outputs(out_json, out_len)) {
     return CANTUS_BAD_REQUEST;
   }
   try {
