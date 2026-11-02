@@ -84,4 +84,10 @@ std::int32_t imul(double a, double b) {
   return static_cast<std::int32_t>(to_uint32(a) * to_uint32(b));
 }
 
+double floor_mod(double value, double modulus) {
+  return std::fmod(std::fmod(value, modulus) + modulus, modulus);
+}
+
+double or_else(double a, double b) { return a != 0 && !std::isnan(a) ? a : b; }
+
 }  // namespace cantus::js

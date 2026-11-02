@@ -27,9 +27,6 @@ double bar_span_of(double start_beat, double end_beat, const MeterArg& meter);
 /** Hold a score inside the [0, 1] range every confidence in this module reports (`clamp01`). */
 double clamp01(double value);
 
-/** Remainder carrying the sign of the divisor (`floorMod`). */
-double floor_mod(double value, double modulus);
-
 /**
  * Where an analysed span ends (`resolveSpanEnd`): `total_beats`, checked to lie in
  * [min(0, start_beat), MAX_SAFE_INTEGER] before it is held to the start, or `sounding_end` when

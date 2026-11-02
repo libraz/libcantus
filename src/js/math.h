@@ -47,6 +47,12 @@ std::uint32_t to_uint32(double x);
 /** `Math.imul(a, b)`. */
 std::int32_t imul(double a, double b);
 
+/** `((value % modulus) + modulus) % modulus`: the remainder carrying the sign of the divisor. */
+double floor_mod(double value, double modulus);
+
+/** `a || b` over two numbers: b where a is 0 or NaN. */
+double or_else(double a, double b);
+
 /** `Math.log2`. */
 double log2(double x);
 /** `Math.exp`. */

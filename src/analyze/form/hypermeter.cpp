@@ -69,7 +69,7 @@ double accent_contrast(const std::vector<double>& novelty, const std::vector<Bar
   double other_count = 0;
   for (std::size_t i = 0; i < slices.size(); ++i) {
     double value = novelty[i];
-    if (floor_mod(slices[i].index - phase, group_bars) == 0) {
+    if (js::floor_mod(slices[i].index - phase, group_bars) == 0) {
       head_sum += value;
       head_count += 1;
     } else {
@@ -116,10 +116,11 @@ CadenceFit cadence_fit_of(const std::vector<CadenceBar>& cadences,
   std::map<double, double> closing;
   std::map<double, double> eliding;
   for (const CadenceBar& cadence : cadences) {
-    double end = cadence.arrival + floor_mod(group_bars - 1 + phase - cadence.arrival, group_bars);
+    double end =
+        cadence.arrival + js::floor_mod(group_bars - 1 + phase - cadence.arrival, group_bars);
     if (end <= cadence.last) {
       credit(closing, end, cadence.strength);
-    } else if (floor_mod(cadence.arrival - phase, group_bars) == 0 &&
+    } else if (js::floor_mod(cadence.arrival - phase, group_bars) == 0 &&
                // Elision needs a next group to arrive into.
                cadence.arrival <= last_bar) {
       credit(eliding, cadence.arrival - 1, cadence.strength);
@@ -130,7 +131,7 @@ CadenceFit cadence_fit_of(const std::vector<CadenceBar>& cadences,
   double weighted = 0;
   for (const BarSlice& slice : slices) {
     // A pickup heads no group, so it ends none either.
-    if (slice.index < 0 || floor_mod(slice.index - phase, group_bars) != group_bars - 1) {
+    if (slice.index < 0 || js::floor_mod(slice.index - phase, group_bars) != group_bars - 1) {
       continue;
     }
     ends += 1;
@@ -163,9 +164,6 @@ Hypermeter undecided_reading(const std::vector<BarSlice>& slices) {
                   " bar(s) is too short to establish a grouping; read as one group";
   return out;
 }
-
-/** `a || b` over two sort keys: b where a is 0 or NaN. */
-double or_else(double a, double b) { return a != 0 && !std::isnan(a) ? a : b; }
 
 /** The search behind hypermeter_with() and hypermeter_over(), over cadences read as bars. */
 Hypermeter hypermeter_core(const std::vector<NoteEvent>& notes,
@@ -259,9 +257,9 @@ Hypermeter hypermeter_core(const std::vector<NoteEvent>& notes,
   }
   // Ties keep the commoner grouping, then the shorter one, then the earlier phase.
   std::stable_sort(readings.begin(), readings.end(), [](const Reading& a, const Reading& b) {
-    double order =
-        or_else(b.score - a.score, or_else(prior_of(b.groupBars) - prior_of(a.groupBars),
-                                           or_else(a.groupBars - b.groupBars, a.phase - b.phase)));
+    double order = js::or_else(
+        b.score - a.score, js::or_else(prior_of(b.groupBars) - prior_of(a.groupBars),
+                                       js::or_else(a.groupBars - b.groupBars, a.phase - b.phase)));
     return order < 0;
   });
   if (readings.empty()) {
@@ -282,7 +280,7 @@ Hypermeter hypermeter_core(const std::vector<NoteEvent>& notes,
   // An upbeat leads into the first hyperbar, so it never becomes a hypermetric downbeat.
   Hypermeter out;
   for (const BarSlice& slice : slices) {
-    if (slice.index >= 0 && floor_mod(slice.index - best.phase, best.groupBars) == 0) {
+    if (slice.index >= 0 && js::floor_mod(slice.index - best.phase, best.groupBars) == 0) {
       out.downbeats.push_back(slice.startBeat);
     }
   }

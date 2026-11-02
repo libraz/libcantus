@@ -101,3 +101,12 @@ TEST_CASE("log2 and exp special values", "[math]") {
   CHECK(js::exp(-0.0) == 1);
   CHECK(js::exp(710) == kInf);
 }
+
+TEST_CASE("floor_mod carries the divisor's sign and or_else skips 0 and NaN", "[math]") {
+  CHECK(js::floor_mod(-1, 4) == 3);
+  CHECK(js::floor_mod(5, 4) == 1);
+  CHECK(js::floor_mod(-0.5, 12) == 11.5);
+  CHECK(js::or_else(0, 2) == 2);
+  CHECK(js::or_else(std::nan(""), 2) == 2);
+  CHECK(js::or_else(-1, 2) == -1);
+}

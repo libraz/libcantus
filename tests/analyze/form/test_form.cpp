@@ -89,7 +89,6 @@ TEST_CASE("the phrase path keeps the earlier predecessor on a tie", "[form]") {
 TEST_CASE("bar evidence helpers", "[form]") {
   CHECK(clamp01(-1) == 0);
   CHECK(clamp01(2) == 1);
-  CHECK(floor_mod(-1, 4) == 3);
   CHECK(combine_evidence({0.5, 0.5}) == 0.75);
   CHECK(bar_span_of(0, 6, MeterArg("4/4")) == 1.5);
   CHECK(last_bar_of(MeterArg("4/4"), 0, 8) == 1);
