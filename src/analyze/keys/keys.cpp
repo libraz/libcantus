@@ -931,6 +931,12 @@ ResolvedKey prevailing_key_or_default(const std::vector<KeyRegion>& regions) {
   return prevailing ? *prevailing : resolve_key(major_key(0));
 }
 
+KeyAtBeat key_at_beat(std::vector<KeyRegion> regions, ResolvedKey fallback) {
+  return [regions = std::move(regions), fallback = std::move(fallback)](double beat) {
+    return scale_of(KeyLookup(regions, fallback)(beat));
+  };
+}
+
 const ResolvedKey& KeyLookup::operator()(double beat) const {
   const std::vector<KeyRegion>& regions = *regions_;
   std::size_t low = 0;

@@ -190,19 +190,13 @@ Progression Timeline::progression() const {
 
 std::vector<ReducedChord> Timeline::reduce(const ReduceProgressionOptions& opts) const {
   ResolvedKey fallback = prevailing_key();
-  std::vector<KeyRegion> regions = keys_;
-  KeyAtBeat key_at = [regions, fallback](double beat) {
-    return scale_of(KeyLookup(regions, fallback)(beat));
-  };
+  KeyAtBeat key_at = key_at_beat(keys_, std::move(fallback));
   return reduce_progression(chord_timeline(), key_at, opts);
 }
 
 std::vector<CadenceHit> Timeline::cadences() const {
   ResolvedKey fallback = prevailing_key();
-  std::vector<KeyRegion> regions = keys_;
-  KeyAtBeat key_at = [regions, fallback](double beat) {
-    return scale_of(KeyLookup(regions, fallback)(beat));
-  };
+  KeyAtBeat key_at = key_at_beat(keys_, std::move(fallback));
   return detect_cadences(chord_timeline(), key_at);
 }
 

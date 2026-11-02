@@ -16,6 +16,7 @@
 
 #include "analyze/detect/profiles.h"
 #include "cantus/analyze/keys.h"
+#include "cantus/analyze/voice.h"
 
 namespace cantus {
 
@@ -106,6 +107,12 @@ class KeyLookup {
   const std::vector<KeyRegion>* regions_;
   ResolvedKey fallback_;
 };
+
+/**
+ * `KeyLookup(regions, fallback)` as a callback yielding the scale of the key in force at a beat.
+ * It owns its copy of the regions.
+ */
+KeyAtBeat key_at_beat(std::vector<KeyRegion> regions, ResolvedKey fallback);
 
 }  // namespace cantus
 

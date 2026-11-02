@@ -28,12 +28,6 @@ const std::vector<std::vector<int>>& conventional_letter_steps() {
   return steps;
 }
 
-/** The shortest signed alteration, in [-6, 6], taking a letter's natural pc to `pc`. */
-int alteration_for(int letter, int pc) {
-  int distance = pitch_class_of(pc - natural_pitch_class_of(letter));
-  return distance > 6 ? distance - 12 : distance;
-}
-
 /** The octave that reproduces `pitch` from a letter and its alteration (`octaveFor`). */
 double octave_for(double pitch, int letter, int alter) {
   return (pitch - natural_pitch_class_of(letter) - alter) / 12 - 1;
@@ -49,7 +43,7 @@ std::vector<NoteData> candidates_for(int pitch, const NoteData& preferred) {
   int pc = pitch_class_of(pitch);
   std::vector<NoteData> rest;
   for (int letter = 0; letter < 7; ++letter) {
-    int alter = alteration_for(letter, pc);
+    int alter = alter_for(letter, pc);
     if (std::abs(alter) > SPELLING_MAX_ALTER || letter == preferred.letter) {
       continue;
     }

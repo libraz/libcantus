@@ -15,7 +15,7 @@
  * carries a root's onset gaps, not the pitches it sounds.
  */
 
-import { HUMANIZE_ADJACENCY } from '../../analyze/adjacency.js';
+import { adjacent } from '../../analyze/adjacency.js';
 import type { CadenceType } from '../../analyze/functional/cadence.js';
 import { functionOf, type HarmonicFunction } from '../../analyze/functional/function.js';
 import { chordToRoman } from '../../analyze/functional/roman.js';
@@ -534,12 +534,11 @@ function selectedDerivation(
     if (!plain) {
       return { from: null, relation: null };
     }
-    const gap = (graph.nodes[node]?.startBeat ?? 0) - (graph.nodes[edge.from]?.endBeat ?? 0);
     return {
       from,
       relation: {
         kind: semitones === 0 ? 'repetition' : 'transposition',
-        sequence: gap >= -HUMANIZE_ADJACENCY && gap <= HUMANIZE_ADJACENCY,
+        sequence: adjacent(graph.nodes[edge.from]?.endBeat ?? 0, graph.nodes[node]?.startBeat ?? 0),
         semitones,
         timeRatio: 1,
       },

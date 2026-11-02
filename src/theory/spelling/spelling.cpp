@@ -118,15 +118,6 @@ NoteData note(int letter, double alter) {
   return NoteData{static_cast<double>(letter), alter, std::nullopt};
 }
 
-/** Shortest signed alteration taking a letter's natural pitch class to `pc` (`alterFor`). */
-int alter_for(int letter, double pc) {
-  int d = pitch_class_of(pc - natural_pitch_class_of(letter));
-  if (d > 6) {
-    d -= 12;
-  }
-  return d;
-}
-
 /** Spell `pc` on the letter `degree_offset` steps above `tonic_letter` (`letterFor`). */
 std::optional<NoteData> letter_for(double tonic_letter, std::optional<int> degree_offset,
                                    double pc) {
@@ -570,6 +561,14 @@ std::vector<NoteData> chord_tones_from_root(const Chord& chord, const PitchSpell
 void assert_chord_root(const Chord& chord) { assert_finite_number(chord.rootPc, "chord.rootPc"); }
 
 }  // namespace
+
+int alter_for(int letter, double pc) {
+  int d = pitch_class_of(pc - natural_pitch_class_of(letter));
+  if (d > 6) {
+    d -= 12;
+  }
+  return d;
+}
 
 bool is_heptatonic(const KeyScale& key) {
   return scale_tones_in_degree_order(key).size() == DIATONIC_LETTER_COUNT;

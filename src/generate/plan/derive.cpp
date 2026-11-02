@@ -10,6 +10,7 @@
 #include <set>
 #include <string>
 
+#include "analyze/adjacency.h"
 #include "cantus/analyze/functional.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
@@ -452,11 +453,10 @@ Derivation selected_derivation(const MotifGraph& graph,
       }
       double node_start = node < graph.nodes.size() ? graph.nodes[node].startBeat : 0;
       double from_end = edge->from < graph.nodes.size() ? graph.nodes[edge->from].endBeat : 0;
-      double gap = node_start - from_end;
       MotifRelationSummary composed;
       composed.kind =
           semitones == 0 ? MotifRelationKind::kRepetition : MotifRelationKind::kTransposition;
-      composed.sequence = gap >= -HUMANIZE_ADJACENCY && gap <= HUMANIZE_ADJACENCY;
+      composed.sequence = adjacent(from_end, node_start);
       composed.semitones = semitones;
       composed.timeRatio = 1;
       Derivation out;

@@ -399,9 +399,7 @@ KeyContext Score::key_context(const std::optional<KeyArg>& key) const {
   std::vector<KeyRegion> regions = key_regions();
   Nullable<ResolvedKey> found = prevailing_key_of(regions);
   ResolvedKey prevailing = found ? *found : key_identity(Key::major("C"));
-  return KeyContext(KeyAtBeat([regions, prevailing](double beat) {
-    return scale_of(KeyLookup(regions, prevailing)(beat));
-  }));
+  return KeyContext(key_at_beat(std::move(regions), std::move(prevailing)));
 }
 
 Hypermeter Score::hypermeter(const HypermeterOptions& opts) const {

@@ -65,15 +65,7 @@ NoteData bare_tonic(const NoteData& note) {
 /** A key named by a tonic and a scale word, or nullopt (`tryNamedScaleKey`). */
 std::optional<ResolvedKey> try_named_scale_key(std::string_view text) {
   std::u16string units = js::to_utf16(text);
-  std::size_t begin = 0;
-  std::size_t end = units.size();
-  while (begin < end && js::is_space(units[begin])) {
-    ++begin;
-  }
-  while (end > begin && js::is_space(units[end - 1])) {
-    --end;
-  }
-  std::u16string_view trimmed(units.data() + begin, end - begin);
+  std::u16string_view trimmed = js::trim_view(units);
   std::size_t separator = 0;
   while (separator < trimmed.size() && !js::is_space(trimmed[separator])) {
     ++separator;
