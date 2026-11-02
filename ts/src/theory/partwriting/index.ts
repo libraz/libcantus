@@ -30,11 +30,12 @@ import {
   createsVoiceCrossing,
   createsVoiceOverlap,
   exceedsSpacing,
-  isAugmentedMelodicInterval,
   isLeadingToneResolution,
 } from '../counterpoint/index.js';
+import { isAugmentedSpelledInterval } from '../counterpoint/internal.js';
 import { type KeyLike, resolveKey, type SpelledKeyLike, toKeyScale } from '../scale/index.js';
 import { spellPitch } from '../spelling/index.js';
+import { bareSpelling } from '../symbol/spelling.js';
 import {
   isDescendingStep,
   isFrustratedLeadingTone,
@@ -176,11 +177,6 @@ export type PartWritingOptions = {
    */
   maxSpacing?: number;
 };
-
-/** A note without its octave, for naming it in a rationale. */
-function bare(note: Note): Note {
-  return { letter: note.letter, alter: note.alter };
-}
 
 /** The sounding pitch of a spelled note, located for the error message. */
 function midiOf(note: Note, index: number, voice: number): number {
@@ -356,7 +352,7 @@ function crossRelationViolations(transition: Transition): PartWritingViolation[]
         [clash.earlierVoice, clash.laterVoice],
         from.index,
         to.index,
-        `${formatNote(bare(clash.earlier))} is contradicted by ${formatNote(bare(clash.later))} in another voice`,
+        `${formatNote(bareSpelling(clash.earlier))} is contradicted by ${formatNote(bareSpelling(clash.later))} in another voice`,
       ),
   );
 }
@@ -403,7 +399,7 @@ function melodicViolations(transition: Transition): PartWritingViolation[] {
       continue;
     }
     const interval = spelledInterval(earlier, later);
-    if (isAugmentedMelodicInterval(earlier, later)) {
+    if (isAugmentedSpelledInterval(interval)) {
       found.push(
         violation(
           'augmentedMelodicInterval',

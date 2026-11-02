@@ -1,10 +1,11 @@
 import type { SpelledInterval } from '../../core/pitch/index.js';
 import { pitchClassOf } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
-import type { Chord, ChordQuality } from '../chord/index.js';
+import type { Chord, ChordQuality, ChordToneRole } from '../chord/index.js';
 import { chordPitchClasses, chordToneRole, makeChord } from '../chord/index.js';
 import { isScaleTone, majorKey, scaleSystemOf, scaleTonesInDegreeOrder } from '../scale/index.js';
 import { isMinorMask } from '../scale/masks.js';
+import { isHeptatonic } from '../spelling/index.js';
 
 /**
  * What a chord is to a key, written once: the leading tone, the dominant's own
@@ -169,7 +170,7 @@ export const DOMINANT_DEGREE = 5;
  * at all.
  */
 export function heptatonicFrameOf(key: KeyScale): KeyScale {
-  return scaleTonesInDegreeOrder(key).length === 7 ? key : majorKey(pitchClassOf(key.rootPc));
+  return isHeptatonic(key) ? key : majorKey(pitchClassOf(key.rootPc));
 }
 
 /** The third and fifth above a scale degree, measured within its own scale. */
@@ -355,20 +356,19 @@ export function isFunctioningLeadingTone(chord: Chord, key: KeyScale): boolean {
  * keeps that obligation.
  */
 export function seventhPcOf(chord: Chord): number | undefined {
-  for (const interval of chord.intervals) {
-    const pc = pitchClassOf(chord.rootPc + interval);
-    if (chordToneRole(pc, chord) === 'seventh') {
-      return pc;
-    }
-  }
-  return undefined;
+  return chordTonePcWithRole(chord, 'seventh');
 }
 
 /** The chord's own fifth as a pitch class, or undefined when it has none. */
 export function fifthPcOf(chord: Chord): number | undefined {
+  return chordTonePcWithRole(chord, 'fifth');
+}
+
+/** The first chord tone, in interval order, the chord itself reads as `role`. */
+function chordTonePcWithRole(chord: Chord, role: ChordToneRole): number | undefined {
   for (const interval of chord.intervals) {
     const pc = pitchClassOf(chord.rootPc + interval);
-    if (chordToneRole(pc, chord) === 'fifth') {
+    if (chordToneRole(pc, chord) === role) {
       return pc;
     }
   }

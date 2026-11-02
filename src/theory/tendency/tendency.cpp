@@ -7,6 +7,7 @@
 
 #include "cantus/theory/scale.h"
 #include "theory/scale/masks.h"
+#include "theory/spelling/spelling.h"
 #include "theory/tendency/limits.gen.h"
 
 namespace cantus {
@@ -45,6 +46,18 @@ DegreeTriad degree_triad(const std::vector<int>& tones, std::size_t index) {
   int root = tones[index];
   return DegreeTriad{pitch_class_of(tones[(index + 2) % tones.size()] - root),
                      pitch_class_of(tones[(index + 4) % tones.size()] - root)};
+}
+
+/** The first chord tone, in interval order, the chord itself reads as `role`
+ * (`chordTonePcWithRole`). */
+std::optional<int> chord_tone_pc_with_role(const Chord& chord, ChordToneRole role) {
+  for (double interval : chord.intervals) {
+    int pc = pitch_class_of(chord.rootPc + interval);
+    if (chord_tone_role(pc, chord) == role) {
+      return pc;
+    }
+  }
+  return std::nullopt;
 }
 
 }  // namespace
@@ -91,10 +104,7 @@ bool is_neapolitan_chord_of(const Chord& chord, const KeyScale& key) {
 }
 
 KeyScale heptatonic_frame_of(const KeyScale& key) {
-  if (scale_tones_in_degree_order(key).size() == 7) {
-    return key;
-  }
-  return major_key(pitch_class_of(key.rootPc)).scale();
+  return is_heptatonic(key) ? key : major_key(pitch_class_of(key.rootPc)).scale();
 }
 
 std::vector<TonicizableDegree> tonicizable_degrees(const KeyScale& key) {
@@ -161,23 +171,11 @@ bool is_functioning_leading_tone(const Chord& chord, const KeyScale& key) {
 }
 
 std::optional<int> seventh_pc_of(const Chord& chord) {
-  for (double interval : chord.intervals) {
-    int pc = pitch_class_of(chord.rootPc + interval);
-    if (chord_tone_role(pc, chord) == ChordToneRole::kSeventh) {
-      return pc;
-    }
-  }
-  return std::nullopt;
+  return chord_tone_pc_with_role(chord, ChordToneRole::kSeventh);
 }
 
 std::optional<int> fifth_pc_of(const Chord& chord) {
-  for (double interval : chord.intervals) {
-    int pc = pitch_class_of(chord.rootPc + interval);
-    if (chord_tone_role(pc, chord) == ChordToneRole::kFifth) {
-      return pc;
-    }
-  }
-  return std::nullopt;
+  return chord_tone_pc_with_role(chord, ChordToneRole::kFifth);
 }
 
 bool is_descending_step(const SpelledInterval& interval) {

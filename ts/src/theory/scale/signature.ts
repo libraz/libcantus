@@ -52,7 +52,7 @@ export const MAX_FIFTHS = 12;
 
 /** Rotate a 12-bit mode mask down by `semitones`, wrapping at the octave. */
 function rotateMask(mask: number, semitones: number): number {
-  const steps = ((semitones % 12) + 12) % 12;
+  const steps = mod12(semitones);
   return ((mask >> steps) | (mask << (12 - steps))) & 0b111111111111;
 }
 

@@ -15,6 +15,7 @@
 #include "core/validation/validation.h"
 #include "js/math.h"
 #include "js/number.h"
+#include "theory/chord/chord.h"
 #include "theory/safety/limits.gen.h"
 #include "theory/safety/weights.h"
 
@@ -79,24 +80,57 @@ bool avoids_major_seventh(const Chord& chord) {
   return has_interval(chord, 4) && has_interval(chord, 10);
 }
 
+/** What a safety query reads off its chord, however many candidates it weighs (`ChordFacts`). */
+struct ChordFacts {
+  const Chord* chord;
+  /** The chord's pitch classes as a twelve-bit mask. */
+  int mask;
+  /** The whole interval classes above its root as a twelve-bit mask. */
+  int offsets;
+  bool avoids_fourth;
+  bool avoids_major_seventh;
+};
+
+/** What the candidates of one query share; the chord facts are read on first use (`QueryShare`). */
+struct QueryShare {
+  std::optional<ChordFacts> facts;
+};
+
+/** Read the facts of a chord, rejecting one whose pitch classes cannot be read
+ * (`chordFactsOf`). */
+ChordFacts chord_facts_of(const Chord& chord) {
+  int mask = chord_pc_mask(chord);
+  int offsets = 0;
+  for (double interval : chord.intervals) {
+    double offset = js::floor_mod(interval, 12);
+    if (std::floor(offset) == offset) {
+      offsets |= 1 << static_cast<int>(offset);
+    }
+  }
+  return ChordFacts{&chord, mask, offsets, avoids_fourth(chord), avoids_major_seventh(chord)};
+}
+
+/** Whether a pitch's class is set in a twelve-bit pitch-class mask (`soundsInMask`). */
+bool sounds_in_mask(int mask, double pitch) { return ((mask >> pitch_class_of(pitch)) & 1) == 1; }
+
 /** Whether a dissonance between two chord tones is one the chord is built from
  * (`isStructuralChordDissonance`). */
-bool is_structural_chord_dissonance(int a, int b, const Chord& chord) {
+bool is_structural_chord_dissonance(int a, int b, const ChordFacts& facts) {
   int raw_class = pitch_class_of(std::abs(a - b));
-  int a_offset = interval_above_root(a, chord);
-  int b_offset = interval_above_root(b, chord);
+  int a_offset = interval_above_root(a, *facts.chord);
+  int b_offset = interval_above_root(b, *facts.chord);
   bool root_seventh = (a_offset == 0 && (b_offset == 10 || b_offset == 11)) ||
                       (b_offset == 0 && (a_offset == 10 || a_offset == 11));
   if (raw_class != 6 && !root_seventh) {
     return false;
   }
-  return is_chord_member(a, chord) && is_chord_member(b, chord);
+  return sounds_in_mask(facts.mask, a) && sounds_in_mask(facts.mask, b);
 }
 
 /** Nearest chord tone at or below the candidate, within two semitones (`stepResolution`). */
-std::optional<int> step_resolution(int pitch, const Chord& chord) {
+std::optional<int> step_resolution(int pitch, const ChordFacts& facts) {
   for (int delta = 1; delta <= 2; ++delta) {
-    if (is_chord_member(pitch - delta, chord)) {
+    if (sounds_in_mask(facts.mask, pitch - delta)) {
       return pitch - delta;
     }
   }
@@ -160,18 +194,19 @@ void assert_safety_context(const SafetyContext& q) {
 }
 
 SafetyResult evaluate_internal(const SafetyContext& q, int pitch, bool collect_suggestions,
-                               bool collect_partners);
+                               bool collect_partners, QueryShare& share,
+                               bool describe_reasons = true);
 
 /** Safe alternative pitches near a rejected candidate, nearest first, the pitch below before the
  * one above (`findSafeNearby`). */
-std::vector<int> find_safe_nearby(const SafetyContext& q, int candidate) {
+std::vector<int> find_safe_nearby(const SafetyContext& q, int candidate, QueryShare& share) {
   std::vector<int> out;
   for (int d = 1; d <= SUGGESTION_WINDOW; ++d) {
     for (int p : {candidate - d, candidate + d}) {
       if (p < 0 || p > 127) {
         continue;
       }
-      if (evaluate_internal(q, p, false, false).safety == NoteSafety::kSafe) {
+      if (evaluate_internal(q, p, false, false, share, false).safety == NoteSafety::kSafe) {
         out.push_back(p);
         if (static_cast<int>(out.size()) >= MAX_SUGGESTIONS) {
           return out;
@@ -183,7 +218,7 @@ std::vector<int> find_safe_nearby(const SafetyContext& q, int candidate) {
 }
 
 SafetyResult evaluate_internal(const SafetyContext& q, int pitch, bool collect_suggestions,
-                               bool collect_partners) {
+                               bool collect_partners, QueryShare& share, bool describe_reasons) {
   std::uint32_t reasons = 0;
   NoteSafety level = NoteSafety::kSafe;
   std::optional<int> resolve_to;
@@ -203,27 +238,36 @@ SafetyResult evaluate_internal(const SafetyContext& q, int pitch, bool collect_s
 
   bool in_scale = is_scale_tone(pitch, q.key);
   const Chord* chord = q.chord ? &*q.chord : nullptr;
+  if (chord != nullptr && !share.facts) {
+    share.facts = chord_facts_of(*chord);
+  }
+  const ChordFacts* facts = share.facts ? &*share.facts : nullptr;
+  bool member = facts != nullptr && sounds_in_mask(facts->mask, pitch);
+  // Where the pitch sits above the root of a chord it is not a tone of.
+  std::optional<int> ic;
+  if (facts != nullptr && !member) {
+    ic = interval_above_root(pitch, *facts->chord);
+  }
 
   // A chromatic avoid note remains chromatic: the avoid-note branch below refines the resolution
   // guidance but must not erase the key relationship.
-  if (!in_scale && (chord == nullptr || !is_chord_member(pitch, *chord))) {
+  if (!in_scale && !member) {
     reasons |= bit(ReasonFlag::kNonScale);
     raise(NoteSafety::kDissonant);
   }
 
-  if (chord != nullptr && is_chord_member(pitch, *chord)) {
+  if (member) {
     reasons |= bit(ReasonFlag::kChordTone);
-  } else if (chord != nullptr) {
-    int ic = interval_above_root(pitch, *chord);
-    bool is_tension = ic == 2 || ic == 5 || ic == 9;
-    bool avoid = (ic == 5 && avoids_fourth(*chord)) || (ic == 11 && avoids_major_seventh(*chord));
+  } else if (ic) {
+    bool is_tension = *ic == 2 || *ic == 5 || *ic == 9;
+    bool avoid = (*ic == 5 && facts->avoids_fourth) || (*ic == 11 && facts->avoids_major_seventh);
     if (avoid) {
       reasons |= bit(ReasonFlag::kAvoidNote);
       if (is_tension) {
         reasons |= bit(ReasonFlag::kTension);
       }
       reasons |= bit(ReasonFlag::kNeedsResolution);
-      resolve_to = step_resolution(pitch, *chord);
+      resolve_to = step_resolution(pitch, *facts);
       raise(avoid_severity);
     } else if (is_tension && in_scale) {
       reasons |= bit(ReasonFlag::kTension);
@@ -239,15 +283,8 @@ SafetyResult evaluate_internal(const SafetyContext& q, int pitch, bool collect_s
 
   // Harmonic tritone against a chord tone. A chord tone is never flagged for a tritone its own
   // chord spells: the interval is the chord's identity, not a clash with it.
-  if (chord != nullptr && !is_chord_member(pitch, *chord)) {
-    int ic = interval_above_root(pitch, *chord);
-    for (double interval : chord->intervals) {
-      double offset = std::fmod(std::fmod(interval, 12) + 12, 12);
-      if (std::fabs(ic - offset) == 6) {
-        reasons |= bit(ReasonFlag::kTritone);
-        break;
-      }
-    }
+  if (ic && ((facts->offsets >> ((*ic + 6) % 12)) & 1) == 1) {
+    reasons |= bit(ReasonFlag::kTritone);
   }
 
   if (q.prevPitch) {
@@ -299,14 +336,14 @@ SafetyResult evaluate_internal(const SafetyContext& q, int pitch, bool collect_s
       if (!creates_vertical_dissonance(pitch, ov.pitch, against_bass)) {
         continue;
       }
-      if (chord != nullptr && is_structural_chord_dissonance(pitch, ov.pitch, *chord)) {
+      if (facts != nullptr && is_structural_chord_dissonance(pitch, ov.pitch, *facts)) {
         continue;
       }
       // Pop reads a fourth between two chord tones as the chord in inversion; strict keeps the
       // six-four a dissonance.
-      if (chord != nullptr && q.profile == SafetyProfile::kPop &&
-          pitch_class_of(std::abs(pitch - ov.pitch)) == 5 && is_chord_member(pitch, *chord) &&
-          is_chord_member(ov.pitch, *chord)) {
+      if (facts != nullptr && q.profile == SafetyProfile::kPop &&
+          pitch_class_of(std::abs(pitch - ov.pitch)) == 5 && member &&
+          sounds_in_mask(facts->mask, ov.pitch)) {
         continue;
       }
       flag_pair(index, ReasonFlag::kVerticalDissonance);
@@ -356,10 +393,12 @@ SafetyResult evaluate_internal(const SafetyContext& q, int pitch, bool collect_s
   SafetyResult result;
   result.safety = level;
   result.reasons = static_cast<int>(reasons);
-  result.rationale = describe(reasons, q);
+  if (describe_reasons) {
+    result.rationale = describe(reasons, q);
+  }
   result.resolveTo = resolve_to;
   if (collect_suggestions && level != NoteSafety::kSafe) {
-    std::vector<int> suggestions = find_safe_nearby(q, pitch);
+    std::vector<int> suggestions = find_safe_nearby(q, pitch, share);
     if (!suggestions.empty()) {
       result.suggestions = std::move(suggestions);
     }
@@ -401,53 +440,51 @@ std::optional<SafetyProfile> parse_safety_profile(std::string_view name) {
   return std::nullopt;
 }
 
-ProfileWeights profile_weights(SafetyProfile profile, const ProfileWeightOverrides& overrides) {
-  ProfileWeights weights = base_weights(profile);
-  auto apply = [](double& target, const std::optional<double>& value, std::string_view field) {
-    if (value) {
-      target = assert_finite_number(*value, "weight " + std::string(field));
-    }
-  };
-  apply(weights.imperfectConsonance, overrides.imperfectConsonance, "imperfectConsonance");
-  apply(weights.perfectConsonance, overrides.perfectConsonance, "perfectConsonance");
-  apply(weights.dissonance, overrides.dissonance, "dissonance");
-  apply(weights.chordTone, overrides.chordTone, "chordTone");
-  apply(weights.contraryMotion, overrides.contraryMotion, "contraryMotion");
-  apply(weights.obliqueMotion, overrides.obliqueMotion, "obliqueMotion");
-  apply(weights.similarMotion, overrides.similarMotion, "similarMotion");
-  apply(weights.parallelImperfect, overrides.parallelImperfect, "parallelImperfect");
-  apply(weights.stepwise, overrides.stepwise, "stepwise");
-  apply(weights.melodicDistance, overrides.melodicDistance, "melodicDistance");
-  apply(weights.forbiddenLeap, overrides.forbiddenLeap, "forbiddenLeap");
-  apply(weights.registerDrift, overrides.registerDrift, "registerDrift");
-  return weights;
-}
-
 namespace {
 
-/** The weight fields, in the order of the weight table, with the override member of each. */
-constexpr std::pair<std::string_view, std::optional<double> ProfileWeightOverrides::*>
-    kWeightOverrideFields[] = {
-        {"imperfectConsonance", &ProfileWeightOverrides::imperfectConsonance},
-        {"perfectConsonance", &ProfileWeightOverrides::perfectConsonance},
-        {"dissonance", &ProfileWeightOverrides::dissonance},
-        {"chordTone", &ProfileWeightOverrides::chordTone},
-        {"contraryMotion", &ProfileWeightOverrides::contraryMotion},
-        {"obliqueMotion", &ProfileWeightOverrides::obliqueMotion},
-        {"similarMotion", &ProfileWeightOverrides::similarMotion},
-        {"parallelImperfect", &ProfileWeightOverrides::parallelImperfect},
-        {"stepwise", &ProfileWeightOverrides::stepwise},
-        {"melodicDistance", &ProfileWeightOverrides::melodicDistance},
-        {"forbiddenLeap", &ProfileWeightOverrides::forbiddenLeap},
-        {"registerDrift", &ProfileWeightOverrides::registerDrift},
+/** A weight field: its name, the override member that sets it and the weight it sets. */
+struct WeightField {
+  std::string_view name;
+  std::optional<double> ProfileWeightOverrides::*override_member;
+  double ProfileWeights::*weight;
+};
+
+/** The weight fields, in the order of the weight table. */
+constexpr WeightField kWeightFields[] = {
+    {"imperfectConsonance", &ProfileWeightOverrides::imperfectConsonance,
+     &ProfileWeights::imperfectConsonance},
+    {"perfectConsonance", &ProfileWeightOverrides::perfectConsonance,
+     &ProfileWeights::perfectConsonance},
+    {"dissonance", &ProfileWeightOverrides::dissonance, &ProfileWeights::dissonance},
+    {"chordTone", &ProfileWeightOverrides::chordTone, &ProfileWeights::chordTone},
+    {"contraryMotion", &ProfileWeightOverrides::contraryMotion, &ProfileWeights::contraryMotion},
+    {"obliqueMotion", &ProfileWeightOverrides::obliqueMotion, &ProfileWeights::obliqueMotion},
+    {"similarMotion", &ProfileWeightOverrides::similarMotion, &ProfileWeights::similarMotion},
+    {"parallelImperfect", &ProfileWeightOverrides::parallelImperfect,
+     &ProfileWeights::parallelImperfect},
+    {"stepwise", &ProfileWeightOverrides::stepwise, &ProfileWeights::stepwise},
+    {"melodicDistance", &ProfileWeightOverrides::melodicDistance, &ProfileWeights::melodicDistance},
+    {"forbiddenLeap", &ProfileWeightOverrides::forbiddenLeap, &ProfileWeights::forbiddenLeap},
+    {"registerDrift", &ProfileWeightOverrides::registerDrift, &ProfileWeights::registerDrift},
 };
 
 }  // namespace
 
+ProfileWeights profile_weights(SafetyProfile profile, const ProfileWeightOverrides& overrides) {
+  ProfileWeights weights = base_weights(profile);
+  for (const WeightField& field : kWeightFields) {
+    const std::optional<double>& value = overrides.*field.override_member;
+    if (value) {
+      weights.*field.weight = assert_finite_number(*value, "weight " + std::string(field.name));
+    }
+  }
+  return weights;
+}
+
 std::optional<double> ProfileWeightOverrides::*weight_override_member(std::string_view field) {
-  for (const auto& [name, member] : kWeightOverrideFields) {
-    if (name == field) {
-      return member;
+  for (const WeightField& entry : kWeightFields) {
+    if (entry.name == field) {
+      return entry.override_member;
     }
   }
   return nullptr;
@@ -456,9 +493,9 @@ std::optional<double> ProfileWeightOverrides::*weight_override_member(std::strin
 std::vector<std::pair<std::string_view, double>> named_weight_overrides(
     const ProfileWeightOverrides& overrides) {
   std::vector<std::pair<std::string_view, double>> named;
-  for (const auto& [name, member] : kWeightOverrideFields) {
-    if (overrides.*member) {
-      named.emplace_back(name, *(overrides.*member));
+  for (const WeightField& entry : kWeightFields) {
+    if (overrides.*entry.override_member) {
+      named.emplace_back(entry.name, *(overrides.*entry.override_member));
     }
   }
   return named;
@@ -467,8 +504,9 @@ std::vector<std::pair<std::string_view, double>> named_weight_overrides(
 SafetyResult evaluate_safety(const SafetyQuery& query, const EvaluateSafetyOptions& opts) {
   assert_safety_context(query);
   assert_midi_pitch(query.candidatePitch, "candidatePitch");
+  QueryShare share;
   return evaluate_internal(query, query.candidatePitch, opts.suggestions.value_or(true),
-                           opts.partners.value_or(false));
+                           opts.partners.value_or(false), share);
 }
 
 std::vector<double> enumerate_safe_pitches(const SafetyContext& context, double pitch_low,
@@ -487,8 +525,10 @@ std::vector<double> enumerate_safe_pitches(const SafetyContext& context, double 
   assert_generation_budget(pitch_high - pitch_low + 1, "safe pitch candidates");
   double low = js::max(pitch_low, context.vocalLow.value_or(pitch_low));
   double high = js::min(pitch_high, context.vocalHigh.value_or(pitch_high));
+  QueryShare share;
   for (double pitch = high; pitch >= low; pitch -= 1) {
-    SafetyResult result = evaluate_internal(context, static_cast<int>(pitch), false, false);
+    SafetyResult result =
+        evaluate_internal(context, static_cast<int>(pitch), false, false, share, false);
     if (result.safety == NoteSafety::kDissonant) {
       continue;
     }

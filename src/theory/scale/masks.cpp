@@ -2,11 +2,11 @@
 
 #include "theory/scale/masks.h"
 
-#include <cmath>
 #include <string>
 
 #include "cantus/core/validation.h"
 #include "core/validation/validation.h"
+#include "js/math.h"
 #include "js/number.h"
 
 namespace cantus {
@@ -32,7 +32,7 @@ int mask_from_offsets(const std::vector<double>& offsets) {
   int mask = 1;
   for (std::size_t index = 0; index < offsets.size(); ++index) {
     double offset = assert_integer(offsets[index], "offsets[" + index_text(index) + "]");
-    mask |= 1 << static_cast<int>(std::fmod(std::fmod(offset, 12) + 12, 12));
+    mask |= 1 << static_cast<int>(js::floor_mod(offset, 12));
   }
   return mask;
 }

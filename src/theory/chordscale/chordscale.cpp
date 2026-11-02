@@ -124,12 +124,12 @@ bool is_altered_dominant(const Chord& chord, std::string_view scale_name) {
 
 /** The scale tones that clash with the chord by the avoid-note rule, before the altered dominant's
  * exemption (`clashingNotes`). */
-std::vector<int> clashing_notes(const Chord& data, int mask, bool melodic) {
+std::vector<int> clashing_notes(const Chord& data, int mask, bool melodic);
+
+/** `clashing_notes` for a scale already known to contain the chord (`clashingTones`). */
+std::vector<int> clashing_tones(const Chord& data, int mask, bool melodic,
+                                const std::vector<int>& chord_pcs) {
   int root_pc = pitch_class_of(data.rootPc);
-  std::vector<int> chord_pcs = chord_pitch_classes(data);
-  if (!matches_chord(chord_pcs, mask, root_pc)) {
-    return {};
-  }
   // Both thirds a suspension may have displaced end it when sounded.
   std::vector<int> displaced = displaced_thirds(data);
   int semitone_above_root = pitch_class_of(root_pc + 1);
@@ -152,6 +152,14 @@ std::vector<int> clashing_notes(const Chord& data, int mask, bool melodic) {
   return avoid;
 }
 
+std::vector<int> clashing_notes(const Chord& data, int mask, bool melodic) {
+  std::vector<int> chord_pcs = chord_pitch_classes(data);
+  if (!matches_chord(chord_pcs, mask, pitch_class_of(data.rootPc))) {
+    return {};
+  }
+  return clashing_tones(data, mask, melodic, chord_pcs);
+}
+
 /** The avoid notes of a scale over a normalized chord (`avoidNotes` past its coercions). */
 std::vector<int> avoid_notes_of(const Chord& data, std::string_view scale_name, int mask,
                                 const AvoidNotesOptions& opts) {
@@ -170,6 +178,8 @@ std::vector<ChordScaleMatch> chord_scales_of(const Chord& data) {
     int size;
     int avoid;
     bool borrowed;
+    int idiomatic;
+    int conventional;
   };
   // A tone beyond the plain seventh chord is a written alteration or extension.
   bool writes_tension = std::any_of(chord_pcs.begin(), chord_pcs.end(), [&](int pc) {
@@ -190,11 +200,13 @@ std::vector<ChordScaleMatch> chord_scales_of(const Chord& data) {
       continue;
     }
     seen_masks.push_back(*mask);
-    if (matches_chord(chord_pcs, *mask, root_pc) || is_altered_dominant(data, name)) {
+    bool fits = matches_chord(chord_pcs, *mask, root_pc);
+    if (fits || is_altered_dominant(data, name)) {
       int size = popcount12(*mask);
-      ranked.push_back(Ranked{std::string(name), size - static_cast<int>(chord_pcs.size()), size,
-                              static_cast<int>(clashing_notes(data, *mask, false).size()),
-                              writes_tension && !matches_chord(chord_pcs, *mask, root_pc)});
+      ranked.push_back(
+          Ranked{std::string(name), size - static_cast<int>(chord_pcs.size()), size,
+                 fits ? static_cast<int>(clashing_tones(data, *mask, false, chord_pcs).size()) : 0,
+                 writes_tension && !fits, idiomatic_rank(data, name), conventional_rank(name)});
     }
   }
   if (ranked.empty()) {
@@ -203,10 +215,8 @@ std::vector<ChordScaleMatch> chord_scales_of(const Chord& data) {
   }
   bool prefer_heptatonic = chord_pcs.size() <= 3;
   std::stable_sort(ranked.begin(), ranked.end(), [&](const Ranked& a, const Ranked& b) {
-    int idiomatic_a = idiomatic_rank(data, a.name);
-    int idiomatic_b = idiomatic_rank(data, b.name);
-    if (idiomatic_a != idiomatic_b) {
-      return idiomatic_a < idiomatic_b;
+    if (a.idiomatic != b.idiomatic) {
+      return a.idiomatic < b.idiomatic;
     }
     if (prefer_heptatonic && (a.size == HEPTATONIC_SIZE) != (b.size == HEPTATONIC_SIZE)) {
       return a.size == HEPTATONIC_SIZE;
@@ -217,10 +227,8 @@ std::vector<ChordScaleMatch> chord_scales_of(const Chord& data) {
     if (a.extra != b.extra) {
       return a.extra < b.extra;
     }
-    int rank_a = conventional_rank(a.name);
-    int rank_b = conventional_rank(b.name);
-    if (rank_a != rank_b) {
-      return rank_a < rank_b;
+    if (a.conventional != b.conventional) {
+      return a.conventional < b.conventional;
     }
     // Among scales the modal preference does not name, the one that clashes least wins.
     if (a.avoid != b.avoid) {
@@ -269,6 +277,44 @@ int scale_pitch_class_set(std::string_view name, int root_pc) {
     }
   }
   return set;
+}
+
+/** The tensions of a normalized chord over a scale mask (`tensionsOver`); `avoid` is the harmonic
+ * avoid-note list when the caller already holds it. */
+std::vector<int> tensions_over(const Chord& data, int mask, bool altered_dominant,
+                               const std::optional<ChordArg>& resolves_to,
+                               const std::vector<int>* avoid) {
+  int root_pc = pitch_class_of(data.rootPc);
+  std::vector<int> chord_pcs = chord_pitch_classes(data);
+  if (!matches_chord(chord_pcs, mask, root_pc) && !altered_dominant) {
+    return {};
+  }
+  std::vector<int> avoid_set;
+  if (!altered_dominant) {
+    avoid_set = avoid != nullptr ? *avoid : clashing_tones(data, mask, false, chord_pcs);
+  }
+  std::optional<Chord> target;
+  if (resolves_to) {
+    target = to_chord_data(*resolves_to);
+  }
+  std::vector<int> functional;
+  if (resolves_to_minor_tonic(data, chord_pcs, target)) {
+    for (int semitones : kMinorResolutionTensions) {
+      functional.push_back(pitch_class_of(root_pc + semitones));
+    }
+  }
+  std::vector<int> tensions;
+  for (int pc = 0; pc < kScaleTones; ++pc) {
+    if (!mask_has_pitch_class(mask, root_pc, pc) || includes(chord_pcs, pc)) {
+      continue;
+    }
+    if (includes(avoid_set, pc) && !includes(functional, pc)) {
+      continue;
+    }
+    tensions.push_back(pc);
+  }
+  std::stable_sort(tensions.begin(), tensions.end());
+  return tensions;
 }
 
 }  // namespace
@@ -335,38 +381,7 @@ std::vector<int> available_tensions(const ChordArg& chord, std::string_view scal
                                     const AvailableTensionsOptions& opts) {
   int mask = require_chord_scale_mask(scale_name);
   Chord data = to_chord_data(chord);
-  int root_pc = pitch_class_of(data.rootPc);
-  std::vector<int> chord_pcs = chord_pitch_classes(data);
-  bool altered_dominant = is_altered_dominant(data, scale_name);
-  if (!matches_chord(chord_pcs, mask, root_pc) && !altered_dominant) {
-    return {};
-  }
-  std::vector<int> avoid_set;
-  if (!altered_dominant) {
-    avoid_set = avoid_notes_of(data, scale_name, mask, {});
-  }
-  std::optional<Chord> target;
-  if (opts.resolvesTo) {
-    target = to_chord_data(*opts.resolvesTo);
-  }
-  std::vector<int> functional;
-  if (resolves_to_minor_tonic(data, chord_pcs, target)) {
-    for (int semitones : kMinorResolutionTensions) {
-      functional.push_back(pitch_class_of(root_pc + semitones));
-    }
-  }
-  std::vector<int> tensions;
-  for (int pc = 0; pc < kScaleTones; ++pc) {
-    if (!mask_has_pitch_class(mask, root_pc, pc) || includes(chord_pcs, pc)) {
-      continue;
-    }
-    if (includes(avoid_set, pc) && !includes(functional, pc)) {
-      continue;
-    }
-    tensions.push_back(pc);
-  }
-  std::stable_sort(tensions.begin(), tensions.end());
-  return tensions;
+  return tensions_over(data, mask, is_altered_dominant(data, scale_name), opts.resolvesTo, nullptr);
 }
 
 std::vector<ChordScaleReportEntry> chord_scale_report(const ChordArg& chord,
@@ -380,20 +395,23 @@ std::vector<ChordScaleReportEntry> chord_scale_report(const ChordArg& chord,
                           ? std::min<std::size_t>(matches.size(), static_cast<std::size_t>(*limit))
                           : matches.size();
   std::vector<ChordScaleReportEntry> report;
-  AvoidNotesOptions melodic_use;
-  melodic_use.use = AvoidNoteUse::kMelodic;
   for (std::size_t i = 0; i < count; ++i) {
     const ChordScaleMatch& match = matches[i];
     int mask = require_chord_scale_mask(match.name);
-    std::vector<int> harmonic = avoid_notes_of(data, match.name, mask, {});
-    std::vector<int> melodic = avoid_notes_of(data, match.name, mask, melodic_use);
+    bool altered_dominant = is_altered_dominant(data, match.name);
+    std::vector<int> harmonic;
+    std::vector<int> melodic;
+    if (!altered_dominant) {
+      harmonic = clashing_notes(data, mask, false);
+      melodic = clashing_notes(data, mask, true);
+    }
     ChordScaleReportEntry entry;
     entry.name = match.name;
     entry.rootPc = match.rootPc;
     for (int pc : harmonic) {
       (includes(melodic, pc) ? entry.avoid : entry.passing).push_back(pc);
     }
-    entry.tensions = available_tensions(data, match.name);
+    entry.tensions = tensions_over(data, mask, altered_dominant, std::nullopt, &harmonic);
     report.push_back(std::move(entry));
   }
   return report;

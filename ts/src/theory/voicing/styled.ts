@@ -91,7 +91,7 @@ function dedupePcs(pcs: number[]): number[] {
 
 /** The lowest MIDI pitch of a pitch class at or above a floor. */
 function lowestPitchAtOrAbove(pc: number, floor: number): number {
-  return floor + ((((pc - pitchClass(floor)) % 12) + 12) % 12);
+  return floor + pitchClass(pc - pitchClass(floor));
 }
 
 /** The pitch class in `pcs` whose circular distance to `target` is smallest. */
@@ -99,7 +99,7 @@ function nearestPc(target: number, pcs: number[]): number {
   let best = pcs[0] ?? target;
   let bestDist = 12;
   for (const pc of pcs) {
-    const dist = Math.min((((pc - target) % 12) + 12) % 12, (((target - pc) % 12) + 12) % 12);
+    const dist = Math.min(pitchClass(pc - target), pitchClass(target - pc));
     if (dist < bestDist) {
       bestDist = dist;
       best = pc;
@@ -200,9 +200,7 @@ export function voiceChordStyled(given: ChordLike, opts?: StyledVoicingOptions):
   }
 
   if (opts?.topNote !== undefined) {
-    const target = order.includes(pitchClass(opts.topNote))
-      ? pitchClass(opts.topNote)
-      : nearestPc(pitchClass(opts.topNote), order);
+    const target = nearestPc(pitchClass(opts.topNote), order);
     const targetIndex = order.indexOf(target);
     order = [...order.slice(targetIndex + 1), ...order.slice(0, targetIndex + 1)];
   }
@@ -234,7 +232,7 @@ export function voiceChordStyled(given: ChordLike, opts?: StyledVoicingOptions):
     if (prev === undefined) {
       prev = lowestPitchAtOrAbove(pc, base);
     } else {
-      let delta = (((pc - pitchClass(prev)) % 12) + 12) % 12;
+      let delta = pitchClass(pc - pitchClass(prev));
       if (delta === 0) {
         delta = 12;
       }

@@ -11,7 +11,7 @@ import {
   describeRejected,
 } from '../../core/validation/index.js';
 import type { Chord } from '../chord/index.js';
-import { intervalAboveRoot, isChordMember } from '../chord/index.js';
+import { chordPcMask, intervalAboveRoot } from '../chord/index.js';
 import {
   createsHiddenParallelPerfect,
   createsParallelPerfect,
@@ -347,6 +347,46 @@ function minimumSafetyForReasons(reasons: number, profile: SafetyProfile): NoteS
   return minimum;
 }
 
+/**
+ * What a safety query reads off its chord, however many candidates it weighs:
+ * the chord, its pitch classes as a mask, the whole interval classes above its
+ * root as a mask, and its two avoid-note conditions.
+ */
+type ChordFacts = {
+  chord: Chord;
+  mask: number;
+  offsets: number;
+  avoidsFourth: boolean;
+  avoidsMajorSeventh: boolean;
+};
+
+/** What the candidates of one query share; the chord facts are read on first use. */
+type QueryShare = { facts?: ChordFacts };
+
+/** Read the facts of a chord, rejecting one whose pitch classes cannot be read. */
+function chordFactsOf(chord: Chord): ChordFacts {
+  const mask = chordPcMask(chord);
+  let offsets = 0;
+  for (const interval of chord.intervals) {
+    const offset = ((interval % 12) + 12) % 12;
+    if (Number.isInteger(offset)) {
+      offsets |= 1 << offset;
+    }
+  }
+  return {
+    chord,
+    mask,
+    offsets,
+    avoidsFourth: avoidsFourth(chord),
+    avoidsMajorSeventh: avoidsMajorSeventh(chord),
+  };
+}
+
+/** Whether a pitch's class is set in a twelve-bit pitch-class mask. */
+function soundsInMask(mask: number, pitch: number): boolean {
+  return ((mask >> pitchClass(pitch)) & 1) === 1;
+}
+
 /** Whether the perfect fourth is an avoid note over this chord. */
 function avoidsFourth(chord: Chord): boolean {
   return chord.intervals.includes(4) && !chord.intervals.includes(5);
@@ -366,23 +406,23 @@ function avoidsMajorSeventh(chord: Chord): boolean {
  * tones (a ninth voiced against the root, say) is a spacing problem rather than
  * a property of the harmony, so it stays reportable.
  */
-function isStructuralChordDissonance(a: number, b: number, chord: Chord): boolean {
+function isStructuralChordDissonance(a: number, b: number, facts: ChordFacts): boolean {
   const rawClass = pitchClass(Math.abs(a - b));
-  const aOffset = intervalAboveRoot(a, chord);
-  const bOffset = intervalAboveRoot(b, chord);
+  const aOffset = intervalAboveRoot(a, facts.chord);
+  const bOffset = intervalAboveRoot(b, facts.chord);
   const rootSeventh =
     (aOffset === 0 && (bOffset === 10 || bOffset === 11)) ||
     (bOffset === 0 && (aOffset === 10 || aOffset === 11));
   if (rawClass !== 6 && !rootSeventh) {
     return false;
   }
-  return isChordMember(a, chord) && isChordMember(b, chord);
+  return soundsInMask(facts.mask, a) && soundsInMask(facts.mask, b);
 }
 
 /** Nearest chord tone at or below the candidate, within two semitones. */
-function stepResolution(pitch: number, chord: Chord): number | undefined {
+function stepResolution(pitch: number, facts: ChordFacts): number | undefined {
   for (let delta = 1; delta <= 2; delta += 1) {
-    if (isChordMember(pitch - delta, chord)) {
+    if (soundsInMask(facts.mask, pitch - delta)) {
       return pitch - delta;
     }
   }
@@ -490,12 +530,18 @@ function assertSafetyContext(q: Omit<SafetyQuery, 'candidatePitch'>): void {
  * @param collectSuggestions Whether to search for safe alternatives on a
  *   non-Safe verdict. Set false during that search itself to bound recursion.
  * @param collectPartners Whether to record the pairwise flags per other voice.
+ * @param share What the candidates of one query read off its chord, so a search
+ *   over many candidates reads it once.
+ * @param describeReasons Whether to word the rationale; a search that reads only
+ *   the verdict and flags does not.
  * @returns The verdict, reason bitmask, and optional guidance.
  */
 function evaluateInternal(
   q: SafetyQuery,
   collectSuggestions: boolean,
   collectPartners: boolean,
+  share: QueryShare = {},
+  describeReasons = true,
 ): SafetyResult {
   let reasons = 0;
   let level = NoteSafety.Safe;
@@ -519,28 +565,34 @@ function evaluateInternal(
 
   const inScale = isScaleTone(pitch, q.key);
   const chord = q.chord;
+  if (chord !== null) {
+    share.facts ??= chordFactsOf(chord);
+  }
+  const facts = share.facts ?? null;
+  const member = facts !== null && soundsInMask(facts.mask, pitch);
+  // Where the pitch sits above the root of a chord it is not a tone of.
+  const ic = facts !== null && !member ? intervalAboveRoot(pitch, facts.chord) : undefined;
 
   // A chromatic avoid note remains chromatic. The avoid-note branch below
   // refines the resolution guidance, but must not erase the key relationship
   // or downgrade a non-scale pitch to a merely stylistic warning.
-  if (!inScale && (chord === null || !isChordMember(pitch, chord))) {
+  if (!inScale && !member) {
     reasons |= ReasonFlag.NonScale;
     raise(NoteSafety.Dissonant);
   }
 
-  if (chord && isChordMember(pitch, chord)) {
+  if (member) {
     reasons |= ReasonFlag.ChordTone;
-  } else if (chord) {
-    const ic = intervalAboveRoot(pitch, chord);
+  } else if (ic !== undefined && facts !== null) {
     const isTension = ic === 2 || ic === 5 || ic === 9;
-    const avoid = (ic === 5 && avoidsFourth(chord)) || (ic === 11 && avoidsMajorSeventh(chord));
+    const avoid = (ic === 5 && facts.avoidsFourth) || (ic === 11 && facts.avoidsMajorSeventh);
     if (avoid) {
       reasons |= ReasonFlag.AvoidNote;
       if (isTension) {
         reasons |= ReasonFlag.Tension;
       }
       reasons |= ReasonFlag.NeedsResolution;
-      resolveTo = stepResolution(pitch, chord);
+      resolveTo = stepResolution(pitch, facts);
       raise(avoidSeverity);
     } else if (isTension && inScale) {
       reasons |= ReasonFlag.Tension;
@@ -559,12 +611,8 @@ function evaluateInternal(
   // clash with it. This covers dominant sevenths (third against seventh) and
   // equally the diminished, half-diminished, diminished-seventh and minor-sixth
   // families, where the tritone falls between two chord tones as well.
-  if (chord && !isChordMember(pitch, chord)) {
-    const ic = intervalAboveRoot(pitch, chord);
-    const toneOffsets = chord.intervals.map((i) => ((i % 12) + 12) % 12);
-    if (toneOffsets.some((t) => Math.abs(ic - t) === 6)) {
-      reasons |= ReasonFlag.Tritone;
-    }
+  if (ic !== undefined && facts !== null && ((facts.offsets >> ((ic + 6) % 12)) & 1) === 1) {
+    reasons |= ReasonFlag.Tritone;
   }
 
   if (q.prevPitch !== undefined) {
@@ -616,17 +664,17 @@ function evaluateInternal(
       if (!createsVerticalDissonance(pitch, ov.pitch, againstBass)) {
         continue;
       }
-      if (chord && isStructuralChordDissonance(pitch, ov.pitch, chord)) {
+      if (facts !== null && isStructuralChordDissonance(pitch, ov.pitch, facts)) {
         continue;
       }
       // Pop reads a fourth between two chord tones as the chord in inversion;
       // strict keeps the six-four a dissonance.
       if (
-        chord &&
+        facts !== null &&
         q.profile === 'pop' &&
         pitchClass(Math.abs(pitch - ov.pitch)) === 5 &&
-        isChordMember(pitch, chord) &&
-        isChordMember(ov.pitch, chord)
+        member &&
+        soundsInMask(facts.mask, ov.pitch)
       ) {
         continue;
       }
@@ -680,12 +728,15 @@ function evaluateInternal(
   // contributes at least its table severity.
   raise(minimumSafetyForReasons(reasons, q.profile));
 
-  const result: SafetyResult = { safety: level, reasons, rationale: describe(reasons, q) };
+  const result: SafetyResult = { safety: level, reasons };
+  if (describeReasons) {
+    result.rationale = describe(reasons, q);
+  }
   if (resolveTo !== undefined) {
     result.resolveTo = resolveTo;
   }
   if (collectSuggestions && level !== NoteSafety.Safe) {
-    const suggestions = findSafeNearby(q, pitch);
+    const suggestions = findSafeNearby(q, pitch, share);
     if (suggestions.length > 0) {
       result.suggestions = suggestions;
     }
@@ -713,16 +764,18 @@ function evaluateInternal(
  *
  * @param q The safety context of the rejected candidate.
  * @param candidate The candidate pitch that was not Safe.
+ * @param share What the candidates of this query read off its chord.
  * @returns Up to `MAX_SUGGESTIONS` safe pitches, nearest first.
  */
-function findSafeNearby(q: SafetyQuery, candidate: number): number[] {
+function findSafeNearby(q: SafetyQuery, candidate: number, share: QueryShare): number[] {
   const out: number[] = [];
   for (let d = 1; d <= SUGGESTION_WINDOW; d += 1) {
     for (const p of [candidate - d, candidate + d]) {
       if (p < 0 || p > 127) {
         continue;
       }
-      if (evaluateInternal({ ...q, candidatePitch: p }, false, false).safety === NoteSafety.Safe) {
+      const probe = evaluateInternal({ ...q, candidatePitch: p }, false, false, share, false);
+      if (probe.safety === NoteSafety.Safe) {
         out.push(p);
         if (out.length >= MAX_SUGGESTIONS) {
           return out;
@@ -839,8 +892,9 @@ export function enumerateSafePitches(
   assertGenerationBudget(pitchHigh - pitchLow + 1, 'safe pitch candidates');
   const low = Math.max(pitchLow, q.vocalLow ?? pitchLow);
   const high = Math.min(pitchHigh, q.vocalHigh ?? pitchHigh);
+  const share: QueryShare = {};
   for (let pitch = high; pitch >= low; pitch -= 1) {
-    const result = evaluateInternal({ ...q, candidatePitch: pitch }, false, false);
+    const result = evaluateInternal({ ...q, candidatePitch: pitch }, false, false, share, false);
     if (result.safety === NoteSafety.Dissonant) {
       continue;
     }

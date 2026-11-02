@@ -1,4 +1,5 @@
 import {
+  diatonicLetterOf,
   formatNote,
   midiToNote,
   type Note,
@@ -114,7 +115,7 @@ export function bySameStep(
  * fifth of a G sharp a D double sharp rather than an E.
  */
 export function spellingAbove(root: PitchSpelling, letters: number, pc: number): PitchSpelling {
-  const letter = (((root.letter + letters) % 7) + 7) % 7;
+  const letter = diatonicLetterOf(root.letter + letters);
   const natural = noteToPitchClass({ letter, alter: 0 });
   return { letter, alter: ((((pc - natural) % 12) + 18) % 12) - 6 };
 }

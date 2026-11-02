@@ -17,6 +17,7 @@
 #include "theory/chord/chord.h"
 #include "theory/chord/spec.h"
 #include "theory/figured_bass/limits.gen.h"
+#include "theory/spelling/limits.gen.h"
 
 namespace cantus {
 
@@ -312,7 +313,7 @@ const std::vector<std::pair<std::vector<double>, ChordQuality>>& tertian_qualiti
 /** The alteration each diatonic letter carries in a key, indexed by letter (`keyLetterAlters`). */
 std::vector<int> key_letter_alters(const ResolvedKey& key) {
   std::size_t size = scale_tones_in_degree_order(key.scale).size();
-  if (size != 7) {
+  if (size != DIATONIC_LETTER_COUNT) {
     throw InvalidInputError("figured bass requires a heptatonic key (received " +
                             js::to_string(static_cast<double>(size)) + " tones)");
   }

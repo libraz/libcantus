@@ -93,8 +93,7 @@ std::string format_chord_symbol(const ChordArg& chord, const ChordSymbolOptions&
     }
     std::string bass_name;
     if (flats && root_hint && bass_hint) {
-      bass_name = symbol_name(carried_bass(*bass_hint, *root_hint, root_spelling,
-                                           flats.value_or(root_spelling.alter < 0),
+      bass_name = symbol_name(carried_bass(*bass_hint, *root_hint, root_spelling, *flats,
                                            [&](const NoteData& spelling) {
                                              return own_spelling &&
                                                     spelling.letter == own_spelling->letter &&

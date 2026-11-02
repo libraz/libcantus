@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <iterator>
 #include <limits>
 #include <optional>
 #include <set>
@@ -391,9 +390,8 @@ Violations leap_answer_violations(const std::vector<Move>& moves) {
 
 /** The tritone the line may not leap is also the tritone it may not draw
  * (`tritoneOutlineViolations`). */
-Violations tritone_outline_violations(const std::vector<Entry>& entries) {
+Violations tritone_outline_violations(const std::vector<Move>& moves) {
   Violations found;
-  std::vector<Move> moves = melodic_moves(entries);
   std::vector<const Move*> run;
   auto close = [&]() {
     if (run.size() > 1) {
@@ -432,10 +430,6 @@ Violations repeated_note_violations(const std::vector<Move>& moves, int closing_
   return found;
 }
 
-void append(Violations& to, Violations from) {
-  to.insert(to.end(), std::make_move_iterator(from.begin()), std::make_move_iterator(from.end()));
-}
-
 /** The rules judged on the shape of the counterpoint rather than on any one of its intervals
  * (`melodicShapeViolations`). */
 Violations melodic_shape_violations(const std::vector<Entry>& entries, int species) {
@@ -445,7 +439,7 @@ Violations melodic_shape_violations(const std::vector<Entry>& entries, int speci
   append(found, climax_violations(entries));
   append(found, leap_chain_violations(moves));
   append(found, leap_answer_violations(moves));
-  append(found, tritone_outline_violations(entries));
+  append(found, tritone_outline_violations(moves));
   if (species == 2 || species == 3) {
     append(found, repeated_note_violations(moves, closing_measure));
   }

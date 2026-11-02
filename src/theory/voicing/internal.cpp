@@ -208,9 +208,13 @@ void enumerate_voicings(const Chord& chord, const std::vector<VoiceRange>& range
 StructuralTables structural_tables(const Chord& chord, const std::optional<KeyScale>& key) {
   StructuralTables out;
   out.tones = chord_pitch_classes(chord);
-  for (int pc : out.tones) {
+  std::array<bool, 12> is_fifth{};
+  for (int pc = 0; pc < 12; ++pc) {
     Nullable<ChordToneRole> role = chord_tone_role(pc, chord);
-    out.missing.push_back(role && *role == ChordToneRole::kFifth ? MISSING_FIFTH_PENALTY
+    is_fifth[static_cast<std::size_t>(pc)] = role && *role == ChordToneRole::kFifth;
+  }
+  for (int pc : out.tones) {
+    out.missing.push_back(is_fifth[static_cast<std::size_t>(pc)] ? MISSING_FIFTH_PENALTY
                                                                  : MISSING_TONE_PENALTY);
   }
   int root_pc = pitch_class_of(chord.rootPc);
@@ -219,11 +223,8 @@ StructuralTables structural_tables(const Chord& chord, const std::optional<KeySc
   for (int pc = 0; pc < 12; ++pc) {
     if (pc == leading_tone_pc) {
       out.doubling[static_cast<std::size_t>(pc)] = LEADING_TONE_DOUBLING_PENALTY;
-    } else if (pc != root_pc) {
-      Nullable<ChordToneRole> role = chord_tone_role(pc, chord);
-      if (!(role && *role == ChordToneRole::kFifth)) {
-        out.doubling[static_cast<std::size_t>(pc)] = POOR_DOUBLING_PENALTY;
-      }
+    } else if (pc != root_pc && !is_fifth[static_cast<std::size_t>(pc)]) {
+      out.doubling[static_cast<std::size_t>(pc)] = POOR_DOUBLING_PENALTY;
     }
   }
   return out;
@@ -305,7 +306,8 @@ double leading_cost(const double* prev, std::size_t prev_offset, const double* c
 
 MoveScoring move_scoring(const std::optional<Chord>& prev_chord, const Chord& chord,
                          const std::optional<ResolvedKey>& key,
-                         const std::optional<Chord>& next_chord) {
+                         const std::optional<Chord>& next_chord,
+                         const SpellingTable* prev_spelling) {
   // The pitch-class tables want the scale alone; the spelling table is handed the key whole,
   // since the letters it writes are the key's.
   std::optional<KeyScale> scale;
@@ -318,8 +320,9 @@ MoveScoring move_scoring(const std::optional<Chord>& prev_chord, const Chord& ch
     out.resolution = resolution_tables(*prev_chord, chord, scale);
   }
   if (key) {
-    out.spelling = MelodicSpelling{spelling_table(KeyArg(*key), prev_chord),
-                                   spelling_table(KeyArg(*key), chord)};
+    out.spelling = MelodicSpelling{
+        prev_spelling != nullptr ? *prev_spelling : spelling_table(KeyArg(*key), prev_chord),
+        spelling_table(KeyArg(*key), chord)};
   }
   if (prev_chord && key) {
     out.crossRelation = CrossRelationTables{*prev_chord, chord, next_chord, key->scale};

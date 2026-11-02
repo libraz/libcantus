@@ -16,6 +16,7 @@ import {
 } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import type { Chord } from '../chord/index.js';
+import { simpleIntervalNumber } from '../counterpoint/internal.js';
 import { appliedChordTarget, isNeapolitanChordOf } from '../tendency/index.js';
 
 /** One chord of an exercise as this rule reads it: what sounds, and what it is. */
@@ -89,7 +90,7 @@ function soundsAugmentedSixth(moment: ChromaticMoment, key: KeyScale): boolean {
       return false;
     }
     const interval = spelledInterval(bass, note);
-    return ((interval.number - 1) % 7) + 1 === 6 && pitchClassOf(interval.semitones) === 10;
+    return simpleIntervalNumber(interval.number) === 6 && pitchClassOf(interval.semitones) === 10;
   });
 }
 

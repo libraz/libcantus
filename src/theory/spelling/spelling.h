@@ -12,6 +12,9 @@
 
 namespace cantus {
 
+/** Whether the key's scale is a seven-note scale (`isHeptatonic`). */
+bool is_heptatonic(const KeyScale& key);
+
 /**
  * Reject a tonic that does not spell the key's own root (`assertTonicOf`).
  * @throws InvalidInputError naming `source` if the tonic sounds another pitch class.

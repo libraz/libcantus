@@ -19,7 +19,7 @@ import {
   type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../scale/index.js';
-import { spellChordFromRoot, spellPitchClass } from '../spelling/index.js';
+import { DIATONIC_LETTER_COUNT, spellChordFromRoot, spellPitchClass } from '../spelling/index.js';
 import type { ChordQuality, ChordSpec } from './spec.js';
 import {
   assertChordSpec,
@@ -735,7 +735,7 @@ export function chordPitchClasses(chord: Chord, opts: { includeBass?: boolean } 
  * @category Chords
  */
 export function intervalAboveRoot(pitch: number, chord: Chord): number {
-  return (((pitchClass(pitch) - pitchClass(assertChord(chord).rootPc)) % 12) + 12) % 12;
+  return pitchClass(pitchClass(pitch) - pitchClass(assertChord(chord).rootPc));
 }
 
 /**
@@ -992,7 +992,7 @@ function stackThirds(degree: number, resolved: ResolvedKey, size: 3 | 4): Chord 
   const key = resolved.scale;
   const tones = scaleTonesInDegreeOrder(key);
   const length = tones.length;
-  if (length !== 7) {
+  if (length !== DIATONIC_LETTER_COUNT) {
     throw new InvalidInputError(
       `diatonic chord stacking requires a heptatonic scale (received ${length} tones)`,
     );
@@ -1001,7 +1001,7 @@ function stackThirds(degree: number, resolved: ResolvedKey, size: 3 | 4): Chord 
   const rootPc = tones[idx(0)] ?? pitchClass(key.rootPc);
   const offsets = [0, 2, 4, 6].slice(0, size).map((step) => {
     const pc = tones[idx(step)] ?? rootPc;
-    return (((pc - rootPc) % 12) + 12) % 12;
+    return pitchClass(pc - rootPc);
   });
   const thirdIc = offsets[1] ?? 4;
   const fifthIc = offsets[2] ?? 7;

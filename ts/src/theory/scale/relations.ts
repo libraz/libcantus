@@ -97,22 +97,6 @@ function spelledLike(a: Note, b: Note): boolean {
 }
 
 /**
- * A key paired with the spelled tonic that anchors its letter names.
- *
- * The tonic carries no octave: a key is rooted on a pitch class, and its
- * spelling is what decides whether the key is written Db major or C# major.
- *
- * @example
- * ```ts
- * import type { ResolvedKey } from '@libraz/libcantus';
- * import { formatNote, majorKey, spelledKeyOf } from '@libraz/libcantus';
- * const dbMajor: ResolvedKey = spelledKeyOf(majorKey(1));
- * formatNote(dbMajor.tonic); // 'Db'
- * ```
- * @category Scales
- */
-
-/**
  * How one key stands to another, as reported by {@link keyRelationBetween} and
  * tagged onto every entry of {@link relatedKeysOf}.
  *
@@ -481,10 +465,8 @@ export function enharmonicKeyOf(tonic: NoteLike, key: KeyLike): ResolvedKey | nu
   const note = toNoteData(tonic);
   const scale = toKeyScale(key);
   maskOf(scale);
-  for (const position of [
-    tonicPosition(note) - ENHARMONIC_FIFTHS,
-    tonicPosition(note) + ENHARMONIC_FIFTHS,
-  ]) {
+  const home = tonicPosition(note);
+  for (const position of [home - ENHARMONIC_FIFTHS, home + ENHARMONIC_FIFTHS]) {
     // Bounded by what the reader can spell, and no further: narrowing it to the
     // major/minor window here would refuse the far spelling of a modal key
     // while the same call from that spelling still found this one, and the

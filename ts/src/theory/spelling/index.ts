@@ -208,7 +208,9 @@ const IMPERFECT_DEGREES = new Set(IMPERFECT_DEGREE_LIST);
  * the tone three semitones above the tonic is its third.
  */
 export const DIATONIC_MODE_OFFSETS: number[][] = MAJOR_SEMITONES.map((tonic, mode) =>
-  MAJOR_SEMITONES.map((_, degree) => mod12((MAJOR_SEMITONES[(mode + degree) % 7] ?? 0) - tonic)),
+  MAJOR_SEMITONES.map((_, degree) =>
+    mod12((MAJOR_SEMITONES[(mode + degree) % DIATONIC_LETTER_COUNT] ?? 0) - tonic),
+  ),
 );
 
 /**
@@ -239,7 +241,7 @@ function degreeStrain(tonic: Note, note: Note): number {
 }
 
 /** Whether the key's scale is a seven-note (heptatonic) scale. */
-function isHeptatonic(key: KeyScale): boolean {
+export function isHeptatonic(key: KeyScale): boolean {
   return scaleTonesInDegreeOrder(key).length === DIATONIC_LETTER_COUNT;
 }
 
@@ -472,7 +474,7 @@ function readGappedScale(tonic: Note, key: KeyScale): Map<number, Note> | undefi
   if (tones.length > MAX_JOINT_TONE_COUNT) {
     return undefined;
   }
-  const tonicPc = mod12(naturalPc(tonic.letter) + tonic.alter);
+  const tonicPc = notePitchClass(tonic);
   const tonicNote: Note = { letter: mod7(tonic.letter), alter: tonic.alter };
   const preferFlat = leansFlat(tonic, key);
   const rest = tones.filter((pc) => mod12(pc - tonicPc) !== 0);
@@ -508,7 +510,7 @@ function readGappedScale(tonic: Note, key: KeyScale): Map<number, Note> | undefi
  * so a flat-side key keeps flat-side names.
  */
 function spellByKey(pc: number, tonic: Note, key: KeyScale): Note {
-  const tonicPc = mod12(naturalPc(tonic.letter) + tonic.alter);
+  const tonicPc = notePitchClass(tonic);
   const offset = mod12(pc - tonicPc);
 
   // The tonic spells as itself, whatever the scale: a caller that asked for Eb
@@ -517,9 +519,9 @@ function spellByKey(pc: number, tonic: Note, key: KeyScale): Note {
     return { letter: mod7(tonic.letter), alter: tonic.alter };
   }
 
-  const heptatonic = isHeptatonic(key);
-  if (heptatonic) {
-    const degree = scaleTonesInDegreeOrder(key).indexOf(mod12(pc));
+  const tones = scaleTonesInDegreeOrder(key);
+  if (tones.length === DIATONIC_LETTER_COUNT) {
+    const degree = tones.indexOf(mod12(pc));
     if (degree >= 0) {
       const letter = mod7(tonic.letter + degree);
       return { letter, alter: alterFor(letter, pc) };
@@ -721,13 +723,14 @@ function spellChordTone(
  */
 function neighbourSpelling(
   neighbour: number | undefined,
+  away: number | undefined,
   gap: number,
   letterStep: number,
   pc: number,
   tonic: Note,
   key: KeyScale,
 ): Note | undefined {
-  if (neighbour === undefined || mod12(neighbour - pc) !== mod12(gap)) {
+  if (neighbour === undefined || away !== mod12(gap)) {
     return undefined;
   }
   return letterFor(spellByKey(mod12(neighbour), tonic, key), letterStep, pc);
@@ -749,27 +752,32 @@ function refineByContext(
   context: SpellingContext,
   keySpelling: Note,
 ): Note {
-  const tonicPc = mod12(naturalPc(tonic.letter) + tonic.alter);
+  const tonicPc = notePitchClass(tonic);
   if (mod12(pc) === tonicPc || isScaleTone(pc, key)) {
     return keySpelling;
   }
   const { previous, next } = context;
-  const candidates = [
+  const chordTone = spellChordTone(pc, context, tonic, key);
+  // Read before any rule is tried, so a malformed neighbour is rejected whichever rule wins.
+  const nextAway = next === undefined ? undefined : mod12(next - pc);
+  const previousAway = previous === undefined ? undefined : mod12(previous - pc);
+  const rules: (() => Note | undefined)[] = [
     // The sounding chord names the pitch by the degree it writes it as.
-    spellChordTone(pc, context, tonic, key),
+    () => chordTone,
     // A semitone below what follows: the pitch is its leading tone, a letter down.
-    neighbourSpelling(next, 1, -1, pc, tonic, key),
+    () => neighbourSpelling(next, nextAway, 1, -1, pc, tonic, key),
     // A semitone above what preceded: the pitch is that note inflected upward,
     // so it keeps its letter and a chromatic ascent spells with sharps.
-    neighbourSpelling(previous, -1, 0, pc, tonic, key),
+    () => neighbourSpelling(previous, previousAway, -1, 0, pc, tonic, key),
     // A semitone above what follows: the pitch leans on it from a letter up,
     // so a falling line spells with flats.
-    neighbourSpelling(next, -1, 1, pc, tonic, key),
+    () => neighbourSpelling(next, nextAway, -1, 1, pc, tonic, key),
     // Failing that, a semitone below what preceded: that note inflected downward,
     // again on its own letter.
-    neighbourSpelling(previous, 1, 0, pc, tonic, key),
+    () => neighbourSpelling(previous, previousAway, 1, 0, pc, tonic, key),
   ];
-  for (const candidate of candidates) {
+  for (const rule of rules) {
+    const candidate = rule();
     if (candidate !== undefined && Math.abs(candidate.alter) <= MAX_CONTEXT_ALTER) {
       return candidate;
     }
@@ -998,7 +1006,7 @@ export function spellChordFromRoot(chord: Chord, root: NoteLike): Note[] {
 
 /** Spell chord tones from an already-resolved root spelling. */
 function chordTonesFromRoot(chord: Chord, root: Note): Note[] {
-  if (mod12(naturalPc(root.letter) + root.alter) !== mod12(chord.rootPc)) {
+  if (notePitchClass(root) !== mod12(chord.rootPc)) {
     throw new InvalidInputError('chord root spelling must match chord.rootPc');
   }
   const hinted = chordToneLetterOffsets(chord);
@@ -1057,7 +1065,7 @@ export function spellChord(chord: Chord, tonic: NoteLike, key: KeyLike): Note[] 
  */
 function chordRootSpelling(chord: Chord, tonic: Note, key: KeyScale): Note {
   const hint = chord.rootSpelling;
-  if (hint !== undefined && mod12(naturalPc(hint.letter) + hint.alter) === mod12(chord.rootPc)) {
+  if (hint !== undefined && notePitchClass(hint) === mod12(chord.rootPc)) {
     return { letter: mod7(hint.letter), alter: hint.alter };
   }
   return spelledPitchClass(chord.rootPc, tonic, key);

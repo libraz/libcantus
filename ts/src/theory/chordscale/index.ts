@@ -233,6 +233,8 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
     size: number;
     avoid: number;
     borrowed: boolean;
+    idiomatic: number;
+    conventional: number;
   }[] = [];
   // A tone beyond the plain seventh chord is a written alteration or extension.
   const writesTension = chordPcs.some((pc) => ![0, 4, 7, 10].includes(pitchClass(pc - rootPc)));
@@ -246,33 +248,31 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
       continue;
     }
     seenMasks.add(mask);
-    if (scaleMatchesChord(chordPcs, mask, rootPc) || isAlteredDominant(data, name)) {
+    const fits = scaleMatchesChord(chordPcs, mask, rootPc);
+    if (fits || isAlteredDominant(data, name)) {
       const size = popcount12(mask);
       ranked.push({
         name,
         extra: size - chordPcs.length,
         size,
-        avoid: clashingNotes(data, mask, false).length,
+        avoid: fits ? clashingTones(data, mask, false, chordPcs).length : 0,
         // Eligible only through the fifth exemption: a scale that holds every
         // written tone is the better answer for a chord that writes a tension.
-        borrowed: writesTension && !scaleMatchesChord(chordPcs, mask, rootPc),
+        borrowed: writesTension && !fits,
+        idiomatic: idiomaticRank(data, name),
+        conventional: conventionalRank(name),
       });
     }
   }
   if (ranked.length === 0) {
     // No diatonic-style scale contains the chord; fall back to the chromatic
     // scale, which trivially contains every pitch class.
-    if (NAMED_SCALES.chromatic !== undefined) {
-      return [{ name: 'chromatic', rootPc }];
-    }
-    return [];
+    return [{ name: 'chromatic', rootPc }];
   }
   const preferHeptatonic = chordPcs.length <= 3;
   ranked.sort((a, b) => {
-    const idiomaticA = idiomaticRank(data, a.name);
-    const idiomaticB = idiomaticRank(data, b.name);
-    if (idiomaticA !== idiomaticB) {
-      return idiomaticA - idiomaticB;
+    if (a.idiomatic !== b.idiomatic) {
+      return a.idiomatic - b.idiomatic;
     }
     if (preferHeptatonic && (a.size === HEPTATONIC_SIZE) !== (b.size === HEPTATONIC_SIZE)) {
       return a.size === HEPTATONIC_SIZE ? -1 : 1;
@@ -283,10 +283,8 @@ export function chordScales(chord: ChordLike): ChordScaleMatch[] {
     if (a.extra !== b.extra) {
       return a.extra - b.extra;
     }
-    const rankA = conventionalRank(a.name);
-    const rankB = conventionalRank(b.name);
-    if (rankA !== rankB) {
-      return rankA - rankB;
+    if (a.conventional !== b.conventional) {
+      return a.conventional - b.conventional;
     }
     // Among scales the modal preference does not name — the symmetric and
     // melodic-minor scales — the one that clashes with the chord least is the
@@ -377,11 +375,16 @@ export function avoidNotes(
  * exemption. Empty when the scale does not contain the chord.
  */
 function clashingNotes(data: Chord, mask: number, melodic: boolean): number[] {
-  const rootPc = pitchClass(data.rootPc);
   const chordPcs = chordPitchClasses(data);
-  if (!scaleMatchesChord(chordPcs, mask, rootPc)) {
+  if (!scaleMatchesChord(chordPcs, mask, pitchClass(data.rootPc))) {
     return [];
   }
+  return clashingTones(data, mask, melodic, chordPcs);
+}
+
+/** {@link clashingNotes} for a scale already known to contain the chord. */
+function clashingTones(data: Chord, mask: number, melodic: boolean, chordPcs: number[]): number[] {
+  const rootPc = pitchClass(data.rootPc);
   const chordSet = new Set(chordPcs);
   // Sounding the third a suspension stands in for is what undoes the
   // suspension, so it is an avoid note however consonant it is against the
@@ -491,18 +494,34 @@ export function availableTensions(
   const asked = assertOptions(opts, 'opts');
   const mask = requireChordScaleMask(scaleName);
   const data = toChordData(chord);
+  return tensionsOver(data, mask, isAlteredDominant(data, scaleName), asked.resolvesTo);
+}
+
+/**
+ * The tensions of a normalized chord over a scale mask, past the coercions of
+ * {@link availableTensions}. `avoid` is the harmonic avoid-note list when the
+ * caller already holds it.
+ */
+function tensionsOver(
+  data: Chord,
+  mask: number,
+  alteredDominant: boolean,
+  resolvesTo: ChordLike | undefined,
+  avoid?: readonly number[],
+): number[] {
   const rootPc = pitchClass(data.rootPc);
   const chordPcs = chordPitchClasses(data);
-  const alteredDominant = isAlteredDominant(data, scaleName);
   if (!scaleMatchesChord(chordPcs, mask, rootPc) && !alteredDominant) {
     return [];
   }
   const chordSet = new Set(chordPcs);
-  const avoidSet = alteredDominant ? new Set<number>() : new Set(avoidNotes(data, scaleName));
+  const avoidSet = new Set<number>(
+    alteredDominant ? [] : (avoid ?? clashingTones(data, mask, false, chordPcs)),
+  );
   const functional = resolvesToMinorTonic(
     data,
     chordPcs,
-    asked.resolvesTo === undefined ? undefined : toChordData(asked.resolvesTo),
+    resolvesTo === undefined ? undefined : toChordData(resolvesTo),
   )
     ? new Set(MINOR_RESOLUTION_TENSIONS.map((semitones) => pitchClass(rootPc + semitones)))
     : undefined;
@@ -562,14 +581,16 @@ export function chordScaleReport(chord: ChordLike, limit?: number): ChordScaleRe
   const matches = chordScales(data);
   const chosen = limit === undefined ? matches : matches.slice(0, limit);
   return chosen.map((match) => {
-    const harmonic = avoidNotes(data, match.name);
-    const melodic = new Set(avoidNotes(data, match.name, { use: 'melodic' }));
+    const mask = requireChordScaleMask(match.name);
+    const alteredDominant = isAlteredDominant(data, match.name);
+    const harmonic = alteredDominant ? [] : clashingNotes(data, mask, false);
+    const melodic = new Set(alteredDominant ? [] : clashingNotes(data, mask, true));
     return {
       name: match.name,
       rootPc: match.rootPc,
       avoid: harmonic.filter((pc) => melodic.has(pc)),
       passing: harmonic.filter((pc) => !melodic.has(pc)),
-      tensions: availableTensions(data, match.name),
+      tensions: tensionsOver(data, mask, alteredDominant, undefined, harmonic),
     };
   });
 }
@@ -590,35 +611,19 @@ export type ScaleChoice = {
  */
 export const RANK_PENALTY = 0.01;
 
-/** Build the pitch-class set of a named scale rooted on `rootPc`. */
-function scalePitchClassSet(name: string, rootPc: number): Set<number> {
+/** Build the pitch-class set of a named scale rooted on `rootPc`, as a 12-bit mask. */
+function scalePitchClassSet(name: string, rootPc: number): number {
   const mask = namedScaleMask(name);
-  const pcs = new Set<number>();
+  let set = 0;
   if (mask === undefined) {
-    return pcs;
+    return set;
   }
   for (let n = 0; n < 12; n += 1) {
     if (((mask >> n) & 1) === 1) {
-      pcs.add(pitchClass(rootPc + n));
+      set |= 1 << pitchClass(rootPc + n);
     }
   }
-  return pcs;
-}
-
-/** Count pitch classes that belong to exactly one of two sets. */
-function symmetricDifferenceSize(a: Set<number>, b: Set<number>): number {
-  let count = 0;
-  for (const pc of a) {
-    if (!b.has(pc)) {
-      count += 1;
-    }
-  }
-  for (const pc of b) {
-    if (!a.has(pc)) {
-      count += 1;
-    }
-  }
-  return count;
+  return set;
 }
 
 /**
@@ -666,10 +671,7 @@ export function scalesForChanges(chords: readonly Chord[]): ScaleChoice[] {
       let bestCost = Number.POSITIVE_INFINITY;
       let bestPrev = -1;
       for (let k = 0; k < prevCosts.length; k += 1) {
-        const transition = symmetricDifferenceSize(
-          prevSets[k] ?? new Set(),
-          curSets[j] ?? new Set(),
-        );
+        const transition = popcount12((prevSets[k] ?? 0) ^ (curSets[j] ?? 0));
         const cost = (prevCosts[k] ?? 0) + transition;
         if (cost < bestCost) {
           bestCost = cost;

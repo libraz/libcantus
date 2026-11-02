@@ -91,7 +91,6 @@ export function nextVoicing(current: number[], chord: ChordLike, opts?: VoicingO
     if (current.length === 0) {
       throw new InvalidInputError('current must contain at least one pitch');
     }
-    assertVoicing(current, 'current');
   }
   // Both branches end in the same resolver, so the voice-count budget and the
   // range checks apply wherever the ranges came from: a texture read off
@@ -106,7 +105,6 @@ export function nextVoicing(current: number[], chord: ChordLike, opts?: VoicingO
         }),
       })
     : resolveRanges(opts);
-  assertVoicing(current, 'current');
   if (current.length < ranges.length) {
     throw new InvalidInputError(
       `current has ${current.length} voices but the requested ranges require ${ranges.length}`,

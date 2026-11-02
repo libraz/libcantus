@@ -287,8 +287,9 @@ export type StructuralTables = {
  */
 export function structuralTables(chord: Chord, key?: KeyScale): StructuralTables {
   const tones = chordPitchClasses(chord);
+  const roles = Array.from({ length: 12 }, (_, pc) => chordToneRole(pc, chord));
   const missing = tones.map((pc) =>
-    chordToneRole(pc, chord) === 'fifth' ? MISSING_FIFTH_PENALTY : MISSING_TONE_PENALTY,
+    roles[pc] === 'fifth' ? MISSING_FIFTH_PENALTY : MISSING_TONE_PENALTY,
   );
   const rootPc = pitchClass(chord.rootPc);
   const leadingTonePc =
@@ -297,7 +298,7 @@ export function structuralTables(chord: Chord, key?: KeyScale): StructuralTables
   for (let pc = 0; pc < 12; pc += 1) {
     if (pc === leadingTonePc) {
       doubling[pc] = LEADING_TONE_DOUBLING_PENALTY;
-    } else if (pc !== rootPc && chordToneRole(pc, chord) !== 'fifth') {
+    } else if (pc !== rootPc && roles[pc] !== 'fifth') {
       doubling[pc] = POOR_DOUBLING_PENALTY;
     }
   }
@@ -719,12 +720,15 @@ export type MoveScoring = {
  * @param nextChord The chord after the one being reached, where the caller
  *   knows it. It licenses the chromatic tone an applied dominant is written
  *   with, and nothing else reads it.
+ * @param prevSpelling The spelling table of `prevChord` under `key`, when the
+ *   caller already holds it; it is built here otherwise.
  */
 export function moveScoring(
   prevChord: Chord | undefined,
   chord: Chord,
   key?: ResolvedKey,
   nextChord?: Chord,
+  prevSpelling?: SpellingTable,
 ): MoveScoring {
   // The pitch-class tables want the scale alone and say so here; the spelling
   // table is handed the key whole, since the letters it writes are the key's.
@@ -735,7 +739,7 @@ export function moveScoring(
     spelling:
       key === undefined
         ? undefined
-        : { from: spellingTable(key, prevChord), to: spellingTable(key, chord) },
+        : { from: prevSpelling ?? spellingTable(key, prevChord), to: spellingTable(key, chord) },
     crossRelation:
       prevChord === undefined || key === undefined
         ? undefined

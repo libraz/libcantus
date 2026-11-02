@@ -99,8 +99,7 @@ bool is_augmented_melodic_interval(const PitchArg& prev, const PitchArg& cur) {
   if (!both_notes(prev, cur)) {
     return false;
   }
-  SpelledInterval interval = spelled_interval(*note_of(prev), *note_of(cur));
-  return interval.number >= 2 && interval.quality.rfind('A', 0) == 0;
+  return is_augmented_spelled_interval(spelled_interval(*note_of(prev), *note_of(cur)));
 }
 
 bool creates_parallel_perfect(const PitchArg& a_prev, const PitchArg& a_cur, const PitchArg& b_prev,

@@ -35,7 +35,7 @@ import {
   type SpelledKeyLike,
   scaleTonesInDegreeOrder,
 } from '../scale/index.js';
-import { noteNames, spellChord, spellScale } from '../spelling/index.js';
+import { DIATONIC_LETTER_COUNT, noteNames, spellChord, spellScale } from '../spelling/index.js';
 import { type ChordLike, toChordData } from '../symbol/index.js';
 
 /** Smallest interval a figure may name above the bass: a second. */
@@ -377,7 +377,7 @@ const TERTIAN_QUALITIES = tertianQualityIndex();
  */
 function keyLetterAlters(key: ResolvedKey): number[] {
   const size = scaleTonesInDegreeOrder(key.scale).length;
-  if (size !== 7) {
+  if (size !== DIATONIC_LETTER_COUNT) {
     throw new InvalidInputError(`figured bass requires a heptatonic key (received ${size} tones)`);
   }
   const alters: number[] = [];
@@ -601,14 +601,12 @@ export function figuredBassRealization(
  * for the spelled notes and suspensions it drops. A moving figure such as
  * `4-3` returns the chord it resolves into.
  *
- * @param bass The bass note, spelled; its octave, if any, is not used.
+ * @param bass The bass note, spelled: a note name, a MIDI number, note data, or
+ *   a `Note`; its octave, if any, is not used.
  * @param figures The figures written under the bass; empty for an unfigured
  *   note.
- * @param key The prevailing key, which supplies every unaltered interval.
- * @param bass The bass note, spelled: a note name, a MIDI number, note data, or
- *   a `Note`.
- * @param figures The figures written under the bass.
- * @param key The prevailing key, as a key name, a key/scale, or a `Key`.
+ * @param key The prevailing key, as a key name, a key/scale, or a `Key`; it
+ *   supplies every unaltered interval.
  * @returns The chord the figures name.
  * @throws If the figures are malformed or name no chord
  *   ({@link InvalidInputError}), if the key is not heptatonic

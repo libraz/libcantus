@@ -15,6 +15,7 @@
 #include "js/math.h"
 #include "js/number.h"
 #include "theory/chord/spec.h"
+#include "theory/spelling/limits.gen.h"
 
 namespace cantus {
 
@@ -59,7 +60,7 @@ std::int32_t bit(double n) { return static_cast<std::int32_t>(1U << (js::to_uint
 int chord_interval_mask(const Chord& chord) {
   std::int32_t mask = 0;
   for (double interval : chord.intervals) {
-    mask |= bit(std::fmod(std::fmod(interval, 12) + 12, 12));
+    mask |= bit(js::floor_mod(interval, 12));
   }
   return mask;
 }
@@ -147,7 +148,7 @@ Chord stack_thirds(double degree, const ResolvedKey& resolved, std::size_t size)
   const KeyScale& key = resolved.scale;
   std::vector<int> tones = scale_tones_in_degree_order(key);
   auto length = static_cast<int>(tones.size());
-  if (length != 7) {
+  if (length != DIATONIC_LETTER_COUNT) {
     throw InvalidInputError("diatonic chord stacking requires a heptatonic scale (received " +
                             js::to_string(length) + " tones)");
   }
@@ -158,7 +159,7 @@ Chord stack_thirds(double degree, const ResolvedKey& resolved, std::size_t size)
   for (std::size_t i = 0; i < size; ++i) {
     // Every other degree: the root, the third, the fifth and the seventh.
     int pc = tones[idx(static_cast<int>(2 * i))];
-    offsets.push_back(((pc - root_pc) % 12 + 12) % 12);
+    offsets.push_back(pitch_class_of(pc - root_pc));
     text += (i > 0 ? ", " : "") + js::to_string(offsets.back());
   }
   auto third_ic = static_cast<int>(offsets[1]);
@@ -404,7 +405,7 @@ std::vector<int> chord_pitch_classes(const Chord& chord, const ChordPitchClassOp
 int interval_above_root(double pitch, const Chord& chord) {
   int pc = pitch_class_of(pitch);
   assert_finite_number(chord.rootPc, "chord.rootPc");
-  return ((pc - pitch_class_of(chord.rootPc)) % 12 + 12) % 12;
+  return pitch_class_of(pc - pitch_class_of(chord.rootPc));
 }
 
 bool is_chord_member(double pitch, const Chord& chord) {
@@ -456,7 +457,7 @@ std::optional<int> degree_of_interval(double interval, const Chord& chord) {
   if (role) {
     return kDegreeByRole[static_cast<std::size_t>(*role)].value;
   }
-  double ic = std::fmod(std::fmod(interval, 12) + 12, 12);
+  double ic = js::floor_mod(interval, 12);
   if (std::floor(ic) != ic) {
     return std::nullopt;
   }

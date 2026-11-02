@@ -138,11 +138,9 @@ std::vector<int> diatonic_pitch_classes(const KeyArg& key) {
 std::vector<int> scale_tones_in_degree_order(const KeyArg& key) {
   KeyScale scale = to_key_scale(key);
   int root = pitch_class_of(scale.rootPc);
-  std::vector<int> pcs;
-  for (int n = 0; n < 12; ++n) {
-    if (((scale.modeMask12 >> n) & 1) == 1) {
-      pcs.push_back((root + n) % 12);
-    }
+  std::vector<int> pcs = scale_offsets(scale);
+  for (int& pc : pcs) {
+    pc = (root + pc) % 12;
   }
   return pcs;
 }

@@ -268,7 +268,7 @@ export function formatChordSymbol(chord: ChordLike, opts?: ChordSymbolOptions): 
               bassHint,
               rootHint,
               rootSpelling,
-              flats ?? rootSpelling.alter < 0,
+              flats,
               (spelling) =>
                 ownSpelling !== undefined &&
                 spelling.letter === ownSpelling.letter &&

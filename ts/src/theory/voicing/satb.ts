@@ -271,44 +271,6 @@ export function voiceChord(chord: ChordLike, opts?: VoicingOptions): number[] {
   return [...pitches.subarray(bestOffset, bestOffset + voices)];
 }
 
-/**
- * Voice a chord progression with smooth voice leading. Each chord picks, from a
- * bounded deterministic candidate set, the voicing minimizing the voice-leading
- * cost from the previous voicing plus a large penalty per counterpoint
- * violation (parallel perfects/octaves, voice crossing, voice overlap, and
- * over-wide upper-voice spacing).
- *
- * The choice also weighs the chord that follows. A voicing costs whatever the
- * move onto the next chord will cost in broken rules, so a placement that is
- * marginally smoother now but strands a voice on a leap it cannot write cleanly
- * loses to the one that leaves the line somewhere the next chord can be reached
- * from. The lookahead is one chord deep and reads only the violation weight of
- * the connection, so a chord is otherwise voiced exactly as it would be on its
- * own merits.
- *
- * Tendency tones are resolved rather than merely moved economically: the voice
- * holding a chordal seventh falls by step unless the next chord keeps that tone,
- * and — when `opts.key` is given — the leading tone rises to the tonic and is
- * never doubled, wherever it is functioning as a leading tone rather than
- * sounding as an ordinary tone of some other chord. A key also names the letters
- * each voice is written with, which is what lets the search refuse the augmented
- * second between the lowered sixth and the raised seventh that a minor-key line
- * otherwise falls into. Without a key neither rule can apply, since nothing
- * identifies which pitch class is the leading tone or how a tone is spelled.
- *
- * @param chords The chords to voice in order.
- * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
- * @returns One voicing per chord, each ascending with one MIDI pitch per voice.
- * @throws If any chord admits no voicing within the given ranges, or if the
- *   progression is longer than `opts.budget` chords.
- * @example
- * ```ts
- * import { parseChordSymbol, voiceProgression } from '@libraz/libcantus';
- * const chords = ['C', 'Am', 'F', 'G'].map((s) => parseChordSymbol(s));
- * voiceProgression(chords); // one four-voice voicing per chord, smoothly led
- * ```
- * @category Voicing & Counterpoint
- */
 /** The unsatisfiable-constraints error for one chord of a progression. */
 function noSolutionAt(index: number, chord: Chord): NoSolutionError {
   return new NoSolutionError(
@@ -376,18 +338,42 @@ function successorWeight(
 }
 
 /**
- * Voice a chord progression with smooth, bounded SATB-style leading.
+ * Voice a chord progression with smooth voice leading. Each chord picks, from a
+ * bounded deterministic candidate set, the voicing minimizing the voice-leading
+ * cost from the previous voicing plus a large penalty per counterpoint
+ * violation (parallel perfects/octaves, voice crossing, voice overlap, and
+ * over-wide upper-voice spacing).
  *
- * Each chord is chosen from a deterministic candidate set, minimizing motion
- * while penalizing counterpoint violations, and weighing the violations the
- * move onto the following chord would then be forced into. A supplied key
- * additionally resolves leading tones and chordal sevenths.
+ * The choice also weighs the chord that follows. A voicing costs whatever the
+ * move onto the next chord will cost in broken rules, so a placement that is
+ * marginally smoother now but strands a voice on a leap it cannot write cleanly
+ * loses to the one that leaves the line somewhere the next chord can be reached
+ * from. The lookahead is one chord deep and reads only the violation weight of
+ * the connection, so a chord is otherwise voiced exactly as it would be on its
+ * own merits.
+ *
+ * Tendency tones are resolved rather than merely moved economically: the voice
+ * holding a chordal seventh falls by step unless the next chord keeps that tone,
+ * and — when `opts.key` is given — the leading tone rises to the tonic and is
+ * never doubled, wherever it is functioning as a leading tone rather than
+ * sounding as an ordinary tone of some other chord. A key also names the letters
+ * each voice is written with, which is what lets the search refuse the augmented
+ * second between the lowered sixth and the raised seventh that a minor-key line
+ * otherwise falls into. Without a key neither rule can apply, since nothing
+ * identifies which pitch class is the leading tone or how a tone is spelled.
  *
  * @param chords The chords to voice in order.
  * @param opts Voicing options; defaults to four voices in {@link SATB_RANGES}.
- * @returns One ascending MIDI voicing per chord.
+ * @returns One voicing per chord, each ascending with one MIDI pitch per voice.
  * @throws {@link NoSolutionError} with the failing chord index when a chord
- *   cannot fit the requested ranges.
+ *   admits no voicing within the given ranges, or if the progression is longer
+ *   than `opts.budget` chords.
+ * @example
+ * ```ts
+ * import { parseChordSymbol, voiceProgression } from '@libraz/libcantus';
+ * const chords = ['C', 'Am', 'F', 'G'].map((s) => parseChordSymbol(s));
+ * voiceProgression(chords); // one four-voice voicing per chord, smoothly led
+ * ```
  * @category Voicing & Counterpoint
  */
 export function voiceProgression(chords: readonly ChordLike[], opts?: VoicingOptions): number[][] {
@@ -428,7 +414,7 @@ export function voiceProgression(chords: readonly ChordLike[], opts?: VoicingOpt
             // The chord after the one being reached goes in too: it is what
             // says whether the chromatic tone the next chord introduces is the
             // one an applied dominant is written with.
-            scoring: moveScoring(chord, nextChord, key, data[index + 2]),
+            scoring: moveScoring(chord, nextChord, key, data[index + 2], scoring.spelling?.to),
           };
     const { pitches, voices, count } = current;
     // A lookahead weighs every pair of candidates, so it is dropped wherever the

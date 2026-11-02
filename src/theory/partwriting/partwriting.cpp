@@ -13,6 +13,7 @@
 #include "cantus/theory/spelling.h"
 #include "core/validation/validation.h"
 #include "js/number.h"
+#include "theory/counterpoint/internal.h"
 #include "theory/partwriting/cross_relation.h"
 #include "theory/partwriting/internal.h"
 #include "theory/tendency/tendency.h"
@@ -195,7 +196,7 @@ std::vector<PartWritingViolation> melodic_violations(const Transition& transitio
     int later_pitch = to.pitches[voice];
     SpelledInterval interval = spelled_interval(earlier, later);
     std::vector<int> line = {static_cast<int>(voice)};
-    if (is_augmented_melodic_interval(earlier, later)) {
+    if (is_augmented_spelled_interval(interval)) {
       found.push_back(
           violation(Kind::kAugmentedMelodicInterval, line, from.index, to.index,
                     "The voice moves by an augmented " + interval_word(interval.number)));
@@ -217,10 +218,6 @@ std::vector<PartWritingViolation> melodic_violations(const Transition& transitio
     }
   }
   return found;
-}
-
-void append(std::vector<PartWritingViolation>& to, std::vector<PartWritingViolation> from) {
-  to.insert(to.end(), std::make_move_iterator(from.begin()), std::make_move_iterator(from.end()));
 }
 
 }  // namespace

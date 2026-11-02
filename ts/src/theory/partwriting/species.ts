@@ -628,7 +628,7 @@ function leapAnswerViolations(moves: readonly Move[]): PartWritingViolation[] {
  * A repeated note does not end the run, and a run of a single interval is left
  * to the leap rule, which already forbids it.
  */
-function tritoneOutlineViolations(entries: readonly Entry[]): PartWritingViolation[] {
+function tritoneOutlineViolations(moves: readonly Move[]): PartWritingViolation[] {
   const found: PartWritingViolation[] = [];
   let run: Move[] = [];
   const close = (): void => {
@@ -650,7 +650,7 @@ function tritoneOutlineViolations(entries: readonly Entry[]): PartWritingViolati
     }
     run = [];
   };
-  for (const move of melodicMoves(entries)) {
+  for (const move of moves) {
     if (direction(move.interval) === 0) {
       continue;
     }
@@ -712,7 +712,7 @@ function melodicShapeViolations(
     ...climaxViolations(entries),
     ...leapChainViolations(moves),
     ...leapAnswerViolations(moves),
-    ...tritoneOutlineViolations(entries),
+    ...tritoneOutlineViolations(moves),
     ...(species === 2 || species === 3 ? repeatedNoteViolations(moves, closingMeasure) : []),
   ];
   return found.sort((left, right) => left.fromIndex - right.fromIndex);

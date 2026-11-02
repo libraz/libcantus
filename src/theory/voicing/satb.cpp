@@ -277,7 +277,8 @@ std::vector<std::vector<int>> voice_progression(const std::vector<ChordArg>& cho
       if (index + 2 < data.size()) {
         after = data[index + 2];
       }
-      lookahead = Lookahead{spare, move_scoring(chord, next_chord, key, after)};
+      const SpellingTable* chord_spelling = scoring.spelling ? &scoring.spelling->to : nullptr;
+      lookahead = Lookahead{spare, move_scoring(chord, next_chord, key, after, chord_spelling)};
     }
     const double* pitches = current->pitches.data();
     std::size_t voices = current->voices;

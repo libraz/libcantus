@@ -253,11 +253,5 @@ export function diatonicPitchClasses(key: KeyLike): number[] {
 export function scaleTonesInDegreeOrder(key: KeyLike): number[] {
   const scale = toKeyScale(key);
   const root = pitchClass(scale.rootPc);
-  const pcs: number[] = [];
-  for (let n = 0; n < 12; n += 1) {
-    if (((scale.modeMask12 >> n) & 1) === 1) {
-      pcs.push((root + n) % 12);
-    }
-  }
-  return pcs;
+  return scaleOffsets(scale).map((n) => (root + n) % 12);
 }

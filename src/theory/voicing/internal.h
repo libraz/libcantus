@@ -116,10 +116,12 @@ struct MoveScoring {
   std::optional<CrossRelationTables> crossRelation;
 };
 
-/** Build the scoring context of a move onto `chord` (`moveScoring`). */
+/** Build the scoring context of a move onto `chord` (`moveScoring`); `prev_spelling` is the table
+ * of `prev_chord` under `key` when the caller already holds it. */
 MoveScoring move_scoring(const std::optional<Chord>& prev_chord, const Chord& chord,
                          const std::optional<ResolvedKey>& key,
-                         const std::optional<Chord>& next_chord = std::nullopt);
+                         const std::optional<Chord>& next_chord = std::nullopt,
+                         const SpellingTable* prev_spelling = nullptr);
 
 /** The rule-violation weight of one move (`violationWeight`). */
 double violation_weight(const MoveScoring& scoring, const double* prev, std::size_t prev_offset,

@@ -7,6 +7,7 @@
 
 #include "core/pitch/limits.gen.h"
 #include "core/validation/validation.h"
+#include "js/math.h"
 
 namespace cantus {
 
@@ -66,7 +67,7 @@ NoteData by_same_step(const NoteData& spelling, const NoteData& from, const Note
 }
 
 NoteData spelling_above(const NoteData& root, double letters, int pc) {
-  int letter = static_cast<int>(std::fmod(std::fmod(root.letter + letters, 7) + 7, 7));
+  int letter = static_cast<int>(js::floor_mod(root.letter + letters, 7));
   int natural = note_to_pitch_class(NoteData{static_cast<double>(letter), 0, std::nullopt});
   int alter = static_cast<int>(std::fmod(std::fmod(pc - natural, 12) + 18, 12)) - 6;
   return NoteData{static_cast<double>(letter), static_cast<double>(alter), std::nullopt};

@@ -36,6 +36,10 @@ double pitch_of(const PitchArg& value) {
   return note_to_midi(std::get<NoteData>(value.value()));
 }
 
+bool is_augmented_spelled_interval(const SpelledInterval& interval) {
+  return interval.number >= 2 && interval.quality.rfind('A', 0) == 0;
+}
+
 int simple_interval_number(double number) {
   return static_cast<int>(std::fmod(std::fabs(number) - 1, 7)) + 1;
 }

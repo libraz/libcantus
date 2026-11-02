@@ -106,13 +106,12 @@ std::optional<int> lookup(const std::array<NamedInt, N>& table, std::string_view
   return std::nullopt;
 }
 
-int mod12(double value) { return pitch_class_of(value); }
-
 int mod7(double value) { return diatonic_letter_of(value); }
 
-/** The pitch class a spelled note sounds (`notePitchClass`). */
-int note_pitch_class(const NoteData& note) {
-  return mod12(natural_pitch_class_of(note.letter) + note.alter);
+/** The pitch class a spelled note sounds (`notePitchClass`); NoteData or PitchSpelling. */
+template <typename Spelled>
+int note_pitch_class(const Spelled& note) {
+  return pitch_class_of(natural_pitch_class_of(note.letter) + note.alter);
 }
 
 NoteData note(int letter, double alter) {
@@ -121,7 +120,7 @@ NoteData note(int letter, double alter) {
 
 /** Shortest signed alteration taking a letter's natural pitch class to `pc` (`alterFor`). */
 int alter_for(int letter, double pc) {
-  int d = mod12(pc - natural_pitch_class_of(letter));
+  int d = pitch_class_of(pc - natural_pitch_class_of(letter));
   if (d > 6) {
     d -= 12;
   }
@@ -163,8 +162,8 @@ NoteData cap_chromatic_accidentals(const NoteData& preferred,
 /** How far a tone's reading strays from a plain degree above the tonic (`degreeStrain`). */
 int degree_strain(const NoteData& tonic, const NoteData& spelled) {
   int letter_offset = mod7(spelled.letter - tonic.letter);
-  int offset = mod12(note_pitch_class(spelled) - note_pitch_class(tonic));
-  int deviation = mod12(offset - kMajorSemitones[static_cast<std::size_t>(letter_offset)]);
+  int offset = pitch_class_of(note_pitch_class(spelled) - note_pitch_class(tonic));
+  int deviation = pitch_class_of(offset - kMajorSemitones[static_cast<std::size_t>(letter_offset)]);
   if (deviation > 6) {
     deviation -= 12;
   }
@@ -174,16 +173,12 @@ int degree_strain(const NoteData& tonic, const NoteData& spelled) {
   return std::min<int>(strain, 2);
 }
 
-bool is_heptatonic(const KeyScale& key) {
-  return scale_tones_in_degree_order(key).size() == DIATONIC_LETTER_COUNT;
-}
-
 /** Whether the scale has a minor third and no major third (`hasMinorThird`). */
 bool has_minor_third(const KeyScale& key) {
   std::vector<int> tones = scale_tones_in_degree_order(key);
-  int root = mod12(key.rootPc);
+  int root = pitch_class_of(key.rootPc);
   auto has = [&tones](int pc) { return std::find(tones.begin(), tones.end(), pc) != tones.end(); };
-  return has(mod12(root + 3)) && !has(mod12(root + 4));
+  return has(pitch_class_of(root + 3)) && !has(pitch_class_of(root + 4));
 }
 
 /** Which way a scale leans: a flat tonic and a minor third both mean flats (`leansFlat`). */
@@ -223,7 +218,7 @@ std::optional<std::vector<NoteData>> spell_by_parent_mode(const NoteData& tonic,
     int alter = 0;
     int signed_alter = 0;
     for (int pc : pcs) {
-      auto found = std::find(offsets.begin(), offsets.end(), mod12(pc - tonic_pc));
+      auto found = std::find(offsets.begin(), offsets.end(), pitch_class_of(pc - tonic_pc));
       std::optional<int> degree;
       if (found != offsets.end()) {
         degree = static_cast<int>(found - offsets.begin());
@@ -311,18 +306,18 @@ std::optional<JointSpelling> spell_gapped_scale(const NoteData& tonic, const Key
   if (tones.size() > MAX_JOINT_TONE_COUNT) {
     return std::nullopt;
   }
-  int tonic_pc = mod12(natural_pitch_class_of(tonic.letter) + tonic.alter);
+  int tonic_pc = note_pitch_class(tonic);
   NoteData tonic_note = note(mod7(tonic.letter), tonic.alter);
   bool prefer_flat = leans_flat(tonic, key);
   std::vector<int> rest;
   for (int pc : tones) {
-    if (mod12(pc - tonic_pc) != 0) {
+    if (pitch_class_of(pc - tonic_pc) != 0) {
       rest.push_back(pc);
     }
   }
   std::vector<std::vector<NoteData>> candidates;
   for (int pc : rest) {
-    candidates.push_back(gapped_candidates(tonic, mod12(pc - tonic_pc), pc, prefer_flat));
+    candidates.push_back(gapped_candidates(tonic, pitch_class_of(pc - tonic_pc), pc, prefer_flat));
   }
   std::optional<std::vector<NoteData>> chosen = spell_by_parent_mode(tonic_note, rest, prefer_flat);
   if (!chosen) {
@@ -338,22 +333,22 @@ std::optional<JointSpelling> spell_gapped_scale(const NoteData& tonic, const Key
   JointSpelling spellings;
   spellings[static_cast<std::size_t>(tonic_pc)] = tonic_note;
   for (std::size_t index = 0; index < rest.size() && index < chosen->size(); ++index) {
-    spellings[static_cast<std::size_t>(mod12(rest[index]))] = (*chosen)[index];
+    spellings[static_cast<std::size_t>(pitch_class_of(rest[index]))] = (*chosen)[index];
   }
   return spellings;
 }
 
 /** Spell a single pitch class from the key alone (`spellByKey`). */
 NoteData spell_by_key(double pc, const NoteData& tonic, const KeyScale& key) {
-  int tonic_pc = mod12(natural_pitch_class_of(tonic.letter) + tonic.alter);
-  int offset = mod12(pc - tonic_pc);
+  int tonic_pc = note_pitch_class(tonic);
+  int offset = pitch_class_of(pc - tonic_pc);
   // The tonic spells as itself, whatever the scale.
   if (offset == 0) {
     return note(mod7(tonic.letter), tonic.alter);
   }
-  if (is_heptatonic(key)) {
-    std::vector<int> tones = scale_tones_in_degree_order(key);
-    auto found = std::find(tones.begin(), tones.end(), mod12(pc));
+  std::vector<int> tones = scale_tones_in_degree_order(key);
+  if (tones.size() == DIATONIC_LETTER_COUNT) {
+    auto found = std::find(tones.begin(), tones.end(), pitch_class_of(pc));
     if (found != tones.end()) {
       int letter = mod7(tonic.letter + static_cast<int>(found - tones.begin()));
       return note(letter, alter_for(letter, pc));
@@ -380,7 +375,7 @@ NoteData spell_by_key(double pc, const NoteData& tonic, const KeyScale& key) {
     if (is_scale_tone(pc, key)) {
       if (std::optional<JointSpelling> joint = spell_gapped_scale(tonic, key)) {
         if (const std::optional<NoteData>& assigned =
-                (*joint)[static_cast<std::size_t>(mod12(pc))]) {
+                (*joint)[static_cast<std::size_t>(pitch_class_of(pc))]) {
           return *assigned;
         }
       }
@@ -390,7 +385,7 @@ NoteData spell_by_key(double pc, const NoteData& tonic, const KeyScale& key) {
       return candidates.front();
     }
   }
-  int below_letter = mod7(kLetterBelowPitchClass[static_cast<std::size_t>(mod12(pc))]);
+  int below_letter = mod7(kLetterBelowPitchClass[static_cast<std::size_t>(pitch_class_of(pc))]);
   return note(below_letter, alter_for(below_letter, pc));
 }
 
@@ -401,7 +396,7 @@ NoteData spelled_pitch_class(double pc, const NoteData& tonic, const KeyScale& k
  */
 PitchSpelling chord_root_spelling(const Chord& chord, const NoteData& tonic, const KeyScale& key) {
   if (const std::optional<PitchSpelling>& hint = chord.rootSpelling) {
-    if (mod12(natural_pitch_class_of(hint->letter) + hint->alter) == mod12(chord.rootPc)) {
+    if (note_pitch_class(*hint) == pitch_class_of(chord.rootPc)) {
       return PitchSpelling{static_cast<double>(mod7(hint->letter)), hint->alter};
     }
   }
@@ -416,7 +411,7 @@ std::optional<int> chord_tone_letter_step(double pc, double root_pc, const Chord
     std::optional<std::vector<int>> offsets = chord_tone_letter_offsets(*chord);
     std::size_t index = chord->intervals.size();
     for (std::size_t i = 0; i < chord->intervals.size(); ++i) {
-      if (mod12(chord->rootPc + chord->intervals[i]) == mod12(pc)) {
+      if (pitch_class_of(chord->rootPc + chord->intervals[i]) == pitch_class_of(pc)) {
         index = i;
         break;
       }
@@ -429,7 +424,7 @@ std::optional<int> chord_tone_letter_step(double pc, double root_pc, const Chord
       return lookup(kLetterStepByRole, to_string(*role));
     }
   }
-  return lookup(kChordToneLetterSteps, mod12(pc - root_pc));
+  return lookup(kChordToneLetterSteps, pitch_class_of(pc - root_pc));
 }
 
 /** Spell `pc` as a chord tone, on the letter its degree above the root implies (`spellChordTone`).
@@ -441,43 +436,61 @@ std::optional<NoteData> spell_chord_tone(double pc, const SpellingContext& conte
   if (!chord_root) {
     return std::nullopt;
   }
-  double root_letter = chord == nullptr ? spell_by_key(mod12(*chord_root), tonic, key).letter
-                                        : chord_root_spelling(*chord, tonic, key).letter;
+  double root_letter = chord == nullptr
+                           ? spell_by_key(pitch_class_of(*chord_root), tonic, key).letter
+                           : chord_root_spelling(*chord, tonic, key).letter;
   return letter_for(root_letter, chord_tone_letter_step(pc, *chord_root, chord), pc);
 }
 
 /** Spell `pc` relative to a neighbour `gap` semitones away from it (`neighbourSpelling`). */
-std::optional<NoteData> neighbour_spelling(std::optional<double> neighbour, int gap,
-                                           int letter_step, double pc, const NoteData& tonic,
-                                           const KeyScale& key) {
-  if (!neighbour || mod12(*neighbour - pc) != mod12(gap)) {
+std::optional<NoteData> neighbour_spelling(std::optional<double> neighbour, std::optional<int> away,
+                                           int gap, int letter_step, double pc,
+                                           const NoteData& tonic, const KeyScale& key) {
+  if (!neighbour || away != pitch_class_of(gap)) {
     return std::nullopt;
   }
-  return letter_for(spell_by_key(mod12(*neighbour), tonic, key).letter, letter_step, pc);
+  return letter_for(spell_by_key(pitch_class_of(*neighbour), tonic, key).letter, letter_step, pc);
 }
 
 /** Refine a key spelling with the surrounding evidence, in rule priority order (`refineByContext`).
  */
 NoteData refine_by_context(double pc, const NoteData& tonic, const KeyScale& key,
                            const SpellingContext& context, const NoteData& key_spelling) {
-  int tonic_pc = mod12(natural_pitch_class_of(tonic.letter) + tonic.alter);
-  if (mod12(pc) == tonic_pc || is_scale_tone(pc, key)) {
+  int tonic_pc = note_pitch_class(tonic);
+  if (pitch_class_of(pc) == tonic_pc || is_scale_tone(pc, key)) {
     return key_spelling;
   }
-  // Every rule is worked out before any is chosen, as the TS array literal evaluates them.
-  std::array<std::optional<NoteData>, 5> candidates = {
-      spell_chord_tone(pc, context, tonic, key),
-      neighbour_spelling(context.next, 1, -1, pc, tonic, key),
-      neighbour_spelling(context.previous, -1, 0, pc, tonic, key),
-      neighbour_spelling(context.next, -1, 1, pc, tonic, key),
-      neighbour_spelling(context.previous, 1, 0, pc, tonic, key),
-  };
-  for (const std::optional<NoteData>& candidate : candidates) {
-    if (candidate && std::abs(candidate->alter) <= MAX_CONTEXT_ALTER) {
-      return *candidate;
-    }
+  std::optional<NoteData> chord_tone = spell_chord_tone(pc, context, tonic, key);
+  // Read before any rule is tried, so a malformed neighbour is rejected whichever rule wins.
+  std::optional<int> next_away;
+  if (context.next) {
+    next_away = pitch_class_of(*context.next - pc);
   }
-  return key_spelling;
+  std::optional<int> previous_away;
+  if (context.previous) {
+    previous_away = pitch_class_of(*context.previous - pc);
+  }
+  auto fits = [](const std::optional<NoteData>& candidate) {
+    return candidate && std::abs(candidate->alter) <= MAX_CONTEXT_ALTER;
+  };
+  if (fits(chord_tone)) {
+    return *chord_tone;
+  }
+  std::optional<NoteData> candidate =
+      neighbour_spelling(context.next, next_away, 1, -1, pc, tonic, key);
+  if (fits(candidate)) {
+    return *candidate;
+  }
+  candidate = neighbour_spelling(context.previous, previous_away, -1, 0, pc, tonic, key);
+  if (fits(candidate)) {
+    return *candidate;
+  }
+  candidate = neighbour_spelling(context.next, next_away, -1, 1, pc, tonic, key);
+  if (fits(candidate)) {
+    return *candidate;
+  }
+  candidate = neighbour_spelling(context.previous, previous_away, 1, 0, pc, tonic, key);
+  return fits(candidate) ? *candidate : key_spelling;
 }
 
 /** Spell a pitch class from an already-resolved tonic and key (`spelledPitchClass`). */
@@ -532,13 +545,13 @@ int chord_letter_offset(double interval, const Chord& chord) {
   }
   // Unknown or custom interval data gets the nearest conventional diatonic distance.
   double octaves = std::floor(js::max(0, interval) / 12);
-  int simple = mod12(interval);
+  int simple = pitch_class_of(interval);
   return static_cast<int>(octaves * 7 + kSimpleLetterOffsets[static_cast<std::size_t>(simple)]);
 }
 
 /** Spell chord tones from an already-resolved root spelling (`chordTonesFromRoot`). */
 std::vector<NoteData> chord_tones_from_root(const Chord& chord, const PitchSpelling& root) {
-  if (mod12(natural_pitch_class_of(root.letter) + root.alter) != mod12(chord.rootPc)) {
+  if (note_pitch_class(root) != pitch_class_of(chord.rootPc)) {
     throw InvalidInputError("chord root spelling must match chord.rootPc");
   }
   std::optional<std::vector<int>> hinted = chord_tone_letter_offsets(chord);
@@ -548,7 +561,7 @@ std::vector<NoteData> chord_tones_from_root(const Chord& chord, const PitchSpell
     int offset =
         hinted && index < hinted->size() ? (*hinted)[index] : chord_letter_offset(interval, chord);
     int letter = mod7(root.letter + offset);
-    double pc = mod12(chord.rootPc + interval);
+    double pc = pitch_class_of(chord.rootPc + interval);
     out.push_back(note(letter, alter_for(letter, pc)));
   }
   return out;
@@ -558,9 +571,13 @@ void assert_chord_root(const Chord& chord) { assert_finite_number(chord.rootPc, 
 
 }  // namespace
 
+bool is_heptatonic(const KeyScale& key) {
+  return scale_tones_in_degree_order(key).size() == DIATONIC_LETTER_COUNT;
+}
+
 void assert_tonic_of(const NoteData& tonic, const KeyScale& key, std::string_view source) {
   int tonic_pc = note_pitch_class(tonic);
-  int root_pc = mod12(key.rootPc);
+  int root_pc = pitch_class_of(key.rootPc);
   if (tonic_pc != root_pc) {
     std::string name = format_note(note(mod7(tonic.letter), tonic.alter));
     throw InvalidInputError(std::string(source) + ": tonic " + name + " sounds pitch class " +
@@ -624,7 +641,7 @@ NoteData spell_pitch(double pitch, const NoteArg& tonic, const KeyArg& key,
   KeyScale scale = to_key_scale(key);
   assert_tonic_of(note_data, scale, "spellPitch");
   double rounded = js::round(assert_finite_number(pitch, "pitch"));
-  NoteData spelled = spelled_pitch_class(mod12(rounded), note_data, scale, &context);
+  NoteData spelled = spelled_pitch_class(pitch_class_of(rounded), note_data, scale, &context);
   spelled.octave = (rounded - natural_pitch_class_of(spelled.letter) - spelled.alter) / 12 - 1;
   return spelled;
 }

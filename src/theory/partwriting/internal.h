@@ -7,6 +7,7 @@
 #define CANTUS_SRC_THEORY_PARTWRITING_INTERNAL_H_
 
 #include <cstddef>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -60,6 +61,11 @@ std::vector<SpeciesEntryPair> species_entry_pairs(std::size_t cantus_firmus,
 /** Build one violation record (`violation`). */
 PartWritingViolation violation(PartWritingViolationKind kind, std::vector<int> voices,
                                int from_index, int to_index, std::string rationale);
+
+/** Append `from` to `to`, moving its elements. */
+inline void append(std::vector<PartWritingViolation>& to, std::vector<PartWritingViolation> from) {
+  to.insert(to.end(), std::make_move_iterator(from.begin()), std::make_move_iterator(from.end()));
+}
 
 }  // namespace cantus
 

@@ -16,6 +16,9 @@ namespace cantus {
  */
 double pitch_of(const PitchArg& value);
 
+/** Whether a spelled interval is augmented above the unison (`isAugmentedSpelledInterval`). */
+bool is_augmented_spelled_interval(const SpelledInterval& interval);
+
 /** Reduce a compound diatonic number to its simple form in [1, 7] (`simpleIntervalNumber`). */
 int simple_interval_number(double number);
 

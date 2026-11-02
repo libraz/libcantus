@@ -44,7 +44,7 @@ std::vector<int> dedupe_pcs(const std::vector<int>& pcs) {
 
 /** The lowest MIDI pitch of a pitch class at or above a floor (`lowestPitchAtOrAbove`). */
 int lowest_pitch_at_or_above(int pc, int floor) {
-  return floor + euclidean_mod(pc - pitch_class_of(floor), 12);
+  return floor + pitch_class_of(pc - pitch_class_of(floor));
 }
 
 /** The pitch class in `pcs` whose circular distance to `target` is smallest (`nearestPc`). */
@@ -52,17 +52,13 @@ int nearest_pc(int target, const std::vector<int>& pcs) {
   int best = pcs.empty() ? target : pcs[0];
   int best_dist = 12;
   for (int pc : pcs) {
-    int dist = std::min<int>(euclidean_mod(pc - target, 12), euclidean_mod(target - pc, 12));
+    int dist = std::min<int>(pitch_class_of(pc - target), pitch_class_of(target - pc));
     if (dist < best_dist) {
       best_dist = dist;
       best = pc;
     }
   }
   return best;
-}
-
-bool includes_pc(const std::vector<int>& pcs, int pc) {
-  return std::find(pcs.begin(), pcs.end(), pc) != pcs.end();
 }
 
 /** `[...order.slice(at), ...order.slice(0, at)]`. */
@@ -143,7 +139,7 @@ std::vector<int> voice_chord_styled(const ChordArg& given, const StyledVoicingOp
 
   if (opts.topNote) {
     int top_pc = pitch_class_of(*opts.topNote);
-    int target = includes_pc(order, top_pc) ? top_pc : nearest_pc(top_pc, order);
+    int target = nearest_pc(top_pc, order);
     auto target_at = std::find(order.begin(), order.end(), target);
     order = rotate_to(order, static_cast<std::size_t>(target_at - order.begin()) + 1);
   }
@@ -173,7 +169,7 @@ std::vector<int> voice_chord_styled(const ChordArg& given, const StyledVoicingOp
       previous = lowest_pitch_at_or_above(pc, base);
       has_previous = true;
     } else {
-      int delta = euclidean_mod(pc - pitch_class_of(previous), 12);
+      int delta = pitch_class_of(pc - pitch_class_of(previous));
       if (delta == 0) {
         delta = 12;
       }

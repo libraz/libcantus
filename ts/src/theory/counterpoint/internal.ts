@@ -35,6 +35,11 @@ function assertQualityLabel(quality: IntervalQualityLabel): IntervalQualityLabel
   return quality;
 }
 
+/** Whether a spelled interval is an augmented one above the unison. */
+export function isAugmentedSpelledInterval(interval: SpelledInterval): boolean {
+  return interval.number >= 2 && interval.quality.startsWith('A');
+}
+
 /** The sounding pitch of a predicate argument, whichever form it arrived in. */
 export function pitchOf(value: number | Note): number {
   return typeof value === 'number' ? value : noteToMidi(value);

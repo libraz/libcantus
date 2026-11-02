@@ -23,7 +23,12 @@ import type { Note, SpelledInterval } from '../../core/pitch/index.js';
 import { pitchClassOf as pitchClass, spelledInterval } from '../../core/pitch/index.js';
 import { assertFiniteNumber, assertOneOf } from '../../core/validation/index.js';
 import { type KeyLike, toKeyScale } from '../scale/index.js';
-import { classifySpelledInterval, pitchOf, simpleIntervalNumber } from './internal.js';
+import {
+  classifySpelledInterval,
+  isAugmentedSpelledInterval,
+  pitchOf,
+  simpleIntervalNumber,
+} from './internal.js';
 
 /**
  * The readings {@link createsHiddenParallelPerfect} judges an approach by.
@@ -168,8 +173,7 @@ export function isAugmentedMelodicInterval(prev: number | Note, cur: number | No
   if (typeof prev === 'number' || typeof cur === 'number') {
     return false;
   }
-  const interval = spelledInterval(prev, cur);
-  return interval.number >= 2 && interval.quality.startsWith('A');
+  return isAugmentedSpelledInterval(spelledInterval(prev, cur));
 }
 
 /** Reduce an interval to its simple class in [0, 11]. */

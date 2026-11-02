@@ -8,6 +8,7 @@
 #include <tuple>
 
 #include "cantus/theory/counterpoint.h"
+#include "theory/counterpoint/internal.h"
 #include "theory/tendency/tendency.h"
 
 namespace cantus {
@@ -38,7 +39,7 @@ bool sounds_augmented_sixth(const ChromaticMoment& moment, const KeyScale& key) 
   }
   for (std::size_t voice = 1; voice < moment.notes.size(); ++voice) {
     SpelledInterval interval = spelled_interval(bass, moment.notes[voice]);
-    if ((interval.number - 1) % 7 + 1 == 6 && pitch_class_of(interval.semitones) == 10) {
+    if (simple_interval_number(interval.number) == 6 && pitch_class_of(interval.semitones) == 10) {
       return true;
     }
   }
