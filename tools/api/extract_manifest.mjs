@@ -11,16 +11,13 @@
  *
  * Usage: node tools/api/extract_manifest.mjs [--check]
  */
-import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { ANNOTATIONS, fail as failTool, formatJson, REPO } from '../corpus/lib.mjs';
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const PKG = path.join(REPO, 'ts');
 const OUT = path.join(REPO, 'api/manifest.json');
-const ANNOTATIONS = path.join(REPO, 'api/annotations.json');
 
 /** Subpath name ('.' is the package root) to entry file. */
 const SUBPATHS = [
@@ -33,8 +30,7 @@ const SUBPATHS = [
 ];
 
 function fail(message) {
-  console.error(`extract_manifest: ${message}`);
-  process.exit(1);
+  failTool('extract_manifest', message);
 }
 
 function rel(file) {
@@ -347,25 +343,11 @@ function build() {
   };
 }
 
-/** The manifest's JSON as the repo's biome configuration formats it. */
-function formatJson(value) {
-  return execFileSync(
-    path.join(REPO, 'node_modules/.bin/biome'),
-    ['format', `--stdin-file-path=${OUT}`],
-    {
-      cwd: REPO,
-      input: `${JSON.stringify(value, null, 2)}\n`,
-      encoding: 'utf8',
-      maxBuffer: 1 << 28,
-    },
-  );
-}
-
 function main() {
   const check = process.argv.includes('--check');
   for (const arg of process.argv.slice(2)) if (arg !== '--check') fail(`unknown argument ${arg}`);
   const manifest = build();
-  const text = formatJson(manifest);
+  const text = formatJson(OUT, manifest);
   if (manifest.exports.length === 0 || manifest.ops.length === 0) fail('no exports found');
   const summary = Object.entries(manifest.counts)
     .map(([k, v]) => `${k} ${v}`)

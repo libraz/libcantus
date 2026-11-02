@@ -19,11 +19,10 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { isDeepStrictEqual } from 'node:util';
 import ts from 'typescript';
+import { fail as failTool, REPO } from '../corpus/lib.mjs';
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const LAYERS = ['core', 'theory', 'analyze', 'generate', 'model'];
 const GENERATION = path.join(REPO, 'tests/spec/generation-golden.test.ts');
 const DETERMINISM = 'tests/spec/derived-determinism.test.ts';
@@ -57,8 +56,7 @@ export const vi = chain();
 `;
 
 function fail(message) {
-  console.error(`regen_golden: ${message}`);
-  process.exit(1);
+  failTool('regen_golden', message);
 }
 
 /** The algorithm version a recording test's title names, or NaN. */

@@ -23,10 +23,9 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import { fail as failTool, REPO } from '../corpus/lib.mjs';
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const VITEST = path.join(REPO, 'node_modules/.bin/vitest');
 const SPEC = path.join(REPO, 'tests/spec');
 const SPEC_CONFIG = path.join(SPEC, 'vitest.config.ts');
@@ -51,8 +50,7 @@ function log(line) {
 }
 
 function fail(message) {
-  console.error(`count: ${message}`);
-  process.exit(1);
+  failTool('count', message);
 }
 
 const TEST_ROOTS = new Set(['it', 'test']);

@@ -37,8 +37,8 @@ EXIT_CODES = {
 }
 
 
-def normalize(text: str) -> str:
-    return json.dumps(json.loads(text), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+def normalize(value: object) -> str:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def corpus_files(path: Path) -> list[Path]:
@@ -143,8 +143,8 @@ def replay(cli: Path, files: list[Path]) -> tuple[int, int, list[str]]:
             elif not bind_ids(expected_value, got_value, {}):
                 failures.append(f"{where}: handle or identity ids disagree within the call")
             else:
-                expected = normalize(json.dumps(expected_value))
-                got = normalize(json.dumps(got_value))
+                expected = normalize(expected_value)
+                got = normalize(got_value)
                 if got != expected:
                     failures.append(f"{where}: got {got}, want {expected}")
     return count, skipped, failures

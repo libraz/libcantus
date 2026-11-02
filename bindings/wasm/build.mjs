@@ -16,11 +16,11 @@
  *
  * Usage: node bindings/wasm/build.mjs [--wasm-dir build-wasm]
  */
-import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import { browserSafeModule, declareDispose, handleTypes, importsNodeBuiltin } from './patch.mjs';
+import { browserSafeModule, copyDeclarations, importsNodeBuiltin } from './patch.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, '../..');
@@ -89,35 +89,7 @@ for (const [file, info] of Object.entries(facade.metafile.outputs)) {
   }
 }
 
-const HANDLES = handleTypes();
-/** The handle types given `[Symbol.dispose]`. */
-const disposable = new Set();
-
-/** Copy every .d.ts under `from` into `to`, keeping the layout, with the handles disposable. */
-function copyDeclarations(from, to) {
-  let count = 0;
-  for (const entry of readdirSync(from, { withFileTypes: true })) {
-    const source = path.join(from, entry.name);
-    if (entry.isDirectory()) {
-      count += copyDeclarations(source, path.join(to, entry.name));
-    } else if (entry.name.endsWith('.d.ts')) {
-      mkdirSync(to, { recursive: true });
-      const { text, added } = declareDispose(readFileSync(source, 'utf8'), HANDLES);
-      for (const name of added) disposable.add(name);
-      writeFileSync(path.join(to, entry.name), text);
-      count += 1;
-    }
-  }
-  return count;
-}
-
 const declarations = copyDeclarations(TYPES, DIST);
-if (declarations === 0)
-  throw new Error('ts/dist has no declarations; build the pure package first');
-const undeclared = HANDLES.filter((name) => !disposable.has(name));
-if (undeclared.length > 0) {
-  throw new Error(`no \`type X = {\` declaration to make disposable for ${undeclared.join(', ')}`);
-}
 process.stdout.write(`wasm dist: ${declarations} declaration files from ts/dist\n`);
 
 // The package as a browser bundler sees it, under the target the README asks for.

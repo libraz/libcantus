@@ -9,15 +9,13 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fail as failTool, REPO } from '../corpus/lib.mjs';
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const SITES = path.join(REPO, 'tools/release/versions.json');
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/;
 
 function fail(message) {
-  console.error(`bump: ${message}`);
-  process.exit(1);
+  failTool('bump', message);
 }
 
 const version = process.argv[2];

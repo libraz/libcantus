@@ -6,7 +6,7 @@
  * - The pure package's declarations describe its handles without `[Symbol.dispose]`, which the
  *   facade's handles have; each handle type of the manifest gets the member.
  */
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,4 +54,47 @@ export function declareDispose(text, handles) {
     added.push(name);
   }
   return { text: added.length > 0 ? `${DISPOSABLE_LIB}${out}` : out, added };
+}
+
+/**
+ * Copy every declaration file under `from` whose name ends with one of `suffixes` into `to`,
+ * keeping the layout, with each handle type of the manifest made disposable.
+ * @param {string} from
+ * @param {string} to
+ * @param {readonly string[]} [suffixes]
+ * @returns {number} How many files were copied.
+ * @throws {Error} When nothing was copied, or a handle type is declared in none of the files.
+ */
+export function copyDeclarations(from, to, suffixes = ['.d.ts']) {
+  const handles = handleTypes();
+  const disposable = new Set();
+  const copy = (source, target) => {
+    let count = 0;
+    for (const entry of readdirSync(source, { withFileTypes: true })) {
+      const file = path.join(source, entry.name);
+      if (entry.isDirectory()) {
+        count += copy(file, path.join(target, entry.name));
+      } else if (suffixes.some((suffix) => entry.name.endsWith(suffix))) {
+        mkdirSync(target, { recursive: true });
+        const { text, added } = declareDispose(readFileSync(file, 'utf8'), handles);
+        for (const name of added) disposable.add(name);
+        writeFileSync(path.join(target, entry.name), text);
+        count += 1;
+      }
+    }
+    return count;
+  };
+  const count = copy(from, to);
+  if (count === 0) {
+    throw new Error(
+      `${path.relative(REPO, from)} has no declarations; build the pure package first`,
+    );
+  }
+  const undeclared = handles.filter((name) => !disposable.has(name));
+  if (undeclared.length > 0) {
+    throw new Error(
+      `no \`type X = {\` declaration to make disposable for ${undeclared.join(', ')}`,
+    );
+  }
+  return count;
 }

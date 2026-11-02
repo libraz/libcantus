@@ -18,6 +18,7 @@ import * as Pure from '../../../../ts/src/index.js';
 import type { Backend, CallReply, HostCallback } from '../backend.js';
 import { ERROR_CODES, ERROR_NAMES, type ErrorCodeName } from '../errors.js';
 import { CLASS_WIRE, CLASSES, TYPES } from '../generated/meta.js';
+import { escapeKey, isTagKey, numberText, setOwn, unescapeKey } from '../runtime.js';
 
 const PURE = Pure as unknown as Record<string, unknown>;
 
@@ -53,18 +54,6 @@ class WireText {
 
 const badRequest = (message: string) => new BoundaryFailure('BAD_REQUEST', message);
 const quote = (s: string) => JSON.stringify(s);
-
-function isTagKey(key: string): boolean {
-  return key.charCodeAt(0) === 36 && key.charCodeAt(1) !== 36;
-}
-
-function escapeKey(key: string): string {
-  return key.charCodeAt(0) === 36 ? `$${key}` : key;
-}
-
-function unescapeKey(key: string): string {
-  return key.charCodeAt(0) === 36 && key.charCodeAt(1) === 36 ? key.slice(1) : key;
-}
 
 function isInteger(v: Wire | undefined, lo: number, hi: number): v is number {
   return typeof v === 'number' && v >= lo && v <= hi && Math.floor(v) === v;
@@ -174,14 +163,6 @@ function stringifyWire(v: Wire | undefined): string {
     return `{${parts.join(',')}}`;
   }
   return JSON.stringify(v);
-}
-
-function numberText(n: number): string {
-  if (Number.isNaN(n)) return '{"$n":"NaN"}';
-  if (n === Number.POSITIVE_INFINITY) return '{"$n":"Infinity"}';
-  if (n === Number.NEGATIVE_INFINITY) return '{"$n":"-Infinity"}';
-  if (n === 0 && 1 / n < 0) return '{"$n":"-0"}';
-  return String(n);
 }
 
 function numberOf(v: Wire | undefined): number | undefined {
@@ -458,17 +439,7 @@ function decodeValue(v: Wire, host: HostCallback | null, state: EncodeState): un
     const out: Record<string, unknown> = {};
     for (const k of Object.keys(o)) {
       const value = decodeValue(o[k] as Wire, host, state);
-      const key = unescapeKey(k);
-      if (key === '__proto__') {
-        Object.defineProperty(out, key, {
-          value,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
-      } else {
-        out[key] = value;
-      }
+      setOwn(out, unescapeKey(k), value);
     }
     return out;
   }

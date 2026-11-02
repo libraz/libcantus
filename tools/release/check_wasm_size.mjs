@@ -9,14 +9,12 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fail as failTool, REPO } from '../corpus/lib.mjs';
 
-const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const BUDGET = path.join(REPO, 'bindings/wasm/wasm-size-budget.json');
 
 function fail(message) {
-  console.error(`check_wasm_size: ${message}`);
-  process.exit(1);
+  failTool('check_wasm_size', message);
 }
 
 const budget = JSON.parse(readFileSync(BUDGET, 'utf8'));

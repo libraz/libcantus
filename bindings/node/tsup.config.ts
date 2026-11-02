@@ -1,8 +1,8 @@
-import { cpSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'tsup';
-import { declareDispose, handleTypes } from '../wasm/patch.mjs';
+import { copyDeclarations } from '../wasm/patch.mjs';
 
 /**
  * The node package's dist/: the facade (bindings/js) bundled with `#backend` bound to the addon
@@ -46,24 +46,6 @@ export default defineConfig({
   ],
   onSuccess: async () => {
     statSync(path.join(pureDist, 'index.d.ts'));
-    cpSync(pureDist, path.join(here, 'dist'), {
-      recursive: true,
-      filter: (src) =>
-        statSync(src).isDirectory() || src.endsWith('.d.ts') || src.endsWith('.d.cts'),
-    });
-    const handles = handleTypes();
-    const disposable = new Set<string>();
-    const dist = path.join(here, 'dist');
-    for (const entry of readdirSync(dist, { recursive: true, encoding: 'utf8' })) {
-      if (!entry.endsWith('.d.ts') && !entry.endsWith('.d.cts')) continue;
-      const file = path.join(dist, entry);
-      const { text, added } = declareDispose(readFileSync(file, 'utf8'), handles);
-      for (const name of added) disposable.add(name);
-      writeFileSync(file, text);
-    }
-    const undeclared = handles.filter((name: string) => !disposable.has(name));
-    if (undeclared.length > 0) {
-      throw new Error(`no declaration to make disposable for ${undeclared.join(', ')}`);
-    }
+    copyDeclarations(pureDist, path.join(here, 'dist'), ['.d.ts', '.d.cts']);
   },
 });

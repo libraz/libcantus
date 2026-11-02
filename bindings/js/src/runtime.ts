@@ -216,19 +216,19 @@ function sharesFrozenChords(segments: unknown): boolean {
 }
 
 /** Whether an object key is a wire tag (one `$`) rather than an escaped user key (`$$`). */
-function isTagKey(key: string): boolean {
+export function isTagKey(key: string): boolean {
   return key.charCodeAt(0) === 36 && key.charCodeAt(1) !== 36;
 }
 
-function escapeKey(key: string): string {
+export function escapeKey(key: string): string {
   return key.charCodeAt(0) === 36 ? `$${key}` : key;
 }
 
-function unescapeKey(key: string): string {
+export function unescapeKey(key: string): string {
   return key.charCodeAt(0) === 36 && key.charCodeAt(1) === 36 ? key.slice(1) : key;
 }
 
-function numberText(n: number): string {
+export function numberText(n: number): string {
   if (Number.isNaN(n)) return '{"$n":"NaN"}';
   if (n === Number.POSITIVE_INFINITY) return '{"$n":"Infinity"}';
   if (n === Number.NEGATIVE_INFINITY) return '{"$n":"-Infinity"}';
@@ -327,7 +327,7 @@ function checkDepth(depth: number): void {
   }
 }
 
-function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
+export function setOwn(target: Record<string, unknown>, key: string, value: unknown): void {
   if (key === '__proto__') {
     Object.defineProperty(target, key, {
       value,
@@ -996,9 +996,11 @@ export class Runtime {
   #decodeHybrid(node: WireObject, ctx: DecodeContext): unknown {
     const type = String(node.$hy);
     const meta = this.#meta(type, 'hybrid');
-    const text = JSON.stringify(node);
+    // The text is read by the lookup and the callback scan only; an entry fills it on demand.
+    const { hybrids } = ctx;
+    const text = hybrids !== null || (ctx.fns?.length ?? 0) > 0 ? JSON.stringify(node) : undefined;
     // A result that is the very hybrid passed in (an assertion returning its argument).
-    const passed = ctx.hybrids?.get(text);
+    const passed = text === undefined ? undefined : hybrids?.get(text);
     if (passed !== undefined) return passed;
     const entry = keptEntry(node, ctx.fns, text);
     const object: Record<string, unknown> = {};

@@ -186,11 +186,14 @@ Napi::Value Call(const Napi::CallbackInfo& info) {
   return reply;
 }
 
+/** `Number.MAX_SAFE_INTEGER`, the largest handle id a JS number holds exactly. */
+constexpr double kMaxSafeInteger = 9007199254740991.0;
+
 /** `release(handle)`; ids that are not a handle the core issued are ignored, as the C ABI does. */
 Napi::Value Release(const Napi::CallbackInfo& info) {
   if (!info[0].IsNumber()) throw Napi::TypeError::New(info.Env(), "handle must be a number");
   const double id = info[0].As<Napi::Number>().DoubleValue();
-  if (id >= 0 && id <= 9007199254740991.0 && id == static_cast<double>(static_cast<uint64_t>(id))) {
+  if (id >= 0 && id <= kMaxSafeInteger && id == static_cast<double>(static_cast<uint64_t>(id))) {
     info.Env().GetInstanceData<EnvIds>()->Release(static_cast<uint64_t>(id));
   }
   return info.Env().Undefined();

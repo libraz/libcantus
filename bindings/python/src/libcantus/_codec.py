@@ -67,13 +67,13 @@ class _Unset:
 UNSET: Any = _Unset()
 
 
-def _without_ref(instance: Model | Hybrid) -> dict[str, Any]:
+def _without_ref(instance: _WireValue) -> dict[str, Any]:
     """The state a copy or a pickle of ``instance`` carries: everything but its reference."""
     return {k: v for k, v in instance.__dict__.items() if k != "_ref"}
 
 
-class Model:
-    """A model-class instance: an immutable value that keeps the wire node it came from."""
+class _WireValue:
+    """A value that keeps the wire node it came from."""
 
     _wire: dict[str, Any]
     # The runtime and id of the core's retained copy of this value, once it has one.
@@ -86,19 +86,15 @@ class Model:
         return f"{type(self).__name__}({json.dumps(self._wire, ensure_ascii=True)})"
 
 
-class Hybrid:
+class Model(_WireValue):
+    """A model-class instance: an immutable value that keeps the wire node it came from."""
+
+
+class Hybrid(_WireValue):
     """A value whose data fields are plain attributes and whose methods are ops."""
 
-    _wire: dict[str, Any]
-    _ref: tuple[Runtime, int] | None = None
     # (wire field name, attribute name) of every data member, in declaration order.
     _FIELDS: ClassVar[tuple[tuple[str, str], ...]] = ()
-
-    def __getstate__(self) -> dict[str, Any]:
-        return _without_ref(self)
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({json.dumps(self._wire, ensure_ascii=True)})"
 
 
 class StaticGetter:
@@ -584,8 +580,8 @@ class Runtime:
         done, wire = _scalar(value)
         if done:
             return wire
-        root: list[Any] = [None]
-        steps: list[Any] = [(root, 0, value, 0, [])]
+        steps: list[Any] = []
+        root: list[Any] = [self._encode_nonscalar(value, frame, 0, [], steps)]
         while steps:
             step = steps.pop()
             if isinstance(step, list):
@@ -602,6 +598,12 @@ class Runtime:
         done, wire = _scalar(value)
         if done:
             return wire
+        return self._encode_nonscalar(value, frame, depth, path, steps)
+
+    def _encode_nonscalar(
+        self, value: Any, frame: _Frame, depth: int, path: list[int], steps: list[Any]
+    ) -> Any:
+        """``_encode_step`` of a value ``_scalar`` does not encode."""
         if isinstance(value, Model):
             ref_id = self._send_ref(value, frame)
             if ref_id is not None:

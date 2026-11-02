@@ -107,6 +107,9 @@ bool list_ops(std::string* out) {
   return true;
 }
 
+/** Reports that list_ops() failed; the exit code to return. */
+int list_failure() { return fail(ExitCode::kInternal, "INTERNAL", "cannot list ops"); }
+
 /** The `{...}` entry of `op` in the flat list array, or an empty string. */
 std::string find_entry(const std::string& list, const std::string& op) {
   std::string needle = "\"name\":" + json_quote(op) + ",";
@@ -135,7 +138,7 @@ bool read_stdin(std::string* out) {
 
 int run_op(const std::string& op, const char* arg) {
   std::string list;
-  if (!list_ops(&list)) return fail(ExitCode::kInternal, "INTERNAL", "cannot list ops");
+  if (!list_ops(&list)) return list_failure();
   std::string entry = find_entry(list, op);
   if (!entry.empty() && (entry.find("\"callbacks\":true") != std::string::npos ||
                          entry.find("\"handles\":true") != std::string::npos)) {
@@ -179,13 +182,13 @@ int main(int argc, char** argv) {
   }
   if (command == "list") {
     std::string list;
-    if (!list_ops(&list)) return fail(ExitCode::kInternal, "INTERNAL", "cannot list ops");
+    if (!list_ops(&list)) return list_failure();
     return emit(std::cout, list);
   }
   if (command == "describe") {
     if (argc != 3) return bad_request("describe takes one op name");
     std::string list;
-    if (!list_ops(&list)) return fail(ExitCode::kInternal, "INTERNAL", "cannot list ops");
+    if (!list_ops(&list)) return list_failure();
     std::string entry = find_entry(list, argv[2]);
     if (entry.empty()) {
       return fail(ExitCode::kUnknownOp, "UNKNOWN_OP", "unknown op " + json_quote(shown(argv[2])));
