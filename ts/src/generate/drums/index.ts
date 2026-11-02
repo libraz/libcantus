@@ -18,6 +18,7 @@ import {
   generatePreChorusBuildup,
   generateSnareForBeat,
   type SectionCtx,
+  sectionGhosts,
   swing16,
 } from './beat.js';
 import { euclideanRhythm } from './euclid.js';
@@ -43,6 +44,7 @@ import {
 } from './hihat.js';
 import { type DrumHit, HitList, onsetKey } from './hit.js';
 import {
+  backbeatBeats,
   backingScale,
   calculateVelocity,
   DEFAULT_RHYTHMIC,
@@ -64,7 +66,7 @@ import {
   sectionDensityMultiplier,
   sectionEnergy,
 } from './internal.js';
-import { getKickEntries, isInPreChorusLift, type KickEntries } from './kick.js';
+import { getKickEntries, isInPreChorusLift, KICK_STEPS, type KickEntries } from './kick.js';
 import { generateAuxPercussionForBar, getPercussionConfig } from './percussion.js';
 
 export type { FillArchetype, FillStroke, FillType, FillVelocity } from './fills.js';
@@ -267,8 +269,8 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   // indexed — so the estimate is the hit count itself.
   assertGenerationBudget(opts.bars * MAX_HITS_PER_BAR, 'drum hits', opts.budget);
   if (opts.euclideanKick) {
-    const steps = opts.euclideanKick.steps ?? 16;
-    assertInteger(steps, 'euclidean steps', 1, 16);
+    const steps = opts.euclideanKick.steps ?? KICK_STEPS;
+    assertInteger(steps, 'euclidean steps', 1, KICK_STEPS);
     assertInteger(opts.euclideanKick.pulses, 'euclidean pulses');
     assertInteger(opts.euclideanKick.rotation ?? 0, 'euclidean rotation');
   }
@@ -321,6 +323,8 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   const swingAmount = feelSwingAmount(feel);
   const densityMult = sectionDensityMultiplier(section) * backingScale(rhythmic);
 
+  const ghostMood = ghostMoodCategory(style);
+  const backbeats = backbeatBeats(mapping.snareBeat3);
   const sec: SectionCtx = {
     style,
     feel,
@@ -334,8 +338,10 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
     useRide: shouldUseRideForSection(section, style),
     useFootHh: shouldUseFootHiHat(section, role),
     role,
-    ghostMood: ghostMoodCategory(style),
+    ghostMood,
     snareBeat3: mapping.snareBeat3,
+    backbeats,
+    ghosts: sectionGhosts(ghostMood, backbeats, ornamentDial, mapping.ghostBoost, section, bpm),
   };
 
   const ohhBarInterval = openHiHatBarInterval(section, style);
@@ -366,10 +372,19 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
   const callerFills = new Map(callerFillEntries.map((entry) => [entry.id, entry.material]));
   const callerFillIds = callerFillEntries.map((entry) => entry.id);
 
-  const euclidSteps = opts.euclideanKick?.steps ?? 16;
+  const euclidSteps = opts.euclideanKick?.steps ?? KICK_STEPS;
   const euclidKick = opts.euclideanKick
     ? euclideanRhythm(opts.euclideanKick.pulses, euclidSteps, opts.euclideanKick.rotation ?? 0)
     : undefined;
+  // The steps that sound, by the beat each one falls in, in step order.
+  const euclidStepLength = barBeats / euclidSteps;
+  const euclidByBeat = new Map<number, number[]>();
+  for (const [step, sounds] of (euclidKick ?? []).entries()) {
+    if (sounds) {
+      const beat = Math.floor(step * euclidStepLength);
+      euclidByBeat.set(beat, [...(euclidByBeat.get(beat) ?? []), step]);
+    }
+  }
 
   const reuseSectionKick = (section === 'b' || section === 'chorus') && style !== 'sparse';
   let sectionKick: KickEntries | undefined;
@@ -479,17 +494,19 @@ export function generateDrums(opts: DrumsOptions): DrumHit[] {
           generatePreChorusBuildup(ctx, sec, isLastBar);
         }
         if (euclidKick && !inLift) {
-          const stepLength = barBeats / euclidSteps;
-          for (let step = 0; step < euclidKick.length; step += 1) {
-            const onset = step * stepLength;
-            if (euclidKick[step] && Math.floor(onset) === beat) {
-              const wholeBeat = Math.abs(onset - Math.round(onset)) < 1e-9;
-              const tick = swing16(barStart + onset, sec, swingAmount);
-              // Naming the pattern is the request that it be written as given,
-              // so these strokes are the ones the ceiling does not touch.
-              exemptOnsets.add(onsetKey(GM.BD, tick));
-              track.add(GM.BD, tick, Math.min(0.5, stepLength), velocity * (wholeBeat ? 1 : 0.85));
-            }
+          for (const step of euclidByBeat.get(beat) ?? []) {
+            const onset = step * euclidStepLength;
+            const wholeBeat = Math.abs(onset - Math.round(onset)) < 1e-9;
+            const tick = swing16(barStart + onset, sec, swingAmount);
+            // Naming the pattern is the request that it be written as given,
+            // so these strokes are the ones the ceiling does not touch.
+            exemptOnsets.add(onsetKey(GM.BD, tick));
+            track.add(
+              GM.BD,
+              tick,
+              Math.min(0.5, euclidStepLength),
+              velocity * (wholeBeat ? 1 : 0.85),
+            );
           }
         } else if (kick) {
           generateKickForBeat(ctx, sec, kick);

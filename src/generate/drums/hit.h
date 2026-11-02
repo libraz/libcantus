@@ -84,7 +84,7 @@ class HitList {
     hit.pitch = pitch;
     hit.startBeat = beat;
     hit.durationBeat = std::move(duration);
-    hit.velocity = clamp_vel(velocity);
+    hit.velocity = clamp_velocity(velocity);
     hit.articulation = std::move(articulation);
     hits_.push_back(std::move(hit));
     onsets_[beat_slot(beat)].insert(pitch);
@@ -104,7 +104,7 @@ class HitList {
 
   /** Whether a crash already sits less than a sixteenth from `start_beat`, on either side. */
   bool has_crash_near(double start_beat) const {
-    double steps = js::round(0.25 * ONSET_KEY_SCALE);
+    double steps = js::round(DRUM_SIXTEENTH * ONSET_KEY_SCALE);
     for (double step = -steps + 1; step < steps; step += 1) {
       if (has_onset(kGm.CRASH, start_beat + step / ONSET_KEY_SCALE)) {
         return true;

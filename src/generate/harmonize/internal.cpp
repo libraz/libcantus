@@ -8,6 +8,7 @@
 #include "cantus/analyze/functional.h"
 #include "cantus/core/pitch.h"
 #include "core/event_index/order.h"
+#include "generate/harmonize/limits.gen.h"
 #include "js/math.h"
 #include "theory/tendency/tendency.h"
 
@@ -35,16 +36,8 @@ bool is_key_tone(double pitch, const KeyScale& key) {
          (cadences_through_raised_seventh(key) && pitch_class_of(pitch) == leading_tone_pc_of(key));
 }
 
-std::vector<NoteEvent> in_onset_order(const std::vector<NoteEvent>& melody) {
-  std::vector<NoteEvent> out;
-  for (std::size_t index : canonical_note_order(melody)) {
-    out.push_back(melody[index]);
-  }
-  return out;
-}
-
 KeyScale infer_key(const std::vector<NoteEvent>& melody) {
-  std::vector<NoteEvent> line = in_onset_order(melody);
+  std::vector<NoteEvent> line = in_canonical_order(melody);
   KeyScale best = major_key(0).scale();
   double best_score = -std::numeric_limits<double>::infinity();
   std::vector<KeyScale> candidates;
@@ -56,7 +49,7 @@ KeyScale infer_key(const std::vector<NoteEvent>& melody) {
     int tonic = pitch_class_of(key.rootPc);
     double score = 0;
     for (const NoteEvent& n : line) {
-      double w = js::max(0.25, n.durationBeat);
+      double w = js::max(HARMONIZE_MIN_NOTE_WEIGHT, n.durationBeat);
       int pc = pitch_class_of(n.pitch);
       if (is_key_tone(n.pitch, key)) {
         score += w;

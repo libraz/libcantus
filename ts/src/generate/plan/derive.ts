@@ -50,6 +50,7 @@ import {
 } from '../../theory/scale/index.js';
 import { cadencesThroughRaisedSeventh, leadingTonePcOf } from '../../theory/tendency/index.js';
 import { type Draw, type GenerationContextInput, resolveContext } from '../context/index.js';
+import { STRONG_WEIGHT } from './internal.js';
 import {
   COMPOSITION_PLAN_VERSION,
   type CompositionPlan,
@@ -144,9 +145,6 @@ export const FUNCTION_DEGREES: Readonly<Record<HarmonicFunction, readonly number
   subdominant: [4, 2],
   dominant: [5, 7],
 };
-
-/** Metric weight from which a beat counts as strong: the downbeat and a bar's secondary accent. */
-export const STRONG_WEIGHT = 2;
 
 /** Degree count of a scale whose degrees stack into diatonic triads. */
 export const HEPTATONIC_DEGREES = 7;

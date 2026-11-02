@@ -9,9 +9,10 @@
  */
 
 import { BEAT_EPS } from '../../analyze/adjacency.js';
-import { foldIntoRange, type StringedProfile } from '../../core/instrument/index.js';
+import type { StringedProfile } from '../../core/instrument/index.js';
 import {
   beatsPerBar,
+  DEFAULT_TS,
   isStrongBeat,
   type MeterLike,
   meterAt,
@@ -30,7 +31,7 @@ import {
 } from '../../core/validation/index.js';
 import type { ChordSegment } from '../../theory/chord/index.js';
 import { type KeyLike, toKeyScale } from '../../theory/scale/index.js';
-import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
+import type { ChordLike } from '../../theory/symbol/index.js';
 import { assertDifficulty, type GenerationContextInput, resolveContext } from '../context/index.js';
 import {
   BEAT_STEPS,
@@ -46,16 +47,16 @@ import {
 import { degreeSemitone, impliedScaleTones } from './degrees.js';
 import {
   approachNote,
-  assertBassSegments,
   barTiles,
   bassPcOf,
   bassRegister,
   DEFAULT_OCTAVE,
-  DEFAULT_TS,
-  placeAboveBass,
-  placePc,
+  lastSegmentEnd,
+  normalizeBassSegments,
   placeRoot,
+  placeTone,
   STRONG_VELOCITY,
+  soundingPitch,
   WEAK_VELOCITY,
 } from './internal.js';
 import type { LickMaterial, LickNote } from './licks-data.js';
@@ -168,10 +169,7 @@ export function placeLicks(
   // Key and chords are read into their plain form once, here at the boundary;
   // everything below works on the plain forms alone.
   const scale = toKeyScale(key);
-  const segments: ChordSegment[] = placement
-    .map((segment) => ({ ...segment, chord: toChordData(segment.chord) }))
-    .sort((a, b) => a.startBeat - b.startBeat);
-  assertBassSegments(segments);
+  const segments = normalizeBassSegments(placement);
   if (segments.length === 0) {
     return [];
   }
@@ -285,10 +283,12 @@ export function placeLicks(
         // so a root folded into it sounds under a bass placed anywhere but the
         // bottom of it — and a `C/E` whose C sounds under its own E is a
         // root-position C, which is not the chord the part was written on.
-        const figureRoot =
-          segment.chord.bassPc === undefined
-            ? placePc(pitchClass(segment.chord.rootPc), rootMidi, low)
-            : placeAboveBass(pitchClass(segment.chord.rootPc), rootMidi);
+        const figureRoot = placeTone(
+          pitchClass(segment.chord.rootPc),
+          rootMidi,
+          low,
+          segment.chord.bassPc !== undefined,
+        );
         for (const lickNote of notes) {
           const at = tileStart + lickNote.step * STEP_BEATS;
           // Placed against the figure's own root rather than folded one note at
@@ -365,7 +365,7 @@ export function placeLicks(
   }
 
   raw.sort((a, b) => a.startBeat - b.startBeat);
-  const lastEnd = segments.reduce((m, seg) => Math.max(m, seg.endBeat), Number.NEGATIVE_INFINITY);
+  const lastEnd = lastSegmentEnd(segments);
   const out: NoteEvent[] = [];
   for (let i = 0; i < raw.length; i += 1) {
     const item = raw[i];
@@ -381,7 +381,7 @@ export function placeLicks(
     if (durationBeat <= BEAT_EPS) {
       continue;
     }
-    const placed = instrument ? foldIntoRange(item.pitch, instrument) : item.pitch;
+    const placed = soundingPitch(item.pitch, instrument);
     const event: NoteEvent = {
       pitch: clampToMidi(placed, 'generated bass pitch'),
       startBeat: item.startBeat,

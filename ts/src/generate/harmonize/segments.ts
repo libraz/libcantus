@@ -14,6 +14,7 @@ import { isStrongBeat } from '../../core/meter/index.js';
 import { assertGenerationBudget } from '../../core/validation/index.js';
 import type { ChordSpan } from '../progression/index.js';
 import type { MelodyNote, Segment } from './internal.js';
+import { MIN_NOTE_WEIGHT } from './internal.js';
 import { classifyMelodyTones } from './nct.js';
 
 /**
@@ -268,7 +269,7 @@ export function buildSegments(
       if (overlap <= 0) {
         continue;
       }
-      const weight = Math.max(0.25, overlap);
+      const weight = Math.max(MIN_NOTE_WEIGHT, overlap);
       segment.costNotes.push({ index, weight, strong: isStrongBeat(overlapStart, ts) });
       segment.weight += weight;
       // The tone a phrase closes on is the last one to start, which is not the

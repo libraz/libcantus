@@ -7,6 +7,7 @@
 #include <limits>
 
 #include "cantus/core/limits.h"
+#include "generate/harmonize/limits.gen.h"
 #include "generate/harmonize/nct.h"
 #include "js/math.h"
 #include "js/sort.h"
@@ -182,7 +183,7 @@ BuiltSegments build_segments(const std::vector<MelodySpan>& spans,
       if (overlap <= 0) {
         continue;
       }
-      double weight = js::max(0.25, overlap);
+      double weight = js::max(HARMONIZE_MIN_NOTE_WEIGHT, overlap);
       segment.costNotes.push_back(CostNote{index, weight, is_strong_beat(overlap_start, ts)});
       segment.weight += weight;
       // The tone a phrase closes on is the last one to start.

@@ -1,14 +1,6 @@
 {
   "tables": [
     {
-      "module": "generate/countermelody/index.ts",
-      "export": "DEFAULT_TS",
-      "form": "record",
-      "cxx_type": "TimeSignature",
-      "cxx_name": "kCounterDefaultTs",
-      "fields": ["numerator", "denominator", "grouping"]
-    },
-    {
       "module": "generate/countermelody/imitation.ts",
       "export": "IMITATION_ANSWERS",
       "cxx_type": "std::string_view",

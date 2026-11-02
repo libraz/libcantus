@@ -1,9 +1,9 @@
-import { BEAT_EPS } from '../../analyze/adjacency.js';
+import { isMultipleOf } from '../../analyze/rhythm/internal.js';
 import { assertChordTimeline, type ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
-import { canonicalNoteOrder } from '../../core/event-index/order.js';
-import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
-import { beatsPerBar, meterAt, toMeterData } from '../../core/meter/index.js';
+import { inCanonicalOrder } from '../../core/event-index/order.js';
+import type { MeterLike } from '../../core/meter/index.js';
+import { beatsPerBar, DEFAULT_TS, meterAt, toMeterData } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -26,6 +26,7 @@ import {
 } from '../../theory/scale/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { type GenerationContextInput, resolveContextWith } from '../context/index.js';
+import { isMidiPitch } from '../drums/internal.js';
 
 /**
  * A transformation applicable to a motif cell.
@@ -137,15 +138,6 @@ export type MotifOptions = {
  */
 export const MIN_TILE_SPAN = 1 / 256;
 
-/** Meter assumed when none is supplied. */
-export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
-
-/** Whether a beat position falls on a bar line of a `barBeats`-long bar. */
-function isDownbeat(startBeat: number, barBeats: number): boolean {
-  const bar = startBeat / barBeats;
-  return Math.abs(bar - Math.round(bar)) < BEAT_EPS;
-}
-
 /** Nearest chord tone to `pitch`, preferring the lower pitch on a tie. */
 function nearestChordTone(pitch: number, chord: Chord): number {
   const pcs = chordPitchClasses(chord);
@@ -190,7 +182,7 @@ function developedPitch(
   const ahead = direction >= 0 ? 1 : -1;
   for (let d = 0; d <= MAX_DEVELOP_SHIFT; d += 1) {
     for (const candidate of d === 0 ? [pitch] : [pitch + ahead * d, pitch - ahead * d]) {
-      if (candidate < 0 || candidate > 127 || !allows(candidate)) {
+      if (!isMidiPitch(candidate) || !allows(candidate)) {
         continue;
       }
       const owner = taken.get(candidate);
@@ -352,7 +344,7 @@ export function generateMotif(opts: MotifOptions): MotifCell {
     }
     let pitch = shiftByScaleDegrees(tonic, (offsets[i] ?? 0) + jitter, key);
     const startBeat = i * beatsPerNote;
-    if (chord && isDownbeat(startBeat, barBeats)) {
+    if (chord && isMultipleOf(startBeat, barBeats)) {
       pitch = nearestChordTone(pitch, chord);
     }
     notes.push({
@@ -468,7 +460,7 @@ function transformCell(
  */
 function assertInRange(cell: MotifCell): MotifCell {
   for (const note of cell.notes) {
-    if (note.pitch < 0 || note.pitch > 127) {
+    if (!isMidiPitch(note.pitch)) {
       throw new InvalidInputError(
         `transformed motif pitch ${note.pitch} is outside the MIDI range 0..127`,
       );
@@ -629,10 +621,7 @@ export function developMotif(
 
   // The cell is walked forwards in time, ties by pitch, so the motion a note
   // continues and the pitches claimed first do not depend on the listing.
-  const line = canonicalNoteOrder(cellNotes).flatMap((index) => {
-    const note = cellNotes[index];
-    return note === undefined ? [] : [note];
-  });
+  const line = inCanonicalOrder(cellNotes);
   // Clamp a degenerate near-zero span so the tile count stays finite, and step
   // the offset multiplicatively so rounding error cannot accumulate over tiles.
   const tileSpan = Math.max(span, MIN_TILE_SPAN);
@@ -653,7 +642,7 @@ export function developMotif(
       const chord = timeline.at(startBeat);
       // The head of the cell and the bar lines are where the ear reads the
       // harmony; everything else is free to pass between them.
-      const structural = n.startBeat === origin || isDownbeat(startBeat, barBeats);
+      const structural = n.startBeat === origin || isMultipleOf(startBeat, barBeats);
       const chordTones = chord && structural ? chordPitchClasses(chord) : null;
       const allows = chordTones
         ? (candidate: number) => chordTones.includes(pitchClass(candidate))

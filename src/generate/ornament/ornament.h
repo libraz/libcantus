@@ -16,9 +16,6 @@
 
 namespace cantus {
 
-/** The meter ornament reads strong positions against when the caller names none (`DEFAULT_TS`). */
-extern const TimeSignature kOrnamentDefaultTs;
-
 /** The names of ORNAMENT_STYLES, for assert_one_of(). */
 std::vector<std::string_view> ornament_style_names();
 

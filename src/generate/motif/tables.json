@@ -6,14 +6,6 @@
       "cxx_type": "std::string_view",
       "cxx_name": "kMotifTransformNames",
       "fields": []
-    },
-    {
-      "module": "generate/motif/index.ts",
-      "export": "DEFAULT_TS",
-      "form": "record",
-      "cxx_type": "TimeSignature",
-      "cxx_name": "kMotifDefaultTs",
-      "fields": ["numerator", "denominator", "grouping"]
     }
   ],
   "limits": [

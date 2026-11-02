@@ -25,6 +25,19 @@ export function canonicalNoteOrder(notes: readonly NoteEvent[]): number[] {
 }
 
 /**
+ * The notes themselves in canonical order.
+ *
+ * @param notes Validated note events.
+ * @returns The same note objects, ordered by {@link canonicalNoteOrder}.
+ */
+export function inCanonicalOrder<T extends NoteEvent>(notes: readonly T[]): T[] {
+  return canonicalNoteOrder(notes).flatMap((index) => {
+    const note = notes[index];
+    return note === undefined ? [] : [note];
+  });
+}
+
+/**
  * Indices of the notes {@link dropSilentNotes} keeps, in input order.
  *
  * For a pass that reports one entry per input note and so cannot drop the

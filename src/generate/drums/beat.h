@@ -11,12 +11,29 @@
 
 #include "cantus/generate/context.h"
 #include "cantus/generate/drums.h"
+#include "generate/drums/ghost.h"
 #include "generate/drums/hihat.h"
 #include "generate/drums/hit.h"
 #include "generate/drums/internal.h"
 #include "generate/drums/kick.h"
 
 namespace cantus {
+
+/** What a section's snare-head ghosts are drawn from, the same on every beat of the call. */
+struct SectionGhosts {
+  /** The beat before each backbeat. */
+  std::vector<double> leadIns;
+  /** The 16ths a ghost may take. */
+  std::vector<GhostPosition> positions;
+  /** The groove's ghost density at this tempo, before the dials lean on it. */
+  double density;
+  /** The chance a ghost sounds, before the odds of its position. */
+  double prob;
+};
+
+/** Read what a section's ghosts are drawn from (`sectionGhosts`). */
+SectionGhosts section_ghosts(MoodCategory mood, const std::vector<double>& backbeats,
+                             double ornament, bool ghost_boost, SectionType section, double bpm);
 
 /** Per-section drum state shared across the bars of a section (`SectionCtx`). */
 struct SectionCtx {
@@ -39,6 +56,10 @@ struct SectionCtx {
   DrumRole role;
   MoodCategory ghostMood;
   bool snareBeat3;
+  /** The beats the groove's backbeat falls on. */
+  std::vector<double> backbeats;
+  /** What the section's snare-head ghosts are drawn from. */
+  SectionGhosts ghosts;
 };
 
 /** Per-beat context passed to every beat processor (`BeatCtx`). */

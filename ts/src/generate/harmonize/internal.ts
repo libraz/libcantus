@@ -4,7 +4,7 @@
  * than one of them asks.
  */
 
-import { canonicalNoteOrder } from '../../core/event-index/order.js';
+import { inCanonicalOrder } from '../../core/event-index/order.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import { beatsPerBar, pulseBeats } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
@@ -269,8 +269,8 @@ export const DEFAULT_PLACEMENT: HarmonizePlacement = {
   transposeSearch: false,
   octaveSearch: false,
 };
-/** Default meter used to weight metric accents when none is supplied. */
-export const DEFAULT_METER: TimeSignature = { numerator: 4, denominator: 4 };
+/** The least weight, in beats, a melody note carries in any reading of the melody. */
+export const MIN_NOTE_WEIGHT = 0.25;
 /**
  * Magnitude of the seed-driven per-candidate perturbation. Kept far below the
  * smallest real cost difference (transition/emission terms are on the order of
@@ -311,7 +311,7 @@ export function isKeyTone(pitch: number, key: KeyScale): boolean {
  * onset order, so the listing does not decide a tie.
  */
 export function inferKey(melody: readonly MelodyNote[]): KeyScale {
-  const line = inOnsetOrder(melody);
+  const line = inCanonicalOrder(melody);
   let best: KeyScale = majorKey(0);
   let bestScore = Number.NEGATIVE_INFINITY;
   const candidates: KeyScale[] = [];
@@ -322,7 +322,7 @@ export function inferKey(melody: readonly MelodyNote[]): KeyScale {
     const tonic = pitchClass(key.rootPc);
     let score = 0;
     for (const n of line) {
-      const w = Math.max(0.25, n.durationBeat);
+      const w = Math.max(MIN_NOTE_WEIGHT, n.durationBeat);
       const pc = pitchClass(n.pitch);
       if (isKeyTone(n.pitch, key)) {
         score += w;
@@ -337,12 +337,4 @@ export function inferKey(melody: readonly MelodyNote[]): KeyScale {
     }
   }
   return best;
-}
-
-/** The melody in onset order, ties by pitch: the order every stage reads it in. */
-export function inOnsetOrder(melody: readonly MelodyNote[]): MelodyNote[] {
-  return canonicalNoteOrder(melody).flatMap((index) => {
-    const note = melody[index];
-    return note === undefined ? [] : [note];
-  });
 }

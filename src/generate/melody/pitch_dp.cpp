@@ -45,24 +45,11 @@ int leap_of(double delta) {
   return delta > 0 ? PITCH_LEAP_UP : PITCH_LEAP_DOWN;
 }
 
-/**
- * Cost of stepping from `from` (reached by a leap in state `leap`) to `to`, or infinity where the
- * step is forbidden. A step between two held notes is never forbidden.
- */
-double step_cost(double from, double to, int leap, bool both_fixed) {
-  double delta = to - from;
-  double size = std::abs(delta);
-  if (!both_fixed && is_forbidden_melodic_leap(from, to)) {
-    return kInfinity;
-  }
-  double cost = interval_cost(size);
-  if ((leap == PITCH_LEAP_UP && delta > 0) || (leap == PITCH_LEAP_DOWN && delta < 0)) {
-    cost += PITCH_LEAP_CONTINUATION_COST;
-  }
-  return cost;
-}
-
 }  // namespace
+
+PitchSlot pinned_slot(double pitch) {
+  return PitchSlot{{pitch}, [](double) { return 0.0; }, true};
+}
 
 std::optional<std::vector<double>> search_pitches(const std::vector<PitchSlot>& slots,
                                                   std::optional<double> budget,
@@ -92,24 +79,41 @@ std::optional<std::vector<double>> search_pitches(const std::vector<PitchSlot>& 
         static_cast<double>(slot.candidates.size()), PITCH_LEAP_STATES, kSearchLabel, budget);
     std::fill(back.begin(), back.end(), -1);
     bool both_fixed = before.fixed && slot.fixed;
-    for (std::size_t state = 0; state < previous.size(); ++state) {
-      double reached = previous[state];
-      if (reached == kInfinity) {
-        continue;
-      }
-      double from = before.candidates[state / PITCH_LEAP_STATES];
-      int leap = static_cast<int>(state % PITCH_LEAP_STATES);
-      for (std::size_t j = 0; j < slot.candidates.size(); ++j) {
-        double to = slot.candidates[j];
-        double step = step_cost(from, to, leap, both_fixed);
-        if (step == kInfinity) {
+    for (std::size_t from_index = 0; from_index * PITCH_LEAP_STATES < previous.size();
+         ++from_index) {
+      double from = before.candidates[from_index];
+      // The size cost of each step out of `from`, infinity where it is forbidden. A step between
+      // two held notes is never forbidden. The leap states of one pitch share it.
+      std::vector<double> size_costs;
+      for (int leap = 0; leap < PITCH_LEAP_STATES; ++leap) {
+        std::size_t state = from_index * PITCH_LEAP_STATES + static_cast<std::size_t>(leap);
+        double reached = previous[state];
+        if (reached == kInfinity) {
           continue;
         }
-        double total = reached + step + unary[j] + (extra ? extra(k, from, to) : 0);
-        std::size_t index = j * PITCH_LEAP_STATES + static_cast<std::size_t>(leap_of(to - from));
-        if (total < current[index]) {
-          current[index] = total;
-          back[index] = static_cast<std::int32_t>(state);
+        if (size_costs.empty()) {
+          for (double to : slot.candidates) {
+            size_costs.push_back(!both_fixed && is_forbidden_melodic_leap(from, to)
+                                     ? kInfinity
+                                     : interval_cost(std::abs(to - from)));
+          }
+        }
+        for (std::size_t j = 0; j < slot.candidates.size(); ++j) {
+          double to = slot.candidates[j];
+          double size = size_costs[j];
+          if (size == kInfinity) {
+            continue;
+          }
+          double delta = to - from;
+          bool continues =
+              (leap == PITCH_LEAP_UP && delta > 0) || (leap == PITCH_LEAP_DOWN && delta < 0);
+          double step = continues ? size + PITCH_LEAP_CONTINUATION_COST : size;
+          double total = reached + step + unary[j] + (extra ? extra(k, from, to) : 0);
+          std::size_t index = j * PITCH_LEAP_STATES + static_cast<std::size_t>(leap_of(to - from));
+          if (total < current[index]) {
+            current[index] = total;
+            back[index] = static_cast<std::int32_t>(state);
+          }
         }
       }
     }

@@ -11,15 +11,13 @@
 #include "cantus/core/validation.h"
 #include "cantus/generate/groove.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
+#include "generate/drums/internal.h"
 #include "generate/groove/limits.gen.h"
 #include "js/math.h"
 #include "js/number.h"
 
 namespace cantus {
-
-const TimeSignature kGrooveDefaultTs =
-#include "generate/groove/default_ts.gen.inc"
-    ;
 
 namespace {
 
@@ -85,8 +83,7 @@ std::vector<NoteEvent> humanize_with(const std::vector<NoteEvent>& sounding,
     double raw_velocity =
         (event.velocity ? static_cast<double>(*event.velocity) : request.baseVelocity) +
         accent_boost + velocity_offset;
-    double velocity =
-        js::min(GROOVE_MAX_VELOCITY, js::max(GROOVE_MIN_VELOCITY, js::round(raw_velocity)));
+    double velocity = clamp_velocity(raw_velocity);
 
     // The note is copied whole and only the fields this pass owns are written over it.
     NoteEvent note = event;
@@ -100,7 +97,7 @@ std::vector<NoteEvent> humanize_with(const std::vector<NoteEvent>& sounding,
 std::vector<NoteEvent> humanize(const std::vector<NoteEvent>& events, const HumanizeOptions& opts) {
   HumanizeRequest request;
   // The meter is read once, here, and every position below is weighed in the signature in force.
-  request.ts = to_meter_data(opts.ts.value_or(MeterArg(kGrooveDefaultTs)), "ts");
+  request.ts = to_meter_data(opts.ts.value_or(MeterArg(kGenerateDefaultTs)), "ts");
   NoteEventAssertOptions note_options;
   note_options.allowNonPositiveDuration = true;
   assert_note_events(events, "humanize events", note_options);

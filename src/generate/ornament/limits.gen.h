@@ -16,12 +16,6 @@ inline constexpr double ORNAMENT_ACCENT_VELOCITY_BOOST = 12;
 /** DEFAULT_VELOCITY of ts/src/generate/ornament/index.ts. */
 inline constexpr double ORNAMENT_DEFAULT_VELOCITY = 80;
 
-/** MIN_VELOCITY of ts/src/generate/ornament/index.ts. */
-inline constexpr double ORNAMENT_MIN_VELOCITY = 1;
-
-/** MAX_VELOCITY of ts/src/generate/ornament/index.ts. */
-inline constexpr double ORNAMENT_MAX_VELOCITY = 127;
-
 /** SLIDE_MIN_SEMITONES of ts/src/generate/ornament/index.ts. */
 inline constexpr double ORNAMENT_SLIDE_MIN_SEMITONES = 1;
 

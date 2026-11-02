@@ -6,14 +6,6 @@
       "cxx_type": "std::string_view",
       "cxx_name": "kOrnamentStyleNames",
       "fields": []
-    },
-    {
-      "module": "generate/ornament/index.ts",
-      "export": "DEFAULT_TS",
-      "form": "record",
-      "cxx_type": "TimeSignature",
-      "cxx_name": "kOrnamentDefaultTs",
-      "fields": ["numerator", "denominator", "grouping"]
     }
   ],
   "limits": [
@@ -39,18 +31,6 @@
       "module": "generate/ornament/index.ts",
       "export": "DEFAULT_VELOCITY",
       "cxx_name": "ORNAMENT_DEFAULT_VELOCITY",
-      "cxx_type": "double"
-    },
-    {
-      "module": "generate/ornament/index.ts",
-      "export": "MIN_VELOCITY",
-      "cxx_name": "ORNAMENT_MIN_VELOCITY",
-      "cxx_type": "double"
-    },
-    {
-      "module": "generate/ornament/index.ts",
-      "export": "MAX_VELOCITY",
-      "cxx_name": "ORNAMENT_MAX_VELOCITY",
       "cxx_type": "double"
     },
     {

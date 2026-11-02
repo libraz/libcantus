@@ -225,6 +225,10 @@ HiHatType section_hi_hat_type(SectionType section, DrumRole role) {
   return HiHatType::kClosed;
 }
 
+double hi_hat_velocity(double velocity) { return js::max(HH_VEL_FLOOR, velocity); }
+
+double open_hat_velocity(double hh_vel) { return hi_hat_velocity(hh_vel * OHH_VEL_LIFT); }
+
 int hi_hat_note(HiHatType type) {
   switch (type) {
     case HiHatType::kPedal:

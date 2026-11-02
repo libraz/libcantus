@@ -1,6 +1,7 @@
 import type { Draw } from '../context/index.js';
 import { sustainsStrokes } from '../context/index.js';
 import {
+  type GhostPosition,
   getGhostDensity,
   getGhostProbabilityAtPosition,
   getGhostVelocity,
@@ -11,9 +12,11 @@ import {
   type HiHatLevel,
   hiHatNote,
   hiHatTypeVelocityMultiplier,
+  hiHatVelocity,
   hiHatVelocityMultiplier,
   OHH_VEL_BOOST,
   offbeatOpenHiHatChance,
+  openHatVelocity,
   roleHiHatInstrument,
   sectionHiHatType,
   shouldAddOpenHHAccent,
@@ -24,7 +27,6 @@ import type { HitList } from './hit.js';
 import type { DrumRole, DrumStyle, Feel, SectionType } from './internal.js';
 import {
   BACKBEAT_LIFT,
-  backbeatBeats,
   EIGHTH,
   GM,
   leanedBy,
@@ -62,7 +64,50 @@ export type SectionCtx = {
   role: DrumRole;
   ghostMood: MoodCategory;
   snareBeat3: boolean;
+  /** The beats the groove's backbeat falls on. */
+  backbeats: number[];
+  /** What the section's snare-head ghosts are drawn from. */
+  ghosts: SectionGhosts;
 };
+
+/** What a section's snare-head ghosts are drawn from, the same on every beat of the call. */
+export type SectionGhosts = {
+  /** The beat before each backbeat. */
+  leadIns: number[];
+  /** The 16ths a ghost may take. */
+  positions: GhostPosition[];
+  /** The groove's ghost density at this tempo, before the dials lean on it. */
+  density: number;
+  /** The chance a ghost sounds, before the odds of its position. */
+  prob: number;
+};
+
+/**
+ * Read what a section's ghosts are drawn from.
+ *
+ * The beat before each backbeat is wherever the groove puts its backbeat: a snare
+ * on the third beat — trap's own backbeat — is led into from the second.
+ */
+export function sectionGhosts(
+  mood: MoodCategory,
+  backbeats: readonly number[],
+  ornament: number,
+  ghostBoost: boolean,
+  section: SectionType,
+  bpm: number,
+): SectionGhosts {
+  const density = getGhostDensity(mood, section, bpm);
+  let prob = leanedBy(density, ornament);
+  if (ghostBoost) {
+    prob = Math.min(1, prob * 1.4);
+  }
+  return {
+    leadIns: backbeats.map((beat) => (beat - 1 + FOUR_FOUR_BEATS) % FOUR_FOUR_BEATS),
+    positions: selectGhostPositions(mood),
+    density,
+    prob,
+  };
+}
 
 /** Per-beat context passed to every beat processor. */
 export type BeatCtx = {
@@ -249,7 +294,7 @@ export function generateSnareForBeat(ctx: BeatCtx, sec: SectionCtx, isIntroFirst
   if (ctx.inPrechorusLift) {
     return;
   }
-  if (!backbeatBeats(sec.snareBeat3).includes(ctx.beat) || isIntroFirst) {
+  if (!sec.backbeats.includes(ctx.beat) || isIntroFirst) {
     return;
   }
   const stroke = backbeatStroke(sec, ctx.velocity);
@@ -266,12 +311,7 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   if (!writesSnareGhosts(sec)) {
     return;
   }
-  // The beat before each backbeat, wherever the groove puts its backbeat: a
-  // snare on the third beat — trap's own backbeat — is led into from the
-  // second, and the fixed pair wrote the ghosts a beat early and again on the
-  // backbeat itself, so trap's backbeat had no lead-in written at all.
-  const backbeats = backbeatBeats(sec.snareBeat3);
-  const leadIns = backbeats.map((beat) => (beat - 1 + FOUR_FOUR_BEATS) % FOUR_FOUR_BEATS);
+  const { leadIns, positions, density: ghostDensity, prob: ghostProb } = sec.ghosts;
   if (!leadIns.includes(ctx.beat)) {
     return;
   }
@@ -279,12 +319,6 @@ export function generateGhostNotesForBeat(ctx: BeatCtx, sec: SectionCtx): void {
   // ceiling decides whether 16ths are reachable at this tempo at all.
   if (!sustainsStrokes(SIXTEENTH, ctx.bpm, sec.difficulty)) {
     return;
-  }
-  const positions = selectGhostPositions(sec.ghostMood);
-  const ghostDensity = getGhostDensity(sec.ghostMood, ctx.section, ctx.bpm);
-  let ghostProb = leanedBy(ghostDensity, sec.ornament);
-  if (sec.ghostBoost) {
-    ghostProb = Math.min(1, ghostProb * 1.4);
   }
 
   for (const pos of positions) {
@@ -410,7 +444,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     if (ctx.section === 'intro' && ctx.beat !== 0) {
       return;
     }
-    const hhVel = Math.max(20, ctx.velocity * dm * 0.75 * typeMult);
+    const hhVel = hiHatVelocity(ctx.velocity * dm * 0.75 * typeMult);
     if (allowsOpenHiHat && isDynamicOpen) {
       ctx.track.add(GM.OHH, ctx.beatTick, EIGHTH, hhVel + OHH_VEL_BOOST, undefined, beatEntry);
     } else if (allowsOpenHiHat && opensOnDownbeat(ctx, sec)) {
@@ -418,7 +452,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
         hiHatNote('open'),
         ctx.beatTick,
         EIGHTH,
-        Math.max(20, hhVel * 1.1),
+        openHatVelocity(hhVel),
         undefined,
         beatEntry,
       );
@@ -448,21 +482,14 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
         }
         continue;
       }
-      const hhVel = Math.max(20, ctx.velocity * dm * typeMult * (eighth === 0 ? 0.9 : 0.65));
+      const hhVel = hiHatVelocity(ctx.velocity * dm * typeMult * (eighth === 0 ? 0.9 : 0.65));
       if (isDynamicOpen && allowsOpenHiHat && eighth === 0) {
         ctx.track.add(GM.OHH, hhTick, EIGHTH, hhVel + OHH_VEL_BOOST, undefined, entry);
         continue;
       }
       const useOpen = eighth === 0 ? opensOnDownbeat(ctx, sec) : opensOffbeat(ctx, sec);
       if (useOpen && allowsOpenHiHat) {
-        ctx.track.add(
-          hiHatNote('open'),
-          hhTick,
-          EIGHTH,
-          Math.max(20, hhVel * 1.1),
-          undefined,
-          entry,
-        );
+        ctx.track.add(hiHatNote('open'), hhTick, EIGHTH, openHatVelocity(hhVel), undefined, entry);
       } else {
         ctx.track.add(hhInstrument, hhTick, EIGHTH / 2, hhVel, undefined, entry);
       }
@@ -482,7 +509,7 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
       sixteenth,
       ctx.draw.float(0.95, 1.05, 'hatVelocity', ctx.bar, ctx.beat, sixteenth),
     );
-    const hhVel = Math.max(20, ctx.velocity * dm * typeMult * metricVel);
+    const hhVel = hiHatVelocity(ctx.velocity * dm * typeMult * metricVel);
     const entry =
       sixteenth === 0
         ? beatEntry
@@ -498,31 +525,17 @@ export function generateHiHatForBeat(ctx: BeatCtx, sec: SectionCtx): void {
     // that open there. Deciding them only on the eighth grid meant reaching the
     // sixteenths turned an open hat back into a closed one.
     if (allowsOpenHiHat && sixteenth === 0 && opensOnDownbeat(ctx, sec)) {
-      ctx.track.add(
-        hiHatNote('open'),
-        hhTick,
-        SIXTEENTH,
-        Math.max(20, hhVel * 1.1),
-        undefined,
-        entry,
-      );
+      ctx.track.add(hiHatNote('open'), hhTick, SIXTEENTH, openHatVelocity(hhVel), undefined, entry);
       continue;
     }
     if (allowsOpenHiHat && sixteenth === 2 && opensOffbeat(ctx, sec)) {
-      ctx.track.add(
-        hiHatNote('open'),
-        hhTick,
-        SIXTEENTH,
-        Math.max(20, hhVel * 1.1),
-        undefined,
-        entry,
-      );
+      ctx.track.add(hiHatNote('open'), hhTick, SIXTEENTH, openHatVelocity(hhVel), undefined, entry);
       continue;
     }
     if (allowsOpenHiHat && ctx.beat === 3 && sixteenth === 3) {
       const openProb = Math.max(0.1, Math.min(0.4, 30 / ctx.bpm));
       if (ctx.draw.prob(openProb, 'openHat', ctx.bar, ctx.beat, sixteenth)) {
-        ctx.track.add(GM.OHH, hhTick, SIXTEENTH, Math.max(20, hhVel * 1.2), undefined, entry);
+        ctx.track.add(GM.OHH, hhTick, SIXTEENTH, hiHatVelocity(hhVel * 1.2), undefined, entry);
         continue;
       }
     }

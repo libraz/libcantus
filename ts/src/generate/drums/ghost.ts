@@ -58,27 +58,20 @@ export function getGhostDensity(mood: MoodCategory, section: SectionType, bpm: n
 
 /** Ghost-note velocity multiplier for a section and metric position. */
 export function getGhostVelocity(section: SectionType, beatPosition: number): number {
-  let base = 0.4;
   const even = beatPosition % 2 === 0 ? 0.05 : 0;
   switch (section) {
     case 'a':
-      base = 0.35 + even;
-      break;
+      return 0.35 + even;
     case 'chorus':
-      base = 0.5 + even;
-      break;
+      return 0.5 + even;
     case 'bridge':
-      base = 0.25 + even;
-      break;
+      return 0.25 + even;
     case 'b':
-      base = 0.4 + even;
-      break;
+      return 0.4 + even;
     case 'intro':
     case 'outro':
-      base = 0.38;
-      break;
+      return 0.38;
   }
-  return Math.max(0.25, Math.min(0.65, base));
 }
 
 /**

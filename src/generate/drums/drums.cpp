@@ -22,6 +22,7 @@
 #include "generate/drums/hit.h"
 #include "generate/drums/internal.h"
 #include "generate/drums/kick.h"
+#include "generate/drums/limits.gen.h"
 #include "generate/drums/percussion.h"
 #include "js/math.h"
 #include "js/number.h"
@@ -99,20 +100,25 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
   double swing_amount = feel_swing_amount(feel);
   double density_mult = section_density_multiplier(section) * backing_scale(rhythmic);
 
-  SectionCtx sec{style,
-                 feel,
-                 request.feel.has_value(),
-                 density_mult,
-                 rhythmic,
-                 ornament_dial,
-                 !resolved.ornament.has_value(),
-                 difficulty,
-                 mapping.ghostBoost,
-                 should_use_ride_for_section(section, style),
-                 should_use_foot_hi_hat(section, role),
-                 role,
-                 ghost_mood_category(style),
-                 mapping.snareBeat3};
+  MoodCategory ghost_mood = ghost_mood_category(style);
+  std::vector<double> backbeats = backbeat_beats(mapping.snareBeat3);
+  SectionCtx sec{
+      style,
+      feel,
+      request.feel.has_value(),
+      density_mult,
+      rhythmic,
+      ornament_dial,
+      !resolved.ornament.has_value(),
+      difficulty,
+      mapping.ghostBoost,
+      should_use_ride_for_section(section, style),
+      should_use_foot_hi_hat(section, role),
+      role,
+      ghost_mood,
+      mapping.snareBeat3,
+      backbeats,
+      section_ghosts(ghost_mood, backbeats, ornament_dial, mapping.ghostBoost, section, bpm)};
 
   double ohh_bar_interval = open_hi_hat_bar_interval(section, style);
   SectionEnergy energy = section_energy(section);
@@ -146,10 +152,20 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
   }
 
   std::optional<std::vector<bool>> euclid_kick;
-  double euclid_steps = request.euclidean ? request.euclidean->steps : 16;
+  double euclid_steps = request.euclidean ? request.euclidean->steps : KICK_STEPS;
   if (request.euclidean) {
     euclid_kick =
         euclidean_rhythm(request.euclidean->pulses, euclid_steps, request.euclidean->rotation);
+  }
+  // The steps that sound, by the beat each one falls in, in step order.
+  double euclid_step_length = bar_beats / euclid_steps;
+  std::map<double, std::vector<std::size_t>> euclid_by_beat;
+  if (euclid_kick) {
+    for (std::size_t step = 0; step < euclid_kick->size(); ++step) {
+      if ((*euclid_kick)[step]) {
+        euclid_by_beat[std::floor(static_cast<double>(step) * euclid_step_length)].push_back(step);
+      }
+    }
   }
 
   bool reuse_section_kick = (section == SectionType::kB || section == SectionType::kChorus) &&
@@ -246,15 +262,15 @@ std::vector<DrumHit> generate_drums_with(const DrumsRequest& request,
           generate_pre_chorus_buildup(ctx, sec, is_last_bar);
         }
         if (euclid_kick && !in_lift) {
-          double step_length = bar_beats / euclid_steps;
-          for (std::size_t step = 0; step < euclid_kick->size(); ++step) {
-            double onset = static_cast<double>(step) * step_length;
-            if ((*euclid_kick)[step] && std::floor(onset) == beat) {
+          auto steps = euclid_by_beat.find(beat);
+          if (steps != euclid_by_beat.end()) {
+            for (std::size_t step : steps->second) {
+              double onset = static_cast<double>(step) * euclid_step_length;
               bool whole_beat = std::abs(onset - js::round(onset)) < 1e-9;
               double tick = swing16(bar_start + onset, sec, swing_amount);
               // Naming the pattern is the request that it be written as given.
               exempt_onsets.insert(onset_key(kGm.BD, tick));
-              track.add(kGm.BD, tick, js::min(0.5, step_length),
+              track.add(kGm.BD, tick, js::min(0.5, euclid_step_length),
                         velocity * (whole_beat ? 1 : 0.85));
             }
           }
@@ -307,8 +323,8 @@ std::vector<DrumHit> generate_drums(const DrumsOptions& opts) {
   assert_generation_budget(opts.bars * MAX_HITS_PER_BAR, "drum hits", opts.budget);
   DrumsRequest request;
   if (opts.euclideanKick) {
-    double steps = opts.euclideanKick->steps.value_or(16);
-    assert_integer(steps, "euclidean steps", 1, 16);
+    double steps = opts.euclideanKick->steps.value_or(KICK_STEPS);
+    assert_integer(steps, "euclidean steps", 1, KICK_STEPS);
     assert_integer(static_cast<double>(opts.euclideanKick->pulses), "euclidean pulses");
     double rotation = static_cast<double>(opts.euclideanKick->rotation.value_or(0));
     assert_integer(rotation, "euclidean rotation");

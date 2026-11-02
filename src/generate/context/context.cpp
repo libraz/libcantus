@@ -14,6 +14,10 @@
 
 namespace cantus {
 
+const TimeSignature kGenerateDefaultTs =
+#include "generate/context/default_ts.gen.inc"
+    ;
+
 namespace {
 
 /** `Number.MIN_VALUE`, the lowest tempo a context accepts. */

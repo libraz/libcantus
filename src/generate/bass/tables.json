@@ -8,14 +8,6 @@
       "fields": []
     },
     {
-      "module": "generate/bass/internal.ts",
-      "export": "DEFAULT_TS",
-      "form": "record",
-      "cxx_type": "TimeSignature",
-      "cxx_name": "kBassDefaultTs",
-      "fields": ["numerator", "denominator", "grouping"]
-    },
-    {
       "module": "generate/bass/degrees.ts",
       "export": "MAJOR_DEGREE_SEMITONES",
       "cxx_type": "int",

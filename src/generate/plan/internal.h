@@ -28,6 +28,9 @@ PositionClass position_class(double beat, const MeterMap& meters);
  */
 double final_downbeat(const PlannedPhrase& phrase, const MeterMap& meters);
 
+/** The first planned chord whose span holds a beat, or null where none does (`chordEntryAt`). */
+const PlannedChord* chord_entry_at(const CompositionPlan& plan, double beat);
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_GENERATE_PLAN_INTERNAL_H_

@@ -1,10 +1,11 @@
 import { BEAT_EPS } from '../../analyze/adjacency.js';
+import { isMultipleOf } from '../../analyze/rhythm/internal.js';
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEventIndex } from '../../core/event-index/index.js';
 import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
-import { isStrongBeat, meterAt, toMeterData } from '../../core/meter/index.js';
+import { DEFAULT_TS, isStrongBeat, meterAt, toMeterData } from '../../core/meter/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,
@@ -30,6 +31,7 @@ import {
 } from '../../theory/safety/index.js';
 import { type KeyLike, toKeyScale } from '../../theory/scale/index.js';
 import { type Draw, type GenerationContextInput, resolveContext } from '../context/index.js';
+import { clampVelocity } from '../drums/internal.js';
 
 /**
  * Options controlling {@link generateCounterMelody}.
@@ -157,29 +159,20 @@ export const VELOCITY_DROP = 16;
  */
 export const TIE_BREAK_JITTER = 1e-6;
 
-/** Whether a beat position falls on a whole quarter-note beat. */
-function isWholeBeat(beat: number): boolean {
-  return Math.abs(beat - Math.round(beat)) < BEAT_EPS;
-}
-
-/** The melody note sounding at a beat (latest onset wins on overlaps). */
-function melodyNoteAt(melody: NoteEventIndex, beat: number): NoteEvent | undefined {
-  return melody.at(beat)?.note;
-}
-
-/** Whether any melody note attacks exactly at a beat. */
-function melodyAttacksAt(melody: NoteEventIndex, beat: number): boolean {
-  return melody.attacksAt(beat);
-}
-
-/** Melody voice at a transition, including the pitch immediately before it. */
-function melodySnapshotAt(melody: NoteEventIndex, beat: number): VoiceSnapshot | undefined {
-  const current = melodyNoteAt(melody, beat);
+/**
+ * Melody voice at a transition, including the pitch immediately before it.
+ * `current` is the melody note sounding at the beat (latest onset wins on overlaps).
+ */
+function melodySnapshotAt(
+  melody: NoteEventIndex,
+  beat: number,
+  current: NoteEvent | undefined,
+): VoiceSnapshot | undefined {
   if (current === undefined) {
     return undefined;
   }
   const attacked = Math.abs(current.startBeat - beat) < BEAT_EPS;
-  const previous = attacked ? melodyNoteAt(melody, beat - BEAT_EPS * 2) : current;
+  const previous = attacked ? melody.at(beat - BEAT_EPS * 2)?.note : current;
   const snapshot: VoiceSnapshot = { pitch: current.pitch };
   if (previous !== undefined) {
     snapshot.prevPitch = previous.pitch;
@@ -191,9 +184,6 @@ function melodySnapshotAt(melody: NoteEventIndex, beat: number): VoiceSnapshot |
 function followOnsets(melody: NoteEventIndex): number[] {
   return [...new Set(melody.notes.map(({ note }) => note.startBeat))];
 }
-
-/** Meter assumed when none is supplied. */
-export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
 /**
  * Largest difference between two candidate scores that are the same score.
@@ -226,13 +216,17 @@ function complementOnsets(
   const gridStart = Math.floor(spanStart / GRID_STEP) * GRID_STEP;
   let last = Number.NEGATIVE_INFINITY;
   for (let beat = gridStart; beat < spanEnd - BEAT_EPS; beat += GRID_STEP) {
-    const attacked = melodyAttacksAt(melody, beat);
-    const sounding = melodyNoteAt(melody, beat) !== undefined;
+    const attacked = melody.attacksAt(beat);
+    const sounding = melody.at(beat)?.note !== undefined;
     let place = false;
     if (!attacked && !sounding) {
-      place = isWholeBeat(beat);
+      place = isMultipleOf(beat, 1);
     } else if (!attacked) {
-      place = draw.prob(isWholeBeat(beat) ? HOLD_ON_BEAT_PROB : HOLD_OFF_BEAT_PROB, 'hold', beat);
+      place = draw.prob(
+        isMultipleOf(beat, 1) ? HOLD_ON_BEAT_PROB : HOLD_OFF_BEAT_PROB,
+        'hold',
+        beat,
+      );
     } else if (isStrongBeat(beat, ts)) {
       place = draw.prob(REINFORCE_PROB, 'reinforce', beat);
     }
@@ -408,7 +402,7 @@ function boundaryContexts(
 ): BoundaryContext[] {
   const boundaries = heldNoteBoundaries(melody, startBeat, endBeat, harmony.chordChangeBeats);
   return boundaries.map((boundary) => {
-    const melodyVoice = melodySnapshotAt(melody, boundary);
+    const melodyVoice = melodySnapshotAt(melody, boundary, melody.at(boundary)?.note);
     return {
       melodyVoice,
       otherVoices: melodyVoice === undefined ? [] : [melodyVoice],
@@ -599,9 +593,9 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     }
     const nextOnset = onsets[onsetIndex + 1];
     const endBeat = nextOnset ?? Math.max(spanEnd, beat + GRID_STEP);
-    const melNote = melodyNoteAt(melody, beat);
+    const melNote = melody.at(beat)?.note;
     const melPitch = melNote?.pitch;
-    const melodyVoice = melodySnapshotAt(melody, beat);
+    const melodyVoice = melodySnapshotAt(melody, beat, melNote);
     const melPrev = melodyVoice?.prevPitch;
     const contexts = boundaryContexts(melody, { chordAt, chordChangeBeats }, beat, endBeat, ts);
     const chord = contexts[0]?.chord ?? chordAt(beat);
@@ -674,12 +668,9 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
       continue;
     }
     const pitch = bestPitch;
-    const velocity = Math.max(
-      1,
-      Math.min(127, Math.round((melNote?.velocity ?? DEFAULT_MELODY_VELOCITY) - VELOCITY_DROP)),
-    );
+    const velocity = clampVelocity((melNote?.velocity ?? DEFAULT_MELODY_VELOCITY) - VELOCITY_DROP);
     out.push({
-      pitch: clampToMidi(pitch),
+      pitch,
       startBeat: beat,
       durationBeat: endBeat - beat,
       velocity,

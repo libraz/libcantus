@@ -16,8 +16,9 @@
  */
 
 import { BEAT_EPS } from '../../analyze/adjacency.js';
-import { foldIntoRange, type StringedProfile } from '../../core/instrument/index.js';
+import type { StringedProfile } from '../../core/instrument/index.js';
 import {
+  DEFAULT_TS,
   isStrongBeat,
   type MeterLike,
   meterAt,
@@ -36,29 +37,30 @@ import {
 } from '../../core/validation/index.js';
 import type { ChordSegment } from '../../theory/chord/index.js';
 import { type KeyLike, toKeyScale } from '../../theory/scale/index.js';
-import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
+import type { ChordLike } from '../../theory/symbol/index.js';
 import {
   type Draw,
   type GenerationContextInput,
   resolveContext,
   sustainsShift,
 } from '../context/index.js';
+import { isMidiPitch } from '../drums/internal.js';
 import {
-  assertBassSegments,
   barTiles,
   bassPcOf,
   bassRegister,
   bassToneCycle,
   beatPositions,
   DEFAULT_OCTAVE,
-  DEFAULT_TS,
   fifthPcOf,
+  lastSegmentEnd,
   midBarPulse,
   approachNote as neighborOf,
-  placeAboveBass,
-  placePc,
+  normalizeBassSegments,
   placeRoot,
+  placeTone,
   STRONG_VELOCITY,
+  soundingPitch,
   WEAK_VELOCITY,
 } from './internal.js';
 
@@ -199,29 +201,13 @@ type BuildContext = {
   difficulty: number | undefined;
 };
 
-/**
- * The pitch a placement actually sounds as.
- *
- * The band already sits inside the instrument, so this catches the placements
- * that deliberately leave it — the pop octave pickup and walking approach notes
- * — rather than transposing the line wholesale. It is a function of its own so
- * that a builder choosing between two placements can ask what each of them will
- * sound as: a note is only an octave below the band if the instrument reaches
- * down there, and the choice has to be made about the note that will be heard.
- */
-function sounding(ctx: BuildContext, placed: number): number {
-  return ctx.instrument ? foldIntoRange(placed, ctx.instrument) : placed;
-}
-
-/** Where a tone of the chord being written goes, band or inversion. */
-function placeTone(ctx: BuildContext, pc: number): number {
-  return ctx.overBass ? placeAboveBass(pc, ctx.rootMidi) : placePc(pc, ctx.rootMidi, ctx.low);
-}
-
 /** Append a note for pitch class `pc` at `pos`, placed against the chord's bass. */
 function emit(ctx: BuildContext, pos: number, pc: number, midiOverride?: number): number {
-  const placed = clampToMidi(midiOverride ?? placeTone(ctx, pc), 'generated bass pitch');
-  const midi = sounding(ctx, placed);
+  const placed = clampToMidi(
+    midiOverride ?? placeTone(pc, ctx.rootMidi, ctx.low, ctx.overBass),
+    'generated bass pitch',
+  );
+  const midi = soundingPitch(placed, ctx.instrument);
   const velocity = isStrongBeat(pos, ctx.ts) ? STRONG_VELOCITY : WEAK_VELOCITY;
   ctx.notes.push({ startBeat: pos, pitch: midi, velocity });
   ctx.prevMidi = midi;
@@ -291,13 +277,16 @@ function pickup(ctx: BuildContext, seg: BassSegment, pos: number, index: number)
   if (
     ctx.draw.prob(0.5, 'pickupKind', index, pos) &&
     octave !== undefined &&
-    reachableLeap(ctx, pos, Math.abs(sounding(ctx, octave) - ctx.prevMidi))
+    reachableLeap(ctx, pos, Math.abs(soundingPitch(octave, ctx.instrument) - ctx.prevMidi))
   ) {
     emit(ctx, pos, bassPcOf(seg.chord), octave);
     return true;
   }
   const fifthPc = fifthPcOf(seg.chord);
-  if (sounding(ctx, placeTone(ctx, fifthPc)) === sounding(ctx, ctx.rootMidi)) {
+  if (
+    soundingPitch(placeTone(fifthPc, ctx.rootMidi, ctx.low, ctx.overBass), ctx.instrument) ===
+    soundingPitch(ctx.rootMidi, ctx.instrument)
+  ) {
     return false;
   }
   emit(ctx, pos, fifthPc);
@@ -318,9 +307,9 @@ function pickup(ctx: BuildContext, seg: BassSegment, pos: number, index: number)
  * the whole question.
  */
 function octavePickup(ctx: BuildContext): number | undefined {
-  const root = sounding(ctx, ctx.rootMidi);
+  const root = soundingPitch(ctx.rootMidi, ctx.instrument);
   for (const candidate of [ctx.rootMidi - 12, ctx.rootMidi + 12]) {
-    if (candidate >= 0 && candidate <= 127 && sounding(ctx, candidate) !== root) {
+    if (isMidiPitch(candidate) && soundingPitch(candidate, ctx.instrument) !== root) {
       return candidate;
     }
   }
@@ -428,10 +417,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
   assertGenerationBudget(opts.segments.length, 'bass segments', opts.budget);
   // The chords are read into their plain form once, here at the boundary; the
   // builders below work on chord data alone.
-  const segments: BassSegment[] = opts.segments
-    .map((segment) => ({ ...segment, chord: toChordData(segment.chord) }))
-    .sort((a, b) => a.startBeat - b.startBeat);
-  assertBassSegments(segments);
+  const segments = normalizeBassSegments(opts.segments);
   if (segments.length === 0) {
     return [];
   }
@@ -492,7 +478,7 @@ export function generateBassLine(opts: BassLineOptions): NoteEvent[] {
   }
 
   ctx.notes.sort((a, b) => a.startBeat - b.startBeat);
-  const lastEnd = segments.reduce((m, seg) => Math.max(m, seg.endBeat), Number.NEGATIVE_INFINITY);
+  const lastEnd = lastSegmentEnd(segments);
 
   const out: NoteEvent[] = [];
   for (let i = 0; i < ctx.notes.length; i += 1) {

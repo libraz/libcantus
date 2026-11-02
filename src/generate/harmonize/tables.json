@@ -183,6 +183,12 @@
       "export": "TIE_BREAK_JITTER",
       "cxx_name": "HARMONIZE_TIE_BREAK_JITTER",
       "cxx_type": "double"
+    },
+    {
+      "module": "generate/harmonize/internal.ts",
+      "export": "MIN_NOTE_WEIGHT",
+      "cxx_name": "HARMONIZE_MIN_NOTE_WEIGHT",
+      "cxx_type": "double"
     }
   ]
 }

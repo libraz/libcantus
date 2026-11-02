@@ -26,6 +26,9 @@ struct PitchSlot {
   bool fixed = false;
 };
 
+/** A note held at `pitch`: the search cannot move it and it costs nothing (`pinnedSlot`). */
+PitchSlot pinned_slot(double pitch);
+
 /** An extra cost on the step into note `index` (from note `index - 1`), added to the interval cost.
  */
 using StepCost = std::function<double(std::size_t index, double from, double to)>;

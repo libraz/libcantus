@@ -48,9 +48,6 @@ struct MotifPlan {
 /** generateMotif from the point its context is resolved; the note budget is already charged. */
 MotifCell generate_motif_with(const MotifPlan& plan, const ResolvedContext& ctx);
 
-/** The meter assumed when none is supplied (`DEFAULT_TS`). */
-extern const TimeSignature kMotifDefaultTs;
-
 /** The names of MOTIF_TRANSFORMS, for assert_one_of(). */
 std::vector<std::string_view> motif_transform_names();
 

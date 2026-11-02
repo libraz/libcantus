@@ -25,6 +25,15 @@ std::vector<std::size_t> canonical_note_order(const std::vector<NoteEvent>& note
   return order;
 }
 
+std::vector<NoteEvent> in_canonical_order(const std::vector<NoteEvent>& notes) {
+  std::vector<NoteEvent> out;
+  out.reserve(notes.size());
+  for (std::size_t index : canonical_note_order(notes)) {
+    out.push_back(notes[index]);
+  }
+  return out;
+}
+
 std::vector<std::size_t> sounding_indices(const std::vector<NoteEvent>& notes) {
   std::vector<std::size_t> out;
   for (std::size_t i = 0; i < notes.size(); ++i) {

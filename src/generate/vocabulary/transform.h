@@ -37,14 +37,53 @@
 #include "cantus/core/meter.h"
 #include "cantus/generate/context.h"
 #include "cantus/generate/vocabulary.h"
+#include "generate/context/draw.h"
 #include "generate/vocabulary/limits.gen.h"
 #include "js/math.h"
 #include "js/number.h"
 
 namespace cantus {
 
-/** The bar the figures are written on when the caller names no meter (`FIGURE_TS`). */
-extern const TimeSignature kFigureTs;
+/**
+ * The model of an onset with a `step` and a `velocity`, but for how its stream is named: a model
+ * derives from it and adds `stream_text(e)`.
+ */
+template <class Derived, class E>
+struct StepModel {
+  using Event = E;
+  using Velocity = double;
+  using StreamKey = std::string;
+
+  static double step(const E& e) { return e.step; }
+  static double velocity(const E& e) { return e.velocity; }
+  static double scaled(double v, double factor) { return v * factor; }
+  static bool louder(double a, double b) { return a > b; }
+  static std::string stream_key(const E& e) { return Derived::stream_text(e); }
+  static bool same_stream(const std::string& a, const std::string& b) { return a == b; }
+  static E placed(const E& e, double at) {
+    E out = e;
+    out.step = at;
+    return out;
+  }
+  static E placed(const E& e, double at, double v) {
+    E out = e;
+    out.step = at;
+    out.velocity = v;
+    return out;
+  }
+};
+
+/** A Draw bound to a path, as the transforms sample it. */
+struct BoundSampler {
+  const Draw& draw;
+  SeedPath path;
+
+  bool prob(double p, const SeedPath& key) const {
+    SeedPath full = path;
+    full.insert(full.end(), key.begin(), key.end());
+    return draw.prob(p, full);
+  }
+};
 
 /** gridMetricWeight against a signature already read (`stepWeight`). */
 int step_weight(double step, const TimeSignature& ts);

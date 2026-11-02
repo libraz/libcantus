@@ -114,14 +114,6 @@
       ]
     },
     {
-      "module": "generate/drums/vocabulary.ts",
-      "export": "FOUR_FOUR",
-      "form": "record",
-      "cxx_type": "TimeSignature",
-      "cxx_name": "kFourFour",
-      "fields": ["numerator", "denominator", "grouping"]
-    },
-    {
       "module": "generate/drums/fills.ts",
       "export": "FILL_TYPES",
       "cxx_type": "std::string_view",
@@ -291,6 +283,18 @@
     },
     {
       "module": "generate/drums/internal.ts",
+      "export": "MIN_VELOCITY",
+      "cxx_name": "DRUM_MIN_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "MAX_VELOCITY",
+      "cxx_name": "DRUM_MAX_VELOCITY",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/internal.ts",
       "export": "DEFAULT_RHYTHMIC",
       "cxx_name": "DRUM_DEFAULT_RHYTHMIC",
       "cxx_type": "double"
@@ -361,6 +365,16 @@
     {
       "module": "generate/drums/hihat.ts",
       "export": "OHH_VEL_BOOST",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/hihat.ts",
+      "export": "HH_VEL_FLOOR",
+      "cxx_type": "double"
+    },
+    {
+      "module": "generate/drums/hihat.ts",
+      "export": "OHH_VEL_LIFT",
       "cxx_type": "double"
     },
     {

@@ -24,7 +24,7 @@ import {
   scaleTonesInDegreeOrder,
 } from '../../theory/scale/index.js';
 import { cadencesThroughRaisedSeventh, leadingTonePcOf } from '../../theory/tendency/index.js';
-import { positionClass } from './internal.js';
+import { chordEntryAt, positionClass } from './internal.js';
 import { planChordTimeline } from './timeline.js';
 import type { CompositionPlan } from './types.js';
 
@@ -96,7 +96,7 @@ export function cadencePitchClasses(
     const chord = timeline.at(beat);
     return chord === null ? null : chordPitchClasses(chord);
   }
-  const entry = plan.harmony.find((chord) => beat >= chord.startBeat && beat < chord.endBeat);
+  const entry = chordEntryAt(plan, beat);
   const scale = scaleOf(plan.keys[entry?.key ?? 0] as ResolvedKey);
   const tones = scaleTonesInDegreeOrder(scale);
   // The dominant a half or phrygian cadence lands on carries the raised seventh.

@@ -9,14 +9,11 @@
 #include "cantus/core/errors.h"
 #include "cantus/core/validation.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
 #include "generate/context/difficulty.h"
 #include "generate/context/draw.h"
 
 namespace cantus {
-
-const TimeSignature kFigureTs =
-#include "generate/vocabulary/figure_ts.gen.inc"
-    ;
 
 namespace {
 
@@ -27,42 +24,9 @@ double subdivision_beats(const TimeSignature& ts) {
 }
 
 /** GridEvent as a grid model: the stream is the limb, else the voice, else the one stream. */
-struct GridEventModel {
-  using Event = GridEvent;
-  using Velocity = double;
-  using StreamKey = std::string;
-
-  static double step(const GridEvent& e) { return e.step; }
-  static double velocity(const GridEvent& e) { return e.velocity; }
-  static double scaled(double v, double factor) { return v * factor; }
-  static bool louder(double a, double b) { return a > b; }
+struct GridEventModel : StepModel<GridEventModel, GridEvent> {
   static std::string stream_text(const GridEvent& e) {
     return e.limb ? *e.limb : e.voice ? *e.voice : std::string();
-  }
-  static std::string stream_key(const GridEvent& e) { return stream_text(e); }
-  static bool same_stream(const std::string& a, const std::string& b) { return a == b; }
-  static GridEvent placed(const GridEvent& e, double at) {
-    GridEvent out = e;
-    out.step = at;
-    return out;
-  }
-  static GridEvent placed(const GridEvent& e, double at, double v) {
-    GridEvent out = e;
-    out.step = at;
-    out.velocity = v;
-    return out;
-  }
-};
-
-/** A Draw bound to a path. */
-struct PathSampler {
-  const Draw& draw;
-  const SeedPath& path;
-
-  bool prob(double p, const SeedPath& key) const {
-    SeedPath full = path;
-    full.insert(full.end(), key.begin(), key.end());
-    return draw.prob(p, full);
   }
 };
 
@@ -185,10 +149,10 @@ std::vector<GridEvent> syncopate(const std::vector<GridEvent>& events,
   assert_seed_path(path);
   const SyncopateOptions* asked = std::get_if<SyncopateOptions>(&amount);
   double dial = asked == nullptr ? std::get<double>(amount) : asked->amount;
-  TimeSignature signature =
-      asked != nullptr && asked->ts ? figure_signature(*asked->ts) : figure_signature(kFigureTs);
+  TimeSignature signature = asked != nullptr && asked->ts ? figure_signature(*asked->ts)
+                                                          : figure_signature(kGenerateDefaultTs);
   assert_range(dial, 0, 1, "syncopate amount");
-  return syncopate_figure<GridEventModel>(figure, dial, signature, PathSampler{draw, path});
+  return syncopate_figure<GridEventModel>(figure, dial, signature, BoundSampler{draw, path});
 }
 
 std::vector<GridEvent> ornament_by(const std::vector<GridEvent>& events,
@@ -198,7 +162,7 @@ std::vector<GridEvent> ornament_by(const std::vector<GridEvent>& events,
   const OrnamentTest& marks = assert_ornament_test(is_ornament, "isOrnament");
   assert_seed_path(path);
   assert_range(amount, 0, 1, "ornament amount");
-  return ornament_figure<GridEventModel>(figure, marks, amount, PathSampler{draw, path});
+  return ornament_figure<GridEventModel>(figure, marks, amount, BoundSampler{draw, path});
 }
 
 std::vector<GridEvent> deform(const std::vector<GridEvent>& events, const DeformOptions& opts,
@@ -206,9 +170,9 @@ std::vector<GridEvent> deform(const std::vector<GridEvent>& events, const Deform
   const std::vector<GridEvent>& figure = assert_grid_events(events);
   assert_seed_path(path);
   double span = assert_span_steps(opts.spanSteps.value_or(BAR_STEPS));
-  MeterArg ts = opts.ts.value_or(MeterArg(kFigureTs));
+  MeterArg ts = opts.ts.value_or(MeterArg(kGenerateDefaultTs));
   TypedDeformPlan plan{opts, ts};
-  return deform_figure<GridEventModel>(figure, span, plan, PathSampler{draw, path});
+  return deform_figure<GridEventModel>(figure, span, plan, BoundSampler{draw, path});
 }
 
 bool within_ceiling(const std::vector<GridEvent>& events, std::optional<double> bpm,

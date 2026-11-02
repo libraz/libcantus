@@ -16,6 +16,9 @@ namespace cantus {
 /** Indices of the notes by onset, then pitch, then position (`canonicalNoteOrder`). */
 std::vector<std::size_t> canonical_note_order(const std::vector<NoteEvent>& notes);
 
+/** The notes themselves in canonical order (`inCanonicalOrder`). */
+std::vector<NoteEvent> in_canonical_order(const std::vector<NoteEvent>& notes);
+
 /** Indices of the notes drop_silent_notes() keeps, ascending (`soundingIndices`). */
 std::vector<std::size_t> sounding_indices(const std::vector<NoteEvent>& notes);
 

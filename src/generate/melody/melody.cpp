@@ -9,6 +9,7 @@
 #include <memory>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "analyze/form/internal.h"
@@ -57,6 +58,8 @@ struct Scene {
   ChordTimeline timeline;
   HarmonyMisfits harmony_misfits;
   std::vector<KeyScale> scales;
+  /** The scale index at each beat asked for, so the plan's chords are searched once per beat. */
+  mutable std::unordered_map<double, std::size_t> scale_at_beat;
   std::vector<std::vector<int>> members;
   std::vector<PhraseFrame> frames;
   std::map<int, Statement> statements;
@@ -80,36 +83,20 @@ Statement statement_of_values(const std::vector<MotifNote>& notes) {
   return out;
 }
 
-std::vector<NoteEvent> events_of(const std::vector<MotifNote>& notes) {
-  std::vector<NoteEvent> out;
-  for (const MotifNote& note : notes) {
-    NoteEvent event;
-    event.pitch = static_cast<int>(note.pitch);
-    event.startBeat = note.startBeat;
-    event.durationBeat = note.durationBeat;
-    out.push_back(event);
-  }
-  return out;
-}
-
 const PlannedPhrase& phrase_of(const Scene& scene, int index) {
   return scene.plan->phrases[static_cast<std::size_t>(index)];
 }
 
-/** The planned chord sounding at a beat, if any. */
-const PlannedChord* chord_entry_at(const CompositionPlan& plan, double beat) {
-  for (const PlannedChord& chord : plan.harmony) {
-    if (beat >= chord.startBeat && beat < chord.endBeat) {
-      return &chord;
-    }
-  }
-  return nullptr;
-}
-
 /** The scale of the key the chord at a beat is named in; the home key where no chord sounds. */
 const KeyScale& scale_at(const Scene& scene, double beat) {
-  const PlannedChord* entry = chord_entry_at(*scene.plan, beat);
-  return scene.scales[entry != nullptr ? static_cast<std::size_t>(entry->key) : 0];
+  auto found = scene.scale_at_beat.find(beat);
+  if (found == scene.scale_at_beat.end()) {
+    const PlannedChord* entry = chord_entry_at(*scene.plan, beat);
+    found = scene.scale_at_beat
+                .emplace(beat, entry != nullptr ? static_cast<std::size_t>(entry->key) : 0)
+                .first;
+  }
+  return scene.scales[found->second];
 }
 
 /** The pitch a phrase's target curve asks for at a beat. */
@@ -176,11 +163,11 @@ PhraseFrame frame_of(Scene* scene, int index) {
   };
   frame.costAt = [scene, &phrase, draw, index](double beat) {
     bool off = position_class(beat, scene->plan->meters) == PositionClass::kOff;
-    KeyScale scale = scale_at(*scene, beat);
+    const KeyScale* scale = &scale_at(*scene, beat);
     double target = target_pitch(phrase, beat);
     return std::function<double(double)>([off, scale, target, draw, index, beat](double pitch) {
       double cost = MELODY_TARGET_COST * std::abs(pitch - target);
-      if (off && !is_scale_tone(pitch, scale)) {
+      if (off && !is_scale_tone(pitch, *scale)) {
         cost += MELODY_OFF_SCALE_COST;
       }
       return cost + draw.float_(0, MELODY_TIE_BREAK,
@@ -192,7 +179,7 @@ PhraseFrame frame_of(Scene* scene, int index) {
                           const std::vector<MotifNote>& before) {
     std::vector<MotifNote> joined = before;
     joined.insert(joined.end(), notes.begin(), notes.end());
-    auto read = scene->harmony_misfits(events_of(joined));
+    auto read = scene->harmony_misfits(to_cell(joined).notes);
     double count = 0;
     for (std::size_t i = before.size(); i < read.size(); ++i) {
       if (read[i]) {
@@ -494,6 +481,16 @@ int held_note_index(const Scene& scene, int index, const Statement& line, double
   return -1;
 }
 
+/** A line with every note held at its pitch but the one at `free`, which takes `slot`. */
+std::vector<PitchSlot> pinned_slots(const Statement& line, std::size_t free,
+                                    const PitchSlot& slot) {
+  std::vector<PitchSlot> slots;
+  for (std::size_t i = 0; i < line.size(); ++i) {
+    slots.push_back(i == free ? slot : pinned_slot(line[i]->pitch));
+  }
+  return slots;
+}
+
 /** Bend a phrase's closing note onto its cadence, holding every other note (in place). */
 void repair_cadence(Scene& scene, int index, Statement& line, int held) {
   const PlannedPhrase& phrase = phrase_of(scene, index);
@@ -532,14 +529,9 @@ void repair_cadence(Scene& scene, int index, Statement& line, int held) {
   if (std::find(allowed->begin(), allowed->end(), pitch_class_of(note->pitch)) != allowed->end()) {
     return;
   }
-  std::vector<PitchSlot> slots;
-  for (std::size_t i = 0; i < line.size(); ++i) {
-    if (static_cast<int>(i) == target) {
-      slots.push_back(PitchSlot{candidates, frame.costAt(line[i]->startBeat), false});
-    } else {
-      slots.push_back(PitchSlot{{line[i]->pitch}, [](double) { return 0.0; }, true});
-    }
-  }
+  std::vector<PitchSlot> slots =
+      pinned_slots(line, static_cast<std::size_t>(target),
+                   PitchSlot{candidates, frame.costAt(note->startBeat), false});
   std::optional<std::vector<double>> pitches = search_pitches(slots, frame.budget);
   if (!pitches) {
     throw NoSolutionError("no cadence pitch joins its neighbours without an augmented step",
@@ -568,14 +560,9 @@ void repick_cut_onset(Scene& scene, int index, Statement& line, int held) {
   if (std::find(candidates.begin(), candidates.end(), note->pitch) != candidates.end()) {
     return;
   }
-  std::vector<PitchSlot> slots;
-  for (std::size_t i = 0; i < line.size(); ++i) {
-    if (static_cast<int>(i) == held) {
-      slots.push_back(PitchSlot{candidates, frame.costAt(line[i]->startBeat), false});
-    } else {
-      slots.push_back(PitchSlot{{line[i]->pitch}, [](double) { return 0.0; }, true});
-    }
-  }
+  std::vector<PitchSlot> slots =
+      pinned_slots(line, static_cast<std::size_t>(held),
+                   PitchSlot{candidates, frame.costAt(note->startBeat), false});
   std::optional<std::vector<double>> pitches = search_pitches(slots, frame.budget);
   if (!pitches) {
     throw NoSolutionError("no pitch at the final downbeat joins its neighbours", frame.at);
@@ -703,7 +690,7 @@ std::vector<NoteEvent> generate_melody_with(const CompositionPlan& plan,
   }
   js::array_sort(melody,
                  [](const NotePtr& a, const NotePtr& b) { return a->startBeat - b->startBeat; });
-  return motif_to_note_events(MotifCell{events_of(values_of(melody))});
+  return motif_to_note_events(to_cell(values_of(melody)));
 }
 
 std::vector<NoteEvent> generate_melody(const CompositionPlan& plan, const MelodyOptions& opts) {

@@ -268,7 +268,7 @@ export function percMoodCategory(style: DrumStyle): PercMoodCategory {
   }
 }
 
-/** Zero-based section index shared by the ghost and percussion tables. */
+/** Zero-based section index into the percussion table. */
 export function sectionIndex(section: SectionType): number {
   switch (section) {
     case 'intro':
@@ -282,7 +282,7 @@ export function sectionIndex(section: SectionType): number {
     case 'bridge':
       return 4;
     case 'outro':
-      return 6;
+      return 5;
   }
 }
 
@@ -342,7 +342,7 @@ export function calculateVelocity(section: SectionType, beat: number): number {
   const base = 80;
   const beatAdj = beat === 0 ? 10 : beat === 2 ? 5 : 0;
   const velocity = (base + beatAdj) * sectionVelocityMultiplier(section);
-  return clampVel(velocity);
+  return clampVelocity(velocity);
 }
 
 /**
@@ -356,7 +356,16 @@ export const BACKBEAT_LIFT = 16;
 /** How far the stroke a fill lands on sits above a backbeat. */
 export const FILL_ACCENT_LIFT = 4;
 
-/** Round and clamp a velocity into the valid MIDI range. */
-export function clampVel(velocity: number): number {
-  return Math.max(1, Math.min(127, Math.round(velocity)));
+/** Whether a pitch lies in the MIDI range 0..127. */
+export function isMidiPitch(pitch: number): boolean {
+  return pitch >= 0 && pitch <= 127;
+}
+
+/** The lowest and highest velocity a generated note carries. */
+export const MIN_VELOCITY = 1;
+export const MAX_VELOCITY = 127;
+
+/** Round a velocity and clamp it into the range a generated note carries. */
+export function clampVelocity(velocity: number): number {
+  return Math.max(MIN_VELOCITY, Math.min(MAX_VELOCITY, Math.round(velocity)));
 }

@@ -12,6 +12,7 @@ import { BEAT_EPS } from '../../analyze/adjacency.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { InstrumentProfile, InstrumentProfileLike } from '../../core/instrument/index.js';
 import {
+  foldIntoRange,
   instrumentRange,
   type StringedProfile,
   toStringedProfile,
@@ -22,22 +23,15 @@ import type { KeyScale } from '../../core/types.js';
 import { assertRange } from '../../core/validation/index.js';
 import type { Chord, ChordSegment } from '../../theory/chord/index.js';
 import { nearestScaleTone } from '../../theory/scale/index.js';
+import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { fifthPcOf as chordFifthPcOf } from '../../theory/tendency/index.js';
+import { isMidiPitch } from '../drums/internal.js';
 
 /** Velocity for notes on metrically strong positions. */
 export const STRONG_VELOCITY = 100;
 
 /** Velocity for notes on weak positions. */
 export const WEAK_VELOCITY = 80;
-
-/**
- * The meter a bass part is written against when the caller names none.
- *
- * Shared by both entry points because it is one default, not two that happen to
- * agree: a figure placed in one and a phrase shape built in the other have to
- * fall on the same grid for the two to be laid over each other.
- */
-export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
 /** The register band a bass part is written in when the caller names none. */
 export const DEFAULT_OCTAVE = 2;
@@ -153,6 +147,46 @@ export function assertBassSegments(segments: readonly ChordSegment[]): void {
       );
     }
   }
+}
+
+/**
+ * A bass pass's segments in plain chord form and onset order, checked against the
+ * contract both entry points share.
+ *
+ * @throws As {@link assertBassSegments} does.
+ */
+export function normalizeBassSegments(
+  segments: readonly (Omit<ChordSegment, 'chord'> & { chord: ChordLike })[],
+): ChordSegment[] {
+  const plain = segments
+    .map((segment) => ({ ...segment, chord: toChordData(segment.chord) }))
+    .sort((a, b) => a.startBeat - b.startBeat);
+  assertBassSegments(plain);
+  return plain;
+}
+
+/** Where the last of the segments ends. */
+export function lastSegmentEnd(segments: readonly ChordSegment[]): number {
+  return segments.reduce((m, seg) => Math.max(m, seg.endBeat), Number.NEGATIVE_INFINITY);
+}
+
+/**
+ * The pitch a placement actually sounds as.
+ *
+ * The band already sits inside the instrument, so this catches the placements
+ * that deliberately leave it — the pop octave pickup and walking approach notes
+ * — rather than transposing the line wholesale. A builder choosing between two
+ * placements asks what each of them will sound as: a note is only an octave
+ * below the band if the instrument reaches down there, and the choice has to be
+ * made about the note that will be heard.
+ */
+export function soundingPitch(placed: number, instrument: StringedProfile | undefined): number {
+  return instrument ? foldIntoRange(placed, instrument) : placed;
+}
+
+/** Where a tone of the chord being written goes, band or inversion. */
+export function placeTone(pc: number, rootMidi: number, low: number, overBass: boolean): number {
+  return overBass ? placeAboveBass(pc, rootMidi) : placePc(pc, rootMidi, low);
 }
 
 /** Chord-tone pitch classes in stacked-thirds order, deduplicated. */
@@ -299,11 +333,10 @@ export function approachNote(
   const dir = from <= target ? -1 : 1;
   const near = neighborOnSide(target, dir, key, chromatic);
   const far = neighborOnSide(target, -dir, key, chromatic);
-  const playable = (midi: number): boolean => midi >= 0 && midi <= 127;
-  if (playable(near) && near !== from) {
+  if (isMidiPitch(near) && near !== from) {
     return near;
   }
-  return playable(far) ? far : near;
+  return isMidiPitch(far) ? far : near;
 }
 
 /** The neighbour of `target` on the side `dir` points to. */

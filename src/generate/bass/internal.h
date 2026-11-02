@@ -18,9 +18,6 @@
 
 namespace cantus {
 
-/** The meter a bass part is written against when the caller names none (`DEFAULT_TS`). */
-extern const TimeSignature kBassDefaultTs;
-
 /** Place a pitch class as a MIDI note near an anchor, within the band `[low, low + 12]`. */
 double place_pc(double pc, double anchor, double low);
 
@@ -54,6 +51,22 @@ void assert_bass_segments(const std::vector<BassSegment>& segments);
 
 /** Sort a placement by onset (`sort((a, b) => a.startBeat - b.startBeat)`). */
 void sort_bass_segments(std::vector<BassSegment>& segments);
+
+/**
+ * A bass pass's segments in plain chord form and onset order, checked against the contract both
+ * entry points share (`normalizeBassSegments`).
+ * @throws InvalidInputError as assert_bass_segments() does.
+ */
+std::vector<BassSegment> read_bass_segments(const std::vector<BassSegmentArg>& timeline);
+
+/** Where the last of the segments ends (`lastSegmentEnd`). */
+double segments_end(const std::vector<BassSegment>& segments);
+
+/** The pitch a placement actually sounds as on the instrument, if any (`soundingPitch`). */
+double sounding_pitch(double placed, const std::optional<InstrumentProfile>& instrument);
+
+/** Where a tone of the chord being written goes, band or inversion (`placeTone`). */
+double place_tone(double pc, double root_midi, double low, bool over_bass);
 
 /** Chord-tone pitch classes in stacked-thirds order, deduplicated. */
 std::vector<int> chord_tone_pcs(const Chord& chord);

@@ -8,7 +8,9 @@
 #include <variant>
 
 #include "cantus/core/validation.h"
+#include "cantus/theory/chord.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
 #include "generate/vocabulary/limits.gen.h"
 
 namespace cantus {
@@ -44,15 +46,6 @@ struct PatternRecord {
   GeneratedList<std::string_view> sections;
   GeneratedList<std::string_view> fitsOver;
 };
-
-std::optional<ChordQuality> quality_named(std::string_view name) {
-  for (ChordQuality quality : chord_qualities()) {
-    if (to_string(quality) == name) {
-      return quality;
-    }
-  }
-  return std::nullopt;
-}
 
 std::vector<DrumVocabulary> make_drum_patterns() {
   static const std::vector<PatternRecord> rows =
@@ -98,7 +91,7 @@ std::vector<DrumVocabulary> make_drum_patterns() {
     if (row.fitsOver.value) {
       entry.fitsOver.emplace();
       for (std::string_view name : *row.fitsOver.value) {
-        entry.fitsOver->push_back(*quality_named(name));
+        entry.fitsOver->push_back(*parse_chord_quality(name));
       }
     }
     out.push_back(std::move(entry));
@@ -107,30 +100,9 @@ std::vector<DrumVocabulary> make_drum_patterns() {
 }
 
 /** DrumStroke as a grid model: the stream is the limb, else the voice. */
-struct DrumStrokeModel {
-  using Event = DrumStroke;
-  using Velocity = double;
-  using StreamKey = std::string;
-
-  static double step(const DrumStroke& e) { return e.step; }
-  static double velocity(const DrumStroke& e) { return e.velocity; }
-  static double scaled(double v, double factor) { return v * factor; }
-  static bool louder(double a, double b) { return a > b; }
+struct DrumStrokeModel : StepModel<DrumStrokeModel, DrumStroke> {
   static std::string stream_text(const DrumStroke& e) {
     return std::string(e.limb ? to_string(*e.limb) : to_string(e.voice));
-  }
-  static std::string stream_key(const DrumStroke& e) { return stream_text(e); }
-  static bool same_stream(const std::string& a, const std::string& b) { return a == b; }
-  static DrumStroke placed(const DrumStroke& e, double at) {
-    DrumStroke out = e;
-    out.step = at;
-    return out;
-  }
-  static DrumStroke placed(const DrumStroke& e, double at, double v) {
-    DrumStroke out = e;
-    out.step = at;
-    out.velocity = v;
-    return out;
   }
 };
 
@@ -192,10 +164,6 @@ struct TypedPatternModel {
 
 }  // namespace
 
-const TimeSignature kFourFour =
-#include "generate/drums/four_four.gen.inc"
-    ;
-
 const std::vector<DrumVocabulary> DRUM_PATTERNS = make_drum_patterns();
 
 bool is_drum_pattern(const std::any& material) {
@@ -209,7 +177,7 @@ std::vector<DrumHit> place_drum_pattern(const DrumPatternOptions& opts) {
   plan.bars = opts.bars;
   plan.genre = opts.genre;
   plan.section = opts.section;
-  plan.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kFourFour)), "ts"));
+  plan.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kGenerateDefaultTs)), "ts"));
   if (opts.velocity) {
     assert_range(*opts.velocity, 1, 127, "drum pattern velocity");
   }

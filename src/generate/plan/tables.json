@@ -69,12 +69,6 @@
     },
     {
       "module": "generate/plan/derive.ts",
-      "export": "STRONG_WEIGHT",
-      "cxx_name": "PLAN_DERIVE_STRONG_WEIGHT",
-      "cxx_type": "int"
-    },
-    {
-      "module": "generate/plan/derive.ts",
       "export": "HEPTATONIC_DEGREES",
       "cxx_name": "PLAN_HEPTATONIC_DEGREES",
       "cxx_type": "int"

@@ -22,12 +22,6 @@ inline constexpr double GROOVE_DEFAULT_BASE_VELOCITY = 80;
 /** MAX_METRIC_WEIGHT of ts/src/generate/groove/index.ts. */
 inline constexpr double GROOVE_MAX_METRIC_WEIGHT = 3;
 
-/** MIN_VELOCITY of ts/src/generate/groove/index.ts. */
-inline constexpr double GROOVE_MIN_VELOCITY = 1;
-
-/** MAX_VELOCITY of ts/src/generate/groove/index.ts. */
-inline constexpr double GROOVE_MAX_VELOCITY = 127;
-
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_GENERATE_GROOVE_LIMITS_GEN_H_

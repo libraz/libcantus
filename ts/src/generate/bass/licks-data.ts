@@ -11,7 +11,7 @@
 
 import { InvalidInputError } from '../../core/errors/index.js';
 import { ARTICULATIONS, type Articulation } from '../../core/instrument/index.js';
-import type { TimeSignature } from '../../core/meter/index.js';
+import { DEFAULT_TS } from '../../core/meter/index.js';
 import {
   assertDegree,
   assertFiniteNumber,
@@ -131,15 +131,6 @@ function note(
 /** A one-bar figure on the sixteenth grid. */
 export const BAR: number = 4 * BEAT_STEPS;
 /**
- * The meter every built-in figure is written in.
- *
- * It is declared rather than left out because an absent condition means "any",
- * and these are not any: their accents fall where a four-beat bar puts them, so
- * a waltz or a jig would be handed a figure written against a bar it does not
- * have.
- */
-export const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
-/**
  * The built-in bass licks, in declaration order.
  *
  * @category Composition
@@ -150,7 +141,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'motown',
     difficulty: 3,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     fitsOver: ['maj', 'maj7', '6', 'dom7'],
     tempoRange: [88, 136],
     material: {
@@ -174,7 +165,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'soul',
     difficulty: 2,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [72, 120],
     material: {
       lengthSteps: BAR,
@@ -190,7 +181,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'funk',
     difficulty: 4,
     articulations: ['mute'],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [84, 124],
     material: {
       lengthSteps: BAR,
@@ -215,7 +206,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'blues',
     difficulty: 2,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     fitsOver: ['maj', 'dom7'],
     tempoRange: [76, 168],
     material: {
@@ -241,7 +232,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'jazz',
     difficulty: 3,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [100, 240],
     material: {
       lengthSteps: BAR,
@@ -257,7 +248,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'bossa',
     difficulty: 2,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [104, 168],
     material: {
       lengthSteps: BAR,
@@ -273,7 +264,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'gospel',
     difficulty: 4,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [60, 108],
     material: {
       lengthSteps: BAR,
@@ -298,7 +289,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'country',
     difficulty: 1,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [80, 180],
     material: {
       lengthSteps: BAR,
@@ -314,7 +305,7 @@ export const BASS_LICKS: readonly BassLick[] = deepFreeze([
     genre: 'reggae',
     difficulty: 3,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [64, 104],
     material: {
       lengthSteps: BAR,

@@ -13,7 +13,9 @@
 #include "cantus/core/validation.h"
 #include "cantus/generate/context.h"
 #include "cantus/theory/harmony.h"
+#include "core/event_index/order.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
 #include "generate/harmonize/candidates.h"
 #include "generate/harmonize/key_fit.h"
 #include "generate/harmonize/limits.gen.h"
@@ -24,19 +26,14 @@
 
 namespace cantus {
 
-namespace {
-
-constexpr std::string_view kStrengthNames[] = {"diatonic", "secondaryDominant", "borrowed"};
-
-}  // namespace
-
 std::string_view to_string(ReharmonizeStrength strength) {
-  return kStrengthNames[static_cast<std::size_t>(strength)];
+  return reharmonize_strength_names()[static_cast<std::size_t>(strength)];
 }
 
 std::optional<ReharmonizeStrength> parse_reharmonize_strength(std::string_view name) {
-  for (std::size_t index = 0; index < std::size(kStrengthNames); ++index) {
-    if (kStrengthNames[index] == name) {
+  std::vector<std::string_view> names = reharmonize_strength_names();
+  for (std::size_t index = 0; index < names.size(); ++index) {
+    if (names[index] == name) {
       return static_cast<ReharmonizeStrength>(index);
     }
   }
@@ -45,7 +42,7 @@ std::optional<ReharmonizeStrength> parse_reharmonize_strength(std::string_view n
 
 HarmonizeResult harmonize_with(const HarmonizeRequest& request) {
   // Read in onset order whatever the listing, so a reordered melody is the same melody.
-  const std::vector<NoteEvent> sounding = in_onset_order(request.sounding);
+  const std::vector<NoteEvent> sounding = in_canonical_order(request.sounding);
   const TimeSignature& ts = request.ts;
   KeyScale key = request.key.scale;
   // Nothing to harmonize: inventing a tonic bar here would silently insert a ghost chord.
@@ -103,14 +100,8 @@ HarmonizeResult harmonize_with(const HarmonizeRequest& request) {
   }
   std::vector<double> octave_shifts =
       request.placement.octaveSearch ? std::vector<double>{0, -12, 12} : std::vector<double>{0};
-  std::vector<double> transposes;
-  for (double s : semitone_shifts) {
-    for (double o : octave_shifts) {
-      transposes.push_back(s + o);
-    }
-  }
-  request.charge(static_cast<double>(transposes.size()) * static_cast<double>(segments.size()) *
-                     static_cast<double>(candidates.size()) *
+  request.charge(static_cast<double>(semitone_shifts.size() * octave_shifts.size()) *
+                     static_cast<double>(segments.size()) * static_cast<double>(candidates.size()) *
                      static_cast<double>(candidates.size()),
                  "harmonization placement search");
 
@@ -118,21 +109,29 @@ HarmonizeResult harmonize_with(const HarmonizeRequest& request) {
   double best_cost = std::numeric_limits<double>::infinity();
   double best_ts = 0;
   std::vector<std::size_t> best_path;
-  for (double shift : transposes) {
-    std::vector<NoteEvent> shifted = sounding;
-    for (NoteEvent& note : shifted) {
-      note.pitch = static_cast<int>(note.pitch + shift);
+  for (double semitones : semitone_shifts) {
+    // Pitch classes decide the path and the key fit, so an octave moves only the register.
+    std::vector<NoteEvent> in_key = sounding;
+    for (NoteEvent& note : in_key) {
+      note.pitch = static_cast<int>(note.pitch + semitones);
     }
     HarmonizePass pass =
-        harmonize_once(shifted, key, candidates, segments, jitter, ends.closing, articulated);
+        harmonize_once(in_key, key, candidates, segments, jitter, ends.closing, articulated);
     // Key fit comes first: no cadence reward buys a melody note out of the key.
-    double fit = key_fit_cost(shifted, key);
-    double total = pass.cost + tessitura_cost(shifted);
-    if (fit < best_fit || (fit == best_fit && total < best_cost)) {
-      best_fit = fit;
-      best_cost = total;
-      best_ts = shift;
-      best_path = pass.path;
+    double fit = key_fit_cost(in_key, key);
+    for (double octave : octave_shifts) {
+      double shift = semitones + octave;
+      std::vector<NoteEvent> shifted = sounding;
+      for (NoteEvent& note : shifted) {
+        note.pitch = static_cast<int>(note.pitch + shift);
+      }
+      double total = pass.cost + tessitura_cost(shifted);
+      if (fit < best_fit || (fit == best_fit && total < best_cost)) {
+        best_fit = fit;
+        best_cost = total;
+        best_ts = shift;
+        best_path = pass.path;
+      }
     }
   }
 
@@ -176,7 +175,7 @@ HarmonizeResult harmonize_melody(const HarmonizeOptions& opts) {
     assert_finite_number(end, "harmonize phrase end");
   }
   std::vector<NoteEvent> sounding = sounding_notes_only(opts.melody);
-  TimeSignature ts = meter_at(0, opts.ts.value_or(MeterArg("4/4")));
+  TimeSignature ts = meter_at(0, opts.ts.value_or(MeterArg(kGenerateDefaultTs)));
   assert_time_signature(ts);
   // The key is read once, here at the boundary, and kept whole.
   bool infer = !opts.key.has_value() || (std::holds_alternative<std::string>(opts.key->value()) &&

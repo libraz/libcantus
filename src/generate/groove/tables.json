@@ -1,14 +1,5 @@
 {
-  "tables": [
-    {
-      "module": "generate/groove/index.ts",
-      "export": "DEFAULT_TS",
-      "form": "record",
-      "cxx_type": "TimeSignature",
-      "cxx_name": "kGrooveDefaultTs",
-      "fields": ["numerator", "denominator", "grouping"]
-    }
-  ],
+  "tables": [],
   "limits": [
     {
       "module": "generate/groove/index.ts",
@@ -44,18 +35,6 @@
       "module": "generate/groove/index.ts",
       "export": "MAX_METRIC_WEIGHT",
       "cxx_name": "GROOVE_MAX_METRIC_WEIGHT",
-      "cxx_type": "double"
-    },
-    {
-      "module": "generate/groove/index.ts",
-      "export": "MIN_VELOCITY",
-      "cxx_name": "GROOVE_MIN_VELOCITY",
-      "cxx_type": "double"
-    },
-    {
-      "module": "generate/groove/index.ts",
-      "export": "MAX_VELOCITY",
-      "cxx_name": "GROOVE_MAX_VELOCITY",
       "cxx_type": "double"
     }
   ]

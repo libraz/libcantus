@@ -37,9 +37,6 @@
 
 namespace cantus {
 
-/** The 4/4 bar the built-in figures are written in (`FOUR_FOUR`). */
-extern const TimeSignature kFourFour;
-
 /** What placeDrumPattern settles before its first bar, whatever holds the figures. */
 struct PatternPlan {
   int bars = 0;
@@ -53,18 +50,6 @@ struct PatternPlan {
   std::optional<double> rhythmic;
   std::optional<double> ornament;
   std::optional<double> difficulty;
-};
-
-/** A Draw bound to a path, as the transforms sample it. */
-struct BoundSampler {
-  const Draw& draw;
-  SeedPath path;
-
-  bool prob(double p, const SeedPath& key) const {
-    SeedPath full = path;
-    full.insert(full.end(), key.begin(), key.end());
-    return draw.prob(p, full);
-  }
 };
 
 /** The deform options placeDrumPattern hands each figure, already checked. */

@@ -1,4 +1,5 @@
-import { meterAt, pulseBeats, toMeterData } from '../../core/meter/index.js';
+import { inCanonicalOrder } from '../../core/event-index/order.js';
+import { DEFAULT_TS, meterAt, pulseBeats, toMeterData } from '../../core/meter/index.js';
 import {
   assertArray,
   assertFiniteNumber,
@@ -28,12 +29,10 @@ import type {
   HarmonizeResult,
 } from './internal.js';
 import {
-  DEFAULT_METER,
   DEFAULT_PLACEMENT,
   defaultHarmonicRhythm,
   FALLBACK,
   inferKey,
-  inOnsetOrder,
   TIE_BREAK_JITTER,
 } from './internal.js';
 import { keyFitCost, tessituraCost } from './key-fit.js';
@@ -109,8 +108,8 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     assertFiniteNumber(end, 'harmonize phrase end');
   }
   // Read in onset order whatever the listing, so a reordered melody is the same melody.
-  const soundingMelody = inOnsetOrder(soundingNotesOnly(opts.melody));
-  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_METER, 'ts'));
+  const soundingMelody = inCanonicalOrder(soundingNotesOnly(opts.melody));
+  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
   assertTimeSignature(ts);
   const requestedKey = opts.key ?? 'infer';
   // The key is read once, here at the boundary, and kept whole: the search
@@ -215,14 +214,17 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
     }
   }
   const octaveShifts: number[] = placement.octaveSearch ? [0, -12, 12] : [0];
-  const transposes = semitoneShifts.flatMap((s) => octaveShifts.map((o) => s + o));
   // The estimate is the search itself: one pass per placement visits every pair
   // of candidates in every slot, and that product dominates everything else the
   // call does. A caller harmonizing a whole piece with the placement search on
   // raises `budget` to cover it, the way the sibling generators are given room
   // for the work they were asked for.
   assertGenerationBudget(
-    transposes.length * segments.length * candidates.length * candidates.length,
+    semitoneShifts.length *
+      octaveShifts.length *
+      segments.length *
+      candidates.length *
+      candidates.length,
     'harmonization placement search',
     opts.budget,
   );
@@ -231,10 +233,11 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
   let bestCost = Number.POSITIVE_INFINITY;
   let bestTs = 0;
   let bestPath: number[] = [];
-  for (const shift of transposes) {
-    const shifted = soundingMelody.map((n) => ({ ...n, pitch: n.pitch + shift }));
+  for (const semitones of semitoneShifts) {
+    // Pitch classes decide the path and the key fit, so an octave moves only the register.
+    const inKey = soundingMelody.map((n) => ({ ...n, pitch: n.pitch + semitones }));
     const { cost, path } = harmonizeOnce(
-      shifted,
+      inKey,
       key,
       candidates,
       segments,
@@ -243,13 +246,17 @@ export function harmonizeMelody(opts: HarmonizeOptions): HarmonizeResult {
       articulatedSegments,
     );
     // Key fit comes first: no cadence reward buys a melody note out of the key.
-    const fit = keyFitCost(shifted, key);
-    const total = cost + tessituraCost(shifted);
-    if (fit < bestFit || (fit === bestFit && total < bestCost)) {
-      bestFit = fit;
-      bestCost = total;
-      bestTs = shift;
-      bestPath = path;
+    const fit = keyFitCost(inKey, key);
+    for (const octave of octaveShifts) {
+      const shift = semitones + octave;
+      const shifted = soundingMelody.map((n) => ({ ...n, pitch: n.pitch + shift }));
+      const total = cost + tessituraCost(shifted);
+      if (fit < bestFit || (fit === bestFit && total < bestCost)) {
+        bestFit = fit;
+        bestCost = total;
+        bestTs = shift;
+        bestPath = path;
+      }
     }
   }
 

@@ -46,9 +46,6 @@ std::vector<GroovedNote> groove_notes(const std::vector<NoteEvent>& sounding,
  */
 TimeSignature groove_signature(const MeterData& meter);
 
-/** The meter humanize reads accents against when the caller names none (`DEFAULT_TS`). */
-extern const TimeSignature kGrooveDefaultTs;
-
 /** humanize over the sounding notes, from the point its draw is resolved. */
 std::vector<NoteEvent> humanize_with(const std::vector<NoteEvent>& sounding,
                                      const HumanizeRequest& request, const Draw& draw);

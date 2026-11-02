@@ -18,7 +18,7 @@ import { BEAT_EPS } from '../../core/meter/index.js';
 import type { KeyScale } from '../../core/types.js';
 import { shiftByScaleDegrees } from '../../theory/scale/index.js';
 import { type MotifCell, type MotifNote, transformMotif } from '../motif/index.js';
-import { type PitchSlot, searchPitches } from './pitch-dp.js';
+import { type PitchSlot, pinnedSlot, searchPitches } from './pitch-dp.js';
 
 /** What a statement's placement, variation or repair needs to know about the phrase it sits in. */
 export type PhraseFrame = {
@@ -208,7 +208,7 @@ export function repairStatement(
           cost: frame.costAt(n.startBeat),
           fixed: false,
         }
-      : { candidates: [n.pitch], cost: () => 0, fixed: true },
+      : pinnedSlot(n.pitch),
   );
   const pitches = searchPitches(slots, frame.budget);
   if (pitches === null) {
@@ -330,7 +330,7 @@ export function varyStatement(
   const notes = source.map((n) => ({ ...n, startBeat: n.startBeat + offset }));
   const slots: PitchSlot[] = notes.map((n, index) =>
     (index === 0 || index === last) && shift !== undefined
-      ? { candidates: [n.pitch + shift], cost: () => 0, fixed: true }
+      ? pinnedSlot(n.pitch + shift)
       : {
           candidates: frame.candidatesAt(n.startBeat),
           cost: frame.costAt(n.startBeat),

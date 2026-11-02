@@ -24,7 +24,7 @@ double key_fit_cost(const std::vector<NoteEvent>& melody, const KeyScale& key) {
   double cost = 0;
   for (const NoteEvent& n : melody) {
     if (!is_key_tone(n.pitch, key)) {
-      cost += js::max(0.25, n.durationBeat) * HARMONIZE_OUT_OF_KEY_PER_BEAT;
+      cost += js::max(HARMONIZE_MIN_NOTE_WEIGHT, n.durationBeat) * HARMONIZE_OUT_OF_KEY_PER_BEAT;
     }
   }
   return cost;

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 
 #include "cantus/core/errors.h"
@@ -11,17 +12,16 @@
 #include "cantus/core/pitch.h"
 #include "cantus/core/validation.h"
 #include "cantus/theory/scale.h"
+#include "cantus/theory/symbol.h"
+#include "core/instrument/profile.h"
 #include "core/validation/validation.h"
+#include "generate/drums/internal.h"
 #include "js/math.h"
 #include "js/number.h"
 #include "js/sort.h"
 #include "theory/tendency/tendency.h"
 
 namespace cantus {
-
-const TimeSignature kBassDefaultTs =
-#include "generate/bass/default_ts.gen.inc"
-    ;
 
 double fold_into_band(double midi, double low) {
   double raised = midi + 12 * js::max(0.0, std::ceil((low - midi) / 12));
@@ -171,11 +171,10 @@ double bass_approach_note(double target, double from, const KeyScale& key, bool 
   double dir = from <= target ? -1 : 1;
   double near = neighbor_on_side(target, dir, key, chromatic);
   double far = neighbor_on_side(target, -dir, key, chromatic);
-  auto playable = [](double midi) { return midi >= 0 && midi <= 127; };
-  if (playable(near) && near != from) {
+  if (is_midi_pitch(near) && near != from) {
     return near;
   }
-  return playable(far) ? far : near;
+  return is_midi_pitch(far) ? far : near;
 }
 
 BassRegister bass_register(const std::optional<InstrumentProfile>& named,
@@ -192,6 +191,36 @@ BassRegister bass_register(const std::optional<InstrumentProfile>& named,
   }
   out.low = band_floor(octave * 12 + 12, out.instrument);
   return out;
+}
+
+std::vector<BassSegment> read_bass_segments(const std::vector<BassSegmentArg>& timeline) {
+  std::vector<BassSegment> segments;
+  for (const BassSegmentArg& segment : timeline) {
+    segments.push_back(
+        BassSegment{segment.startBeat, segment.endBeat, to_chord_data(segment.chord)});
+  }
+  sort_bass_segments(segments);
+  assert_bass_segments(segments);
+  return segments;
+}
+
+double segments_end(const std::vector<BassSegment>& segments) {
+  double end = -std::numeric_limits<double>::infinity();
+  for (const BassSegment& seg : segments) {
+    end = js::max(end, seg.endBeat);
+  }
+  return end;
+}
+
+double sounding_pitch(double placed, const std::optional<InstrumentProfile>& instrument) {
+  if (!instrument) {
+    return placed;
+  }
+  return fold_in(static_cast<int>(assert_midi_pitch(placed, "pitch")), *instrument);
+}
+
+double place_tone(double pc, double root_midi, double low, bool over_bass) {
+  return over_bass ? place_above_bass(pc, root_midi) : place_pc(pc, root_midi, low);
 }
 
 }  // namespace cantus

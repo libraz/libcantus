@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <string>
 
 #include "cantus/core/errors.h"
@@ -12,6 +13,7 @@
 #include "cantus/theory/scale.h"
 #include "core/validation/validation.h"
 #include "generate/countermelody/countermelody.h"
+#include "generate/drums/internal.h"
 #include "js/math.h"
 #include "js/number.h"
 
@@ -32,7 +34,7 @@ double degrees_of(const SpelledInterval& interval) {
 
 /** Reject a pitch the transposition has pushed off the keyboard. */
 double assert_playable(double pitch) {
-  if (pitch < 0 || pitch > 127) {
+  if (!is_midi_pitch(pitch)) {
     throw InvalidInputError("imitated pitch " + js::to_string(pitch) +
                             " is outside the MIDI range 0..127");
   }
@@ -83,19 +85,23 @@ std::vector<NoteEvent> imitation_answers(const std::vector<NoteEvent>& sounding,
   double pivot = sounding[subject.front()].pitch;
   double shift = plan.atBeat - origin;
   double degrees = degrees_of(plan.interval);
+  // Every note is mirrored about the same pivot, so its rung is read once.
+  std::optional<ScaleLadderPosition> axis;
+  if (plan.invert && plan.tonal) {
+    axis = scale_ladder_position(pivot, plan.key);
+  }
   for (std::size_t index : subject) {
     const NoteEvent& note = sounding[index];
     double pitch = note.pitch;
     // A tonal answer counts along the key's ladder of scale tones.
     double offset = 0;
     if (plan.invert) {
-      if (plan.tonal) {
+      if (axis) {
         // Mirroring reflects the rung, and the offset with it, each note read relative to the
         // pivot's own offset so that a chromatic pivot mirrors onto itself.
-        ScaleLadderPosition axis = scale_ladder_position(pivot, plan.key);
-        ScaleLadderPosition here = scale_ladder_position(pitch - axis.offset, plan.key);
-        pitch = scale_ladder_pitch(2 * axis.rung - here.rung, plan.key);
-        offset = axis.offset - here.offset;
+        ScaleLadderPosition here = scale_ladder_position(pitch - axis->offset, plan.key);
+        pitch = scale_ladder_pitch(2 * axis->rung - here.rung, plan.key);
+        offset = axis->offset - here.offset;
       } else {
         pitch = 2 * pivot - pitch;
       }
@@ -106,8 +112,7 @@ std::vector<NoteEvent> imitation_answers(const std::vector<NoteEvent>& sounding,
     answer.pitch = static_cast<int>(assert_playable(pitch));
     answer.startBeat = note.startBeat + shift;
     if (note.velocity) {
-      answer.velocity = static_cast<int>(
-          js::max(1.0, js::min(127.0, js::round(*note.velocity * plan.velocityScale))));
+      answer.velocity = static_cast<int>(clamp_velocity(*note.velocity * plan.velocityScale));
     }
     out.push_back(answer);
   }

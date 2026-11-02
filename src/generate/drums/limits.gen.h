@@ -15,6 +15,12 @@ inline constexpr double DRUM_EIGHTH = 0.5;
 /** SIXTEENTH of ts/src/generate/drums/internal.ts. */
 inline constexpr double DRUM_SIXTEENTH = 0.25;
 
+/** MIN_VELOCITY of ts/src/generate/drums/internal.ts. */
+inline constexpr double DRUM_MIN_VELOCITY = 1;
+
+/** MAX_VELOCITY of ts/src/generate/drums/internal.ts. */
+inline constexpr double DRUM_MAX_VELOCITY = 127;
+
 /** DEFAULT_RHYTHMIC of ts/src/generate/drums/internal.ts. */
 inline constexpr double DRUM_DEFAULT_RHYTHMIC = 0.5;
 
@@ -56,6 +62,12 @@ inline constexpr double HH_16TH_BPM_THRESHOLD = 150;
 
 /** OHH_VEL_BOOST of ts/src/generate/drums/hihat.ts. */
 inline constexpr double OHH_VEL_BOOST = 7;
+
+/** HH_VEL_FLOOR of ts/src/generate/drums/hihat.ts. */
+inline constexpr double HH_VEL_FLOOR = 20;
+
+/** OHH_VEL_LIFT of ts/src/generate/drums/hihat.ts. */
+inline constexpr double OHH_VEL_LIFT = 1.1;
 
 /** FHH_VEL_MIN of ts/src/generate/drums/hihat.ts. */
 inline constexpr std::int64_t FHH_VEL_MIN = 45;

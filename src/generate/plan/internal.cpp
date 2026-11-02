@@ -35,4 +35,13 @@ double final_downbeat(const PlannedPhrase& phrase, const MeterMap& meters) {
   return js::max(downbeat, phrase.startBeat);
 }
 
+const PlannedChord* chord_entry_at(const CompositionPlan& plan, double beat) {
+  for (const PlannedChord& chord : plan.harmony) {
+    if (beat >= chord.startBeat && beat < chord.endBeat) {
+      return &chord;
+    }
+  }
+  return nullptr;
+}
+
 }  // namespace cantus

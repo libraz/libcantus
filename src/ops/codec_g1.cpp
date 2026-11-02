@@ -943,7 +943,8 @@ std::optional<double> WireDeformPlan::rhythmic() const {
 }
 
 TimeSignature WireDeformPlan::signature() const {
-  return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : figure_signature(kFigureTs);
+  return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts"))
+                       : figure_signature(kGenerateDefaultTs);
 }
 
 std::optional<OrnamentRequest<WireGridModel>> WireDeformPlan::ornament() const {

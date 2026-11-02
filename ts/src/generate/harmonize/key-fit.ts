@@ -10,7 +10,7 @@
 import type { KeyScale } from '../../core/types.js';
 import { OUT_OF_KEY_PER_BEAT } from './cost.js';
 import type { MelodyNote } from './internal.js';
-import { isKeyTone } from './internal.js';
+import { isKeyTone, MIN_NOTE_WEIGHT } from './internal.js';
 
 /** Comfortable melodic range (MIDI) and the per-semitone cost of leaving it. */
 export const COMFORT_LOW = 55;
@@ -45,7 +45,7 @@ export function keyFitCost(melody: readonly MelodyNote[], key: KeyScale): number
   let cost = 0;
   for (const n of melody) {
     if (!isKeyTone(n.pitch, key)) {
-      cost += Math.max(0.25, n.durationBeat) * OUT_OF_KEY_PER_BEAT;
+      cost += Math.max(MIN_NOTE_WEIGHT, n.durationBeat) * OUT_OF_KEY_PER_BEAT;
     }
   }
   return cost;

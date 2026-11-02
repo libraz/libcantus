@@ -14,6 +14,7 @@
 
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import {
+  DEFAULT_TS,
   isCompound,
   meterAt,
   metricWeight,
@@ -138,9 +139,6 @@ function drawKey(event: GridEvent): (string | number)[] {
 function halvedStep(step: number): number {
   return Number.isInteger(step) ? Math.round(step / 2) : step / 2;
 }
-
-/** The bar the figures are written on when the caller names no meter. */
-export const FIGURE_TS: TimeSignature = { numerator: 4, denominator: 4 };
 
 /**
  * The first subdivision of a pulse: half of it in a simple meter, a third in a
@@ -421,7 +419,7 @@ export function syncopate<T extends GridEvent>(
   const asked =
     typeof amount === 'number' ? undefined : assertRecord<SyncopateOptions>(amount, 'amount');
   const dial = asked === undefined ? amount : asked.amount;
-  const signature = meterAt(0, toMeterData(asked?.ts ?? FIGURE_TS, 'ts'));
+  const signature = meterAt(0, toMeterData(asked?.ts ?? DEFAULT_TS, 'ts'));
   assertRange(dial as number, 0, 1, 'syncopate amount');
   return syncopateFigure(figure, dial as number, signature, sampler, path);
 }
@@ -607,7 +605,7 @@ export function resolveDials(asked: DeformOptions): ResolvedDials {
     asked.rhythmic === undefined
       ? undefined
       : assertRange(asked.rhythmic, 0, 1, 'complexity rhythmic');
-  const ts = meterAt(0, toMeterData(asked.ts ?? FIGURE_TS, 'ts'));
+  const ts = meterAt(0, toMeterData(asked.ts ?? DEFAULT_TS, 'ts'));
   const ornament =
     asked.ornament === undefined ? undefined : assertRange(asked.ornament, 0, 1, 'ornament amount');
   const isOrnament = asked.isOrnament

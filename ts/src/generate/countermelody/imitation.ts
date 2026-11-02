@@ -26,6 +26,7 @@ import {
   shiftByScaleDegrees,
   toKeyScale,
 } from '../../theory/scale/index.js';
+import { clampVelocity, isMidiPitch } from '../drums/internal.js';
 
 /** Every way an imitation can answer, in declaration order. */
 export const IMITATION_ANSWERS = ['real', 'tonal'] as const;
@@ -100,7 +101,7 @@ function degreesOf(interval: SpelledInterval): number {
 
 /** Reject a pitch the transposition has pushed off the keyboard. */
 function assertPlayable(pitch: number): number {
-  if (pitch < 0 || pitch > 127) {
+  if (!isMidiPitch(pitch)) {
     throw new InvalidInputError(`imitated pitch ${pitch} is outside the MIDI range 0..127`);
   }
   return pitch;
@@ -182,6 +183,8 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
   const shift = opts.atBeat - origin;
   const invert = opts.invert ?? false;
   const degrees = degreesOf(interval);
+  // Every note is mirrored about the same pivot, so its rung is read once.
+  const axis = invert && tonal ? scaleLadderPosition(pivot, key) : undefined;
 
   return subject.map((note) => {
     let pitch = note.pitch;
@@ -191,7 +194,7 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
     // tone below it.
     let offset = 0;
     if (invert) {
-      if (tonal) {
+      if (axis !== undefined) {
         // Mirroring reflects the rung, and the offset with it: a note a semitone
         // above its scale tone lands a semitone below the one it is mirrored
         // onto, which is what keeps two adjacent chromatic pitches from being
@@ -199,7 +202,6 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
         // the offset is added back after the degree arithmetic. Each note is read
         // relative to the pivot's own offset, so a chromatic pivot mirrors onto
         // itself.
-        const axis = scaleLadderPosition(pivot, key);
         const here = scaleLadderPosition(pitch - axis.offset, key);
         pitch = scaleLadderPitch(2 * axis.rung - here.rung, key);
         offset = axis.offset - here.offset;
@@ -219,7 +221,7 @@ export function imitate(lead: readonly NoteEvent[], opts: ImitationOptions): Not
       startBeat: note.startBeat + shift,
     };
     if (note.velocity !== undefined) {
-      answer.velocity = Math.max(1, Math.min(127, Math.round(note.velocity * velocityScale)));
+      answer.velocity = clampVelocity(note.velocity * velocityScale);
     }
     return answer;
   });

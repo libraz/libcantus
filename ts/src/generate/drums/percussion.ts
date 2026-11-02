@@ -24,34 +24,14 @@ export type PercussionConfig = {
 type PercActivation = [tambourine: boolean, shaker: boolean, handclap: boolean];
 
 // Percussion activation per [mood category][section index]. Columns:
-// intro, a, b, chorus, bridge, interlude, outro, chant, mixbreak.
+// intro, a, b, chorus, bridge, outro.
 const F: PercActivation = [false, false, false];
 export const PERC_TABLE: PercActivation[][] = [
-  /* calm */ [F, F, F, F, F, F, F, F, F],
-  /* std  */ [F, F, [false, true, false], [true, false, true], F, F, F, F, [true, false, true]],
-  /* ener */ [
-    F,
-    [false, true, false],
-    [false, true, false],
-    [true, true, true],
-    F,
-    F,
-    F,
-    F,
-    [true, true, true],
-  ],
-  /* idol */ [
-    F,
-    [false, true, false],
-    [false, true, false],
-    [true, true, true],
-    F,
-    F,
-    F,
-    F,
-    [true, true, true],
-  ],
-  /* rock */ [F, F, F, [false, false, true], F, F, F, F, [false, false, true]],
+  /* calm */ [F, F, F, F, F, F],
+  /* std  */ [F, F, [false, true, false], [true, false, true], F, F],
+  /* ener */ [F, [false, true, false], [false, true, false], [true, true, true], F, F],
+  /* idol */ [F, [false, true, false], [false, true, false], [true, true, true], F, F],
+  /* rock */ [F, F, F, [false, false, true], F, F],
 ];
 
 /** Shaker velocity factors across the four sixteenths of a beat. */

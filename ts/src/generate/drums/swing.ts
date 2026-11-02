@@ -1,7 +1,5 @@
-import type { Feel } from './internal.js';
+import { EIGHTH, type Feel, SIXTEENTH } from './internal.js';
 
-const SIXTEENTH = 0.25;
-const EIGHTH = 0.5;
 /** Delay of an off-beat 16th at full swing (triplet minus straight), in beats. */
 const DELTA_16 = 1 / 3 - 1 / 4; // 0.08333...
 /** Delay of an off-beat 8th at full swing, in beats. */

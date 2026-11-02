@@ -14,10 +14,10 @@
 
 import type { Articulation } from '../../core/instrument/index.js';
 import {
+  DEFAULT_TS,
   isStrongBeat,
   type MeterData,
   type MeterLike,
-  type TimeSignature,
   toMeterData,
 } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
@@ -33,6 +33,7 @@ import {
   resolveContextWith,
   sustainsStrokes,
 } from '../context/index.js';
+import { clampVelocity } from '../drums/internal.js';
 
 /**
  * Every ornament idiom, in declaration order.
@@ -93,7 +94,6 @@ export type OrnamentOptions = {
   ctx?: GenerationContextInput;
 };
 
-export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 const DEFAULT_STYLE: OrnamentStyle = 'ghost';
 export const DEFAULT_AMOUNT = 0.5;
 /** Velocity a ghosted stroke keeps, as a fraction of what it had. */
@@ -102,8 +102,6 @@ export const GHOST_VELOCITY_SCALE = 0.45;
 export const ACCENT_VELOCITY_BOOST = 12;
 /** Velocity assumed for a note that carries none. */
 export const DEFAULT_VELOCITY = 80;
-export const MIN_VELOCITY = 1;
-export const MAX_VELOCITY = 127;
 /**
  * Interval, in semitones, from which a move reads as slid into rather than
  * restruck. A semitone is the most idiomatic slide there is on a fretted or a
@@ -136,11 +134,6 @@ function eligible(
   }
 }
 
-/** The articulation a style writes. */
-function articulationOf(style: OrnamentStyle): Articulation {
-  return style;
-}
-
 /** Velocity after an ornament, or the note's own where the ornament changes none. */
 function ornamentedVelocity(style: OrnamentStyle, note: NoteEvent): number | undefined {
   if (note.velocity === undefined && style !== 'ghost' && style !== 'accent') {
@@ -154,10 +147,6 @@ function ornamentedVelocity(style: OrnamentStyle, note: NoteEvent): number | und
     return clampVelocity(velocity + ACCENT_VELOCITY_BOOST);
   }
   return velocity;
-}
-
-function clampVelocity(velocity: number): number {
-  return Math.min(MAX_VELOCITY, Math.max(MIN_VELOCITY, Math.round(velocity)));
 }
 
 /**
@@ -231,7 +220,7 @@ export function ornament(notes: readonly NoteEvent[], opts: OrnamentOptions = {}
     if (!draw.prob(amount, style, note.startBeat, note.pitch)) {
       return decorated;
     }
-    decorated.articulation = articulationOf(style);
+    decorated.articulation = style;
     const velocity = ornamentedVelocity(style, note);
     if (velocity !== undefined) {
       decorated.velocity = velocity;

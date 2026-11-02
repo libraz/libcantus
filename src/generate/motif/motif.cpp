@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 
+#include "analyze/rhythm/internal.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/pitch.h"
@@ -17,6 +18,7 @@
 #include "core/event_index/order.h"
 #include "core/validation/validation.h"
 #include "generate/context/context.h"
+#include "generate/drums/internal.h"
 #include "generate/motif/limits.gen.h"
 #include "js/math.h"
 #include "js/number.h"
@@ -31,12 +33,6 @@ constexpr std::string_view kTransformNames[] =
     ;
 static_assert(sizeof(kTransformNames) / sizeof(kTransformNames[0]) == MOTIF_TRANSFORMS.size(),
               "MOTIF_TRANSFORMS and MotifTransform disagree");
-
-/** Whether a beat position falls on a bar line of a `bar_beats`-long bar. */
-bool is_downbeat(double start_beat, double bar_beats) {
-  double bar = start_beat / bar_beats;
-  return std::abs(bar - js::round(bar)) < BEAT_EPS;
-}
 
 /** Nearest chord tone to `pitch`, preferring the lower pitch on a tie. */
 double nearest_chord_tone(double pitch, const Chord& chord) {
@@ -68,7 +64,7 @@ double developed_pitch(double pitch, const std::function<bool(double)>& allows, 
       candidates = {pitch + ahead * d, pitch - ahead * d};
     }
     for (double candidate : candidates) {
-      if (candidate < 0 || candidate > 127 || !allows(candidate)) {
+      if (!is_midi_pitch(candidate) || !allows(candidate)) {
         continue;
       }
       auto owner = taken.find(candidate);
@@ -145,7 +141,7 @@ std::vector<double> contour_offsets(MotifContour contour, std::size_t count) {
 /** Reject a cell whose pitches have left the MIDI range. */
 void assert_in_range(const std::vector<MotifResult>& notes) {
   for (const MotifResult& note : notes) {
-    if (note.pitch < 0 || note.pitch > 127) {
+    if (!is_midi_pitch(note.pitch)) {
       throw InvalidInputError("transformed motif pitch " + js::to_string(note.pitch) +
                               " is outside the MIDI range 0..127");
     }
@@ -234,10 +230,6 @@ std::vector<MotifResult> transform_unchecked(const std::vector<NoteEvent>& notes
 }
 
 }  // namespace
-
-const TimeSignature kMotifDefaultTs =
-#include "generate/motif/default_ts.gen.inc"
-    ;
 
 std::string_view to_string(MotifTransform transform) {
   return kTransformNames[static_cast<std::size_t>(transform)];
@@ -364,7 +356,7 @@ std::vector<MotifResult> develop_notes(const std::vector<NoteEvent>& notes,
       }
       std::optional<ChordTones> chord = chord_at(start_beat);
       // The head of the cell and the bar lines are where the ear reads the harmony.
-      bool structural = n.startBeat == origin || is_downbeat(start_beat, bar_beats);
+      bool structural = n.startBeat == origin || is_multiple_of(start_beat, bar_beats);
       std::vector<int> chord_tones;
       bool use_chord = chord && structural;
       if (use_chord) {
@@ -426,7 +418,7 @@ MotifCell generate_motif_with(const MotifPlan& plan, const ResolvedContext& ctx)
     double pitch =
         shift_by_scale_degrees(tonic, (at < offsets.size() ? offsets[at] : 0) + jitter, plan.key);
     double start_beat = i * beats_per_note;
-    if (plan.chord && is_downbeat(start_beat, plan.barBeats)) {
+    if (plan.chord && is_multiple_of(start_beat, plan.barBeats)) {
       if (plan.unknownChordQuality) {
         throw InvalidInputError("Unknown chord quality: " + *plan.unknownChordQuality);
       }
@@ -446,8 +438,8 @@ MotifCell generate_motif(const MotifOptions& opts) {
   plan.contour = opts.contour.value_or(MotifContour::kArch);
   plan.bars = assert_positive_int(opts.bars, "motif bars");
   // The meter is read once, here: a motif is one repeated bar grid.
-  plan.barBeats =
-      beats_per_bar(meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kMotifDefaultTs)), "ts")));
+  plan.barBeats = beats_per_bar(
+      meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kGenerateDefaultTs)), "ts")));
   assert_generation_budget(js::max(3.0, plan.bars * 2), "motif notes");
   // The dial is handed over as it was given: `jitter` is sugar for the context's ornament dial.
   ResolvedContext ctx = resolve_context_with(opts.ctx, ContextSugar{opts.jitter});

@@ -13,6 +13,8 @@
 #include "cantus/theory/chord.h"
 #include "cantus/theory/scale.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
+#include "generate/plan/limits.gen.h"
 #include "generate/progression/limits.gen.h"
 #include "js/number.h"
 #include "theory/tendency/tendency.h"
@@ -97,7 +99,7 @@ int borrowed_offset(int degree) {
 
 /** Root pitch class of a scale degree in the given key, including borrowed degrees. */
 int degree_to_root_pc(int degree, const KeyScale& key) {
-  if (degree >= 1 && degree <= 7) {
+  if (degree >= 1 && degree <= PLAN_HEPTATONIC_DEGREES) {
     // Degrees are read in the key's heptatonic frame, as the numerals are.
     std::vector<int> tones = scale_tones_in_degree_order(heptatonic_frame_of(key));
     return static_cast<std::size_t>(degree - 1) < tones.size()
@@ -110,7 +112,7 @@ int degree_to_root_pc(int degree, const KeyScale& key) {
 
 /** Diatonic (or borrowed) triad quality of a degree in the given key. */
 ChordQuality auto_quality(int degree, const KeyScale& key, bool harmonic_dominant) {
-  if (degree >= 1 && degree <= 7) {
+  if (degree >= 1 && degree <= PLAN_HEPTATONIC_DEGREES) {
     // A cadence-oriented progression needs a leading tone in minor too; a mode keeps its own fifth
     // degree.
     if (harmonic_dominant && cadences_through_raised_seventh(key) && degree == 5) {
@@ -143,7 +145,7 @@ std::vector<CycleStep> resolve_cycle(const std::vector<int>& degrees, const KeyS
     CycleStep step;
     step.rootPc = degree_to_root_pc(degree, key);
     step.quality = ext ? *ext : auto_quality(degree, key, harmonic_dominant);
-    if (degree >= 1 && degree <= 7) {
+    if (degree >= 1 && degree <= PLAN_HEPTATONIC_DEGREES) {
       step.degree = degree;
     }
     steps.push_back(step);
@@ -175,10 +177,6 @@ bool can_be_tonicized(const ChordSpan& span, const std::set<int>& tonicizable) {
 }
 
 }  // namespace
-
-const TimeSignature kProgressionDefaultTs =
-#include "generate/progression/default_ts.gen.inc"
-    ;
 
 const BorrowedDegrees BORROWED_DEGREES = {borrowed_code("bVI"),  borrowed_code("bVII"),
                                           borrowed_code("bIII"), borrowed_code("iv"),
@@ -240,12 +238,25 @@ bool is_borrowed_degree(double degree) {
 
 std::vector<ProgressionPreset> progressions() { return builtin_presets(); }
 
-std::vector<ProgressionPreset> progressions_by_style(ProgStyle style) {
-  std::vector<ProgressionPreset> out;
+namespace {
+
+/** The built-in presets that suit a style, in declaration order. */
+std::vector<const ProgressionPreset*> presets_with_style(ProgStyle style) {
+  std::vector<const ProgressionPreset*> out;
   for (const ProgressionPreset& preset : builtin_presets()) {
     if (std::find(preset.styles.begin(), preset.styles.end(), style) != preset.styles.end()) {
-      out.push_back(preset);
+      out.push_back(&preset);
     }
+  }
+  return out;
+}
+
+}  // namespace
+
+std::vector<ProgressionPreset> progressions_by_style(ProgStyle style) {
+  std::vector<ProgressionPreset> out;
+  for (const ProgressionPreset* preset : presets_with_style(style)) {
+    out.push_back(*preset);
   }
   return out;
 }
@@ -255,11 +266,7 @@ ProgressionPreset preset_for(const std::optional<ProgStyle>& style, const std::s
   // A style no preset claims is a caller error, exactly as an unknown presetId is.
   std::vector<const ProgressionPreset*> pool;
   if (style) {
-    for (const ProgressionPreset& preset : builtin_presets()) {
-      if (std::find(preset.styles.begin(), preset.styles.end(), *style) != preset.styles.end()) {
-        pool.push_back(&preset);
-      }
-    }
+    pool = presets_with_style(*style);
   }
   if (pool.empty()) {
     throw InvalidInputError("Unknown progression style: " + named);
@@ -352,7 +359,8 @@ std::vector<ChordSpan> generate_progression(const ProgressionOptions& opts) {
     for (std::size_t index = 0; index < opts.preset->degrees.size(); ++index) {
       int degree = opts.preset->degrees[index];
       assert_degree(degree, "progression preset degrees[" + index_text(index) + "]");
-      bool supported = (degree >= 1 && degree <= 7) || is_borrowed_degree(degree);
+      bool supported =
+          (degree >= 1 && degree <= PLAN_HEPTATONIC_DEGREES) || is_borrowed_degree(degree);
       if (!supported) {
         throw InvalidInputError("progression preset degrees[" + index_text(index) +
                                 "] is not a supported progression degree; received " +
@@ -367,6 +375,7 @@ std::vector<ChordSpan> generate_progression(const ProgressionOptions& opts) {
     for (const ProgressionPreset& candidate : builtin_presets()) {
       if (candidate.id == *opts.presetId) {
         preset = candidate;
+        break;
       }
     }
     if (!preset) {
@@ -380,7 +389,7 @@ std::vector<ChordSpan> generate_progression(const ProgressionOptions& opts) {
   plan.degrees = preset->degrees;
   plan.cadenceStrong = preset->functional == ProgFunction::kCadenceStrong;
   // One chord per bar of the meter the caller counts in.
-  plan.barBeats = beats_per_bar(opts.ts.value_or(MeterArg(kProgressionDefaultTs)));
+  plan.barBeats = beats_per_bar(opts.ts.value_or(MeterArg(kGenerateDefaultTs)));
   plan.bars = opts.bars;
   return generate_progression_with(plan, ctx);
 }

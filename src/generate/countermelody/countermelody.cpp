@@ -9,6 +9,7 @@
 #include <string>
 #include <utility>
 
+#include "analyze/rhythm/internal.h"
 #include "cantus/analyze/timeline.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/event_index.h"
@@ -16,7 +17,9 @@
 #include "cantus/core/validation.h"
 #include "cantus/theory/counterpoint.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
 #include "generate/countermelody/limits.gen.h"
+#include "generate/drums/internal.h"
 #include "js/math.h"
 #include "js/number.h"
 #include "theory/safety/weights.h"
@@ -24,9 +27,6 @@
 namespace cantus {
 
 namespace {
-
-/** Whether a beat position falls on a whole quarter-note beat. */
-bool is_whole_beat(double beat) { return std::abs(beat - js::round(beat)) < BEAT_EPS; }
 
 /** The melody note sounding at a beat (latest onset wins on overlaps). */
 std::optional<NoteEvent> melody_note_at(const NoteEventIndex& melody, double beat) {
@@ -37,9 +37,12 @@ std::optional<NoteEvent> melody_note_at(const NoteEventIndex& melody, double bea
   return found->note;
 }
 
-/** Melody voice at a transition, including the pitch immediately before it. */
-std::optional<VoiceSnapshot> melody_snapshot_at(const NoteEventIndex& melody, double beat) {
-  std::optional<NoteEvent> current = melody_note_at(melody, beat);
+/**
+ * Melody voice at a transition, including the pitch immediately before it. `current` is the melody
+ * note sounding at the beat.
+ */
+std::optional<VoiceSnapshot> melody_snapshot_at(const NoteEventIndex& melody, double beat,
+                                                const std::optional<NoteEvent>& current) {
   if (!current) {
     return std::nullopt;
   }
@@ -78,11 +81,11 @@ std::vector<double> complement_onsets(const NoteEventIndex& melody, const TimeSi
     bool sounding = melody_note_at(melody, beat).has_value();
     bool place = false;
     if (!attacked && !sounding) {
-      place = is_whole_beat(beat);
+      place = is_multiple_of(beat, 1);
     } else if (!attacked) {
-      place =
-          draw.prob(is_whole_beat(beat) ? COUNTER_HOLD_ON_BEAT_PROB : COUNTER_HOLD_OFF_BEAT_PROB,
-                    {std::string("hold"), beat});
+      place = draw.prob(
+          is_multiple_of(beat, 1) ? COUNTER_HOLD_ON_BEAT_PROB : COUNTER_HOLD_OFF_BEAT_PROB,
+          {std::string("hold"), beat});
     } else if (is_strong_beat(beat, ts)) {
       place = draw.prob(COUNTER_REINFORCE_PROB, {std::string("reinforce"), beat});
     }
@@ -196,7 +199,7 @@ std::vector<BoundaryContext> boundary_contexts(const NoteEventIndex& melody,
   std::vector<BoundaryContext> contexts;
   for (double boundary : boundaries) {
     BoundaryContext context;
-    context.melodyVoice = melody_snapshot_at(melody, boundary);
+    context.melodyVoice = melody_snapshot_at(melody, boundary, melody_note_at(melody, boundary));
     if (context.melodyVoice) {
       context.otherVoices.push_back(*context.melodyVoice);
     }
@@ -252,10 +255,6 @@ std::optional<NoteSafety> held_pitch_safety(double pitch,
 }
 
 }  // namespace
-
-const TimeSignature kCounterDefaultTs =
-#include "generate/countermelody/default_ts.gen.inc"
-    ;
 
 std::vector<std::string_view> counter_rhythm_names() {
   return {to_string(CounterRhythm::kComplement), to_string(CounterRhythm::kFollow)};
@@ -371,7 +370,7 @@ std::vector<NoteEvent> generate_counter_melody_with(const CounterRequest& reques
     if (mel_note) {
       mel_pitch = mel_note->pitch;
     }
-    std::optional<VoiceSnapshot> melody_voice = melody_snapshot_at(melody, beat);
+    std::optional<VoiceSnapshot> melody_voice = melody_snapshot_at(melody, beat, mel_note);
     std::optional<double> mel_prev;
     if (melody_voice && melody_voice->prevPitch) {
       mel_prev = *melody_voice->prevPitch;
@@ -436,12 +435,11 @@ std::vector<NoteEvent> generate_counter_melody_with(const CounterRequest& reques
     }
     double pitch = *best_pitch;
     double velocity =
-        js::max(1.0, js::min(127.0, js::round((mel_note && mel_note->velocity
-                                                   ? static_cast<double>(*mel_note->velocity)
-                                                   : COUNTER_DEFAULT_MELODY_VELOCITY) -
-                                              COUNTER_VELOCITY_DROP)));
+        clamp_velocity((mel_note && mel_note->velocity ? static_cast<double>(*mel_note->velocity)
+                                                       : COUNTER_DEFAULT_MELODY_VELOCITY) -
+                       COUNTER_VELOCITY_DROP);
     NoteEvent note;
-    note.pitch = static_cast<int>(clamp_to_midi(pitch));
+    note.pitch = static_cast<int>(pitch);
     note.startBeat = beat;
     note.durationBeat = end_beat - beat;
     note.velocity = static_cast<int>(velocity);
@@ -477,7 +475,7 @@ std::vector<NoteEvent> generate_counter_melody(const CounterMelodyOptions& opts)
   note_options.allowNonPositiveDuration = true;
   assert_note_events(opts.melody, "countermelody melody", note_options);
   request.melody = opts.melody;
-  request.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kCounterDefaultTs)), "ts"));
+  request.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kGenerateDefaultTs)), "ts"));
   assert_time_signature(request.ts);
   request.rhythm = opts.rhythm.value_or(CounterRhythm::kComplement);
   request.profile = opts.profile.value_or(SafetyProfile::kPop);

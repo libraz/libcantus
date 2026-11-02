@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <set>
@@ -29,6 +30,45 @@ namespace {
 constexpr std::string_view kPreserveAspects[] =
 #include "generate/plan/preserve_aspects.gen.inc"
     ;
+
+/** Where an aspect's weight lives in the caller's options and in the resolved weights. */
+struct PreserveMembers {
+  std::string_view aspect;
+  std::optional<double> PreserveWeights::*given;
+  double ResolvedWeights::*resolved;
+};
+
+constexpr PreserveMembers kPreserveMembers[] = {
+    {"form", &PreserveWeights::form, &ResolvedWeights::form},
+    {"phraseLengths", &PreserveWeights::phraseLengths, &ResolvedWeights::phraseLengths},
+    {"harmonicFunction", &PreserveWeights::harmonicFunction, &ResolvedWeights::harmonicFunction},
+    {"harmonicRhythm", &PreserveWeights::harmonicRhythm, &ResolvedWeights::harmonicRhythm},
+    {"motifRelations", &PreserveWeights::motifRelations, &ResolvedWeights::motifRelations},
+    {"registerShape", &PreserveWeights::registerShape, &ResolvedWeights::registerShape},
+    {"rhythm", &PreserveWeights::rhythm, &ResolvedWeights::rhythm},
+};
+
+constexpr bool preserve_members_in_order() {
+  if (std::size(kPreserveMembers) != std::size(kPreserveAspects)) {
+    return false;
+  }
+  for (std::size_t i = 0; i < std::size(kPreserveMembers); ++i) {
+    if (kPreserveMembers[i].aspect != kPreserveAspects[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+static_assert(preserve_members_in_order(), "PRESERVE_ASPECTS and the weight members disagree");
+
+const PreserveMembers* preserve_members(std::string_view aspect) {
+  for (const PreserveMembers& members : kPreserveMembers) {
+    if (members.aspect == aspect) {
+      return &members;
+    }
+  }
+  return nullptr;
+}
 
 /** A generated FUNCTION_DEGREES row: the function's name and the degrees that may stand for it. */
 struct FunctionDegreesRow {
@@ -344,9 +384,9 @@ std::vector<MotifCandidate> schedule_motifs(const std::vector<MotifCandidate>& c
   std::vector<Cover> own;
   for (std::size_t index = 0; index < count; ++index) {
     next.push_back(first_from(index + 1, order[index].endBeat));
-    own.push_back(Cover{
-        order[index].notes,
-        metric_weight(order[index].startBeat, meters) < PLAN_DERIVE_STRONG_WEIGHT ? -1.0 : 0.0, 1});
+    own.push_back(
+        Cover{order[index].notes,
+              metric_weight(order[index].startBeat, meters) < PLAN_STRONG_WEIGHT ? -1.0 : 0.0, 1});
   }
   std::vector<Cover> best(count + 1, Cover{0, 0, 0});
   auto taking = [&](std::size_t index) {
@@ -546,25 +586,13 @@ std::vector<std::string_view> preserve_aspects() {
 
 const std::optional<double>* preserve_weight(const PreserveWeights& weights,
                                              std::string_view aspect) {
-  if (aspect == "form") return &weights.form;
-  if (aspect == "phraseLengths") return &weights.phraseLengths;
-  if (aspect == "harmonicFunction") return &weights.harmonicFunction;
-  if (aspect == "harmonicRhythm") return &weights.harmonicRhythm;
-  if (aspect == "motifRelations") return &weights.motifRelations;
-  if (aspect == "registerShape") return &weights.registerShape;
-  if (aspect == "rhythm") return &weights.rhythm;
-  return nullptr;
+  const PreserveMembers* members = preserve_members(aspect);
+  return members != nullptr ? &(weights.*members->given) : nullptr;
 }
 
 double* preserve_slot(ResolvedWeights& weights, std::string_view aspect) {
-  if (aspect == "form") return &weights.form;
-  if (aspect == "phraseLengths") return &weights.phraseLengths;
-  if (aspect == "harmonicFunction") return &weights.harmonicFunction;
-  if (aspect == "harmonicRhythm") return &weights.harmonicRhythm;
-  if (aspect == "motifRelations") return &weights.motifRelations;
-  if (aspect == "registerShape") return &weights.registerShape;
-  if (aspect == "rhythm") return &weights.rhythm;
-  return nullptr;
+  const PreserveMembers* members = preserve_members(aspect);
+  return members != nullptr ? &(weights.*members->resolved) : nullptr;
 }
 
 CompositionPlan derive_composition_plan_with(const ReferenceProfile& profile,

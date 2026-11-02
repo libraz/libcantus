@@ -20,18 +20,6 @@ namespace cantus {
 
 namespace {
 
-MotifCell to_cell(const std::vector<MotifNote>& notes) {
-  MotifCell cell;
-  for (const MotifNote& note : notes) {
-    NoteEvent event;
-    event.pitch = static_cast<int>(note.pitch);
-    event.startBeat = note.startBeat;
-    event.durationBeat = note.durationBeat;
-    cell.notes.push_back(event);
-  }
-  return cell;
-}
-
 /** Scale a cell's timing about its first onset, unless the ratio leaves it as it is. */
 MotifCell stretched(const MotifCell& cell, double time_ratio) {
   return time_ratio == 1 ? cell : transform_motif(cell, MotifTransform::kAugment, time_ratio);
@@ -112,20 +100,33 @@ std::vector<double> relation_levels(MotifRelationKind kind, double low, double h
   return {};
 }
 
-std::vector<MotifNote> replay_at(const std::vector<MotifNote>& source,
-                                 const MotifRelationSummary& relation, double level,
-                                 double start_beat, const KeyScale& key) {
-  MotifCell cell = shaped(to_cell(source), relation);
+MotifCell to_cell(const std::vector<MotifNote>& notes) {
+  MotifCell cell;
+  for (const MotifNote& note : notes) {
+    NoteEvent event;
+    event.pitch = static_cast<int>(note.pitch);
+    event.startBeat = note.startBeat;
+    event.durationBeat = note.durationBeat;
+    cell.notes.push_back(event);
+  }
+  return cell;
+}
+
+std::vector<MotifNote> Replayer::at(double level, double start_beat, const KeyScale& key) {
+  if (!shaped_) {
+    shaped_ = shaped(to_cell(source_), relation_);
+  }
+  const MotifCell& cell = *shaped_;
   if (cell.notes.empty()) {
     throw js::TypeError("Cannot read properties of undefined (reading 'startBeat')");
   }
   const NoteEvent& first = cell.notes.front();
   double offset = start_beat - first.startBeat;
-  double shift = source.front().pitch + level - first.pitch;
+  double shift = source_.front().pitch + level - first.pitch;
   std::vector<MotifNote> out;
   for (const NoteEvent& n : cell.notes) {
     MotifNote note;
-    note.pitch = relation.kind == MotifRelationKind::kTonalTransposition
+    note.pitch = relation_.kind == MotifRelationKind::kTonalTransposition
                      ? shift_by_scale_degrees(n.pitch, level, key)
                      : n.pitch + shift;
     note.startBeat = n.startBeat + offset;
@@ -133,6 +134,12 @@ std::vector<MotifNote> replay_at(const std::vector<MotifNote>& source,
     out.push_back(note);
   }
   return out;
+}
+
+std::vector<MotifNote> replay_at(const std::vector<MotifNote>& source,
+                                 const MotifRelationSummary& relation, double level,
+                                 double start_beat, const KeyScale& key) {
+  return Replayer(source, relation).at(level, start_beat, key);
 }
 
 std::vector<MotifNote> clip_statement(const std::vector<MotifNote>& notes, double end_beat) {
@@ -155,7 +162,7 @@ std::vector<MotifNote> repair_statement(const std::vector<MotifNote>& notes,
     if (forced[index]) {
       slots.push_back(PitchSlot{frame.candidatesAt(n.startBeat), frame.costAt(n.startBeat), false});
     } else {
-      slots.push_back(PitchSlot{{n.pitch}, [](double) { return 0.0; }, true});
+      slots.push_back(pinned_slot(n.pitch));
     }
   }
   std::optional<std::vector<double>> pitches = search_pitches(slots, frame.budget);
@@ -178,8 +185,9 @@ std::vector<MotifNote> place_derived(const std::vector<MotifNote>& source,
   double planned = relation.kind == MotifRelationKind::kTonalTransposition
                        ? relation.degrees.value_or(0)
                        : relation.semitones;
+  Replayer replayer(source, relation);
   auto replay = [&](double level) {
-    return clip_statement(replay_at(source, relation, level, start_beat, key), end_beat);
+    return clip_statement(replayer.at(level, start_beat, key), end_beat);
   };
   std::vector<double> base;
   for (const MotifNote& n : replay(0)) {
@@ -261,7 +269,7 @@ std::vector<MotifNote> vary_statement(const std::vector<MotifNote>& source, doub
   for (std::size_t index = 0; index < notes.size(); ++index) {
     const MotifNote& n = notes[index];
     if ((index == 0 || index == last) && shift) {
-      slots.push_back(PitchSlot{{n.pitch + *shift}, [](double) { return 0.0; }, true});
+      slots.push_back(pinned_slot(n.pitch + *shift));
     } else {
       slots.push_back(PitchSlot{frame.candidatesAt(n.startBeat), frame.costAt(n.startBeat), false});
     }

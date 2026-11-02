@@ -20,6 +20,7 @@
 #include "cantus/generate/drums.h"
 #include "cantus/generate/vocabulary.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
 #include "generate/context/draw.h"
 #include "generate/context/limits.gen.h"
 #include "generate/drums/drums.h"
@@ -322,8 +323,8 @@ void register_vocabulary() {
         js::type_of(amount) == "number" ? nullptr : &assert_record(amount, "amount");
     const json::Value& dial = asked == nullptr ? amount : get(*asked, "amount");
     const json::Value* ts = asked == nullptr ? nullptr : opt_null_default(*asked, "ts");
-    TimeSignature signature =
-        ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : figure_signature(kFigureTs);
+    TimeSignature signature = ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts"))
+                                            : figure_signature(kGenerateDefaultTs);
     double d = assert_range(dial, 0, 1, "syncopate amount");
     return events_json(
         syncopate_figure<WireGridModel>(figure, d, signature, WireSampler{sampler, path}));
@@ -421,7 +422,7 @@ void register_drums() {
           *parse_section(assert_one_of(section, section_names(), "drum pattern section"));
     }
     const json::Value* ts = opt_null_default(opts, "ts");
-    plan.ts = ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : kFourFour;
+    plan.ts = ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : kGenerateDefaultTs;
     const json::Value& velocity = get(opts, "velocity");
     if (!is_undefined(velocity)) {
       assert_range(velocity, 1, 127, "drum pattern velocity");

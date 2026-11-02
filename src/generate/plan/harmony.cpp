@@ -68,13 +68,7 @@ std::optional<std::vector<int>> cadence_pitch_classes(const CompositionPlan& pla
     }
     return chord_pitch_classes(*chord);
   }
-  const PlannedChord* entry = nullptr;
-  for (const PlannedChord& chord : plan.harmony) {
-    if (beat >= chord.startBeat && beat < chord.endBeat) {
-      entry = &chord;
-      break;
-    }
-  }
+  const PlannedChord* entry = chord_entry_at(plan, beat);
   KeyScale scale = scale_of(plan.keys[entry != nullptr ? static_cast<std::size_t>(entry->key) : 0]);
   std::vector<int> tones = scale_tones_in_degree_order(scale);
   // The dominant a half or phrygian cadence lands on carries the raised seventh.

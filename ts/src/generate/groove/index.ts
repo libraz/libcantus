@@ -11,6 +11,7 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import {
   beatsPerBar,
+  DEFAULT_TS,
   formatTimeSignature,
   type MeterLike,
   meterAt,
@@ -29,6 +30,7 @@ import {
   dropSilentNotes,
 } from '../../core/validation/index.js';
 import { type GenerationContextInput, resolveContext } from '../context/index.js';
+import { clampVelocity } from '../drums/internal.js';
 
 /**
  * Options controlling {@link humanize}.
@@ -87,8 +89,6 @@ export type HumanizeOptions = {
   part?: string;
 };
 
-/** Default time signature for {@link humanize} when none is given. */
-export const DEFAULT_TS: TimeSignature = { numerator: 4, denominator: 4 };
 /** The namespace {@link humanize} draws under when the caller names none. */
 const DEFAULT_PART = 'humanize';
 /**
@@ -101,8 +101,6 @@ export const DEFAULT_VELOCITY_JITTER = 8;
 export const DEFAULT_ACCENT = 12;
 export const DEFAULT_BASE_VELOCITY = 80;
 export const MAX_METRIC_WEIGHT = 3;
-export const MIN_VELOCITY = 1;
-export const MAX_VELOCITY = 127;
 
 /**
  * Humanize a sequence of note events by nudging their timing and velocity
@@ -180,7 +178,7 @@ export function humanize(events: readonly NoteEvent[], opts: HumanizeOptions = {
       event.pitch,
     );
     const rawVelocity = (event.velocity ?? baseVelocity) + accentBoost + velocityOffset;
-    const velocity = Math.min(MAX_VELOCITY, Math.max(MIN_VELOCITY, Math.round(rawVelocity)));
+    const velocity = clampVelocity(rawVelocity);
 
     // The note is copied whole and only the fields this pass owns are written
     // over it: an articulation, or anything else a caller has put on a note,

@@ -42,13 +42,13 @@ import {
 } from '../context/index.js';
 import { type MotifNote, motifToNoteEvents } from '../motif/index.js';
 import { cadencePitchClasses, planHarmonyMisfits } from '../plan/harmony.js';
-import { finalDownbeat, positionClass } from '../plan/internal.js';
+import { chordEntryAt, finalDownbeat, positionClass } from '../plan/internal.js';
 import { planChordTimeline } from '../plan/timeline.js';
-import type { CompositionPlan, PlannedChord, PlannedMotif, PlannedPhrase } from '../plan/types.js';
+import type { CompositionPlan, PlannedMotif, PlannedPhrase } from '../plan/types.js';
 import { plannedContourAt } from '../plan/types.js';
 import { assertCompositionPlan } from '../plan/validate.js';
 import { type PhraseFrame, placeDerived, relationLevels, varyStatement } from './derive.js';
-import { type PitchSlot, searchPitches } from './pitch-dp.js';
+import { type PitchSlot, pinnedSlot, searchPitches } from './pitch-dp.js';
 
 /**
  * Options controlling {@link generateMelody}.
@@ -91,6 +91,8 @@ type Scene = {
   timeline: ChordTimeline;
   harmonyMisfits: (line: readonly MotifNote[]) => (string[] | null)[];
   scales: KeyScale[];
+  /** The scale at each beat asked for, so the plan's chords are searched once per beat. */
+  scaleAtBeat: Map<number, KeyScale>;
   members: number[][];
   frames: PhraseFrame[];
   statements: Map<number, MotifNote[]>;
@@ -126,14 +128,14 @@ function melodyContext(
   });
 }
 
-/** The planned chord sounding at a beat, if any. */
-function chordEntryAt(plan: CompositionPlan, beat: number): PlannedChord | undefined {
-  return plan.harmony.find((chord) => beat >= chord.startBeat && beat < chord.endBeat);
-}
-
 /** The scale of the key the chord at a beat is named in; the home key where no chord sounds. */
 function scaleAt(scene: Scene, beat: number): KeyScale {
-  return scene.scales[chordEntryAt(scene.plan, beat)?.key ?? 0] as KeyScale;
+  let scale = scene.scaleAtBeat.get(beat);
+  if (scale === undefined) {
+    scale = scene.scales[chordEntryAt(scene.plan, beat)?.key ?? 0] as KeyScale;
+    scene.scaleAtBeat.set(beat, scale);
+  }
+  return scale;
 }
 
 /** The pitch a phrase's target curve asks for at a beat. */
@@ -513,11 +515,11 @@ function repairCadence(scene: Scene, index: number, line: MotifNote[], held: num
   if (allowed.includes(pitchClassOf(note.pitch))) {
     return;
   }
-  const slots: PitchSlot[] = line.map((n, i) =>
-    i === target
-      ? { candidates, cost: frame.costAt(n.startBeat), fixed: false }
-      : { candidates: [n.pitch], cost: () => 0, fixed: true },
-  );
+  const slots = pinnedSlots(line, target, {
+    candidates,
+    cost: frame.costAt(note.startBeat),
+    fixed: false,
+  });
   const pitches = searchPitches(slots, frame.budget);
   if (pitches === null) {
     throw new NoSolutionError(`no cadence pitch joins its neighbours without an augmented step`, {
@@ -548,11 +550,11 @@ function repickCutOnset(scene: Scene, index: number, line: MotifNote[], held: nu
   if (candidates.includes(note.pitch)) {
     return;
   }
-  const slots: PitchSlot[] = line.map((n, i) =>
-    i === held
-      ? { candidates, cost: frame.costAt(n.startBeat), fixed: false }
-      : { candidates: [n.pitch], cost: () => 0, fixed: true },
-  );
+  const slots = pinnedSlots(line, held, {
+    candidates,
+    cost: frame.costAt(note.startBeat),
+    fixed: false,
+  });
   const pitches = searchPitches(slots, frame.budget);
   if (pitches === null) {
     throw new NoSolutionError(`no pitch at the final downbeat joins its neighbours`, {
@@ -560,6 +562,11 @@ function repickCutOnset(scene: Scene, index: number, line: MotifNote[], held: nu
     });
   }
   line[held] = { ...note, pitch: pitches[held] as number };
+}
+
+/** A line with every note held at its pitch but the one at `free`, which takes `slot`. */
+function pinnedSlots(line: readonly MotifNote[], free: number, slot: PitchSlot): PitchSlot[] {
+  return line.map((n, i) => (i === free ? slot : pinnedSlot(n.pitch)));
 }
 
 /** A phrase's notes before cadence repair, in time order. */
@@ -672,6 +679,7 @@ export function generateMelody(plan: CompositionPlan, opts?: MelodyOptions): Not
     timeline,
     harmonyMisfits: planHarmonyMisfits(plan, timeline),
     scales: plan.keys.map((key) => scaleOf(key)),
+    scaleAtBeat: new Map(),
     members: membersOf(plan),
     frames: [],
     statements: new Map(),

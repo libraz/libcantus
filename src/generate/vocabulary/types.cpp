@@ -12,21 +12,6 @@
 
 namespace cantus {
 
-namespace {
-
-template <class Enum, std::size_t N>
-std::optional<Enum> parse_named(const std::array<std::string_view, N>& names,
-                                std::string_view name) {
-  for (std::size_t i = 0; i < N; ++i) {
-    if (names[i] == name) {
-      return static_cast<Enum>(i);
-    }
-  }
-  return std::nullopt;
-}
-
-}  // namespace
-
 std::string_view to_string(Genre genre) { return kGenreNames[static_cast<std::size_t>(genre)]; }
 
 std::optional<Genre> parse_genre(std::string_view name) {
@@ -41,11 +26,9 @@ std::optional<ProvenanceBasis> parse_provenance_basis(std::string_view name) {
   return parse_named<ProvenanceBasis>(kProvenanceBasisNames, name);
 }
 
-std::vector<std::string_view> genre_names() { return {kGenreNames.begin(), kGenreNames.end()}; }
+std::vector<std::string_view> genre_names() { return names_of(kGenreNames); }
 
-std::vector<std::string_view> provenance_basis_names() {
-  return {kProvenanceBasisNames.begin(), kProvenanceBasisNames.end()};
-}
+std::vector<std::string_view> provenance_basis_names() { return names_of(kProvenanceBasisNames); }
 
 namespace detail {
 

@@ -12,10 +12,10 @@ import { InvalidInputError } from '../../core/errors/index.js';
 import { type Articulation, canSound, type Limb } from '../../core/instrument/index.js';
 import {
   beatsPerBar,
+  DEFAULT_TS,
   formatTimeSignature,
   type MeterLike,
   meterAt,
-  type TimeSignature,
   toMeterData,
 } from '../../core/meter/index.js';
 import {
@@ -159,8 +159,6 @@ function bar(strokes: DrumStroke[]): DrumPattern {
   return { steps: BAR_STEPS, strokes };
 }
 
-export const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
-
 /**
  * The built-in drum patterns, in declaration order.
  *
@@ -172,7 +170,7 @@ export const DRUM_PATTERNS: readonly DrumVocabulary[] = deepFreeze([
     genre: 'motown',
     difficulty: 2,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [96, 136],
     material: bar([
       hit('kick', 0, 1),
@@ -193,7 +191,7 @@ export const DRUM_PATTERNS: readonly DrumVocabulary[] = deepFreeze([
     genre: 'funk',
     difficulty: 4,
     articulations: ['ghost'],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [84, 120],
     material: bar([
       hit('kick', 0, 1),
@@ -218,7 +216,7 @@ export const DRUM_PATTERNS: readonly DrumVocabulary[] = deepFreeze([
     genre: 'blues',
     difficulty: 5,
     articulations: ['ghost'],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [72, 104],
     material: bar([
       hit('kick', 0, 1),
@@ -240,7 +238,7 @@ export const DRUM_PATTERNS: readonly DrumVocabulary[] = deepFreeze([
     genre: 'bossa',
     difficulty: 3,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [110, 160],
     material: bar([
       hit('kick', 0, 0.9),
@@ -264,7 +262,7 @@ export const DRUM_PATTERNS: readonly DrumVocabulary[] = deepFreeze([
     genre: 'samba',
     difficulty: 4,
     articulations: [],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [92, 140],
     material: bar([
       hit('kick', 0, 0.85),
@@ -289,7 +287,7 @@ export const DRUM_PATTERNS: readonly DrumVocabulary[] = deepFreeze([
     genre: 'gospel',
     difficulty: 4,
     articulations: ['ghost'],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [64, 104],
     material: bar([
       hit('kick', 0, 1),
@@ -314,7 +312,7 @@ export const DRUM_PATTERNS: readonly DrumVocabulary[] = deepFreeze([
     genre: 'dnb',
     difficulty: 4,
     articulations: ['ghost'],
-    ts: FOUR_FOUR,
+    ts: DEFAULT_TS,
     tempoRange: [160, 180],
     material: bar([
       hit('kick', 0, 1),
@@ -433,7 +431,7 @@ export function placeDrumPattern(opts: DrumPatternOptions): DrumHit[] {
     opts.section === undefined
       ? undefined
       : assertOneOf(opts.section, PUBLIC_SECTIONS, 'drum pattern section');
-  const ts = meterAt(0, toMeterData(opts.ts ?? FOUR_FOUR, 'ts'));
+  const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
   if (opts.velocity !== undefined) {
     assertRange(opts.velocity, 1, 127, 'drum pattern velocity');
   }

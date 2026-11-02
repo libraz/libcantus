@@ -13,6 +13,7 @@
 #include "cantus/core/limits.h"
 #include "cantus/core/validation.h"
 #include "generate/context/context.h"
+#include "generate/drums/internal.h"
 #include "generate/ornament/limits.gen.h"
 #include "js/math.h"
 
@@ -47,10 +48,6 @@ bool eligible(OrnamentStyle style, const NoteEvent& note, const NoteEvent* previ
              std::abs(note.pitch - previous->pitch) >= ORNAMENT_SLIDE_MIN_SEMITONES;
   }
   return false;
-}
-
-double clamp_velocity(double velocity) {
-  return js::min(ORNAMENT_MAX_VELOCITY, js::max(ORNAMENT_MIN_VELOCITY, js::round(velocity)));
 }
 
 /** Velocity after an ornament, or nothing where the ornament changes none. */
@@ -123,10 +120,6 @@ std::vector<double> stroke_gaps(const std::vector<NoteEvent>& sounding) {
 
 }  // namespace
 
-const TimeSignature kOrnamentDefaultTs =
-#include "generate/ornament/default_ts.gen.inc"
-    ;
-
 std::string_view to_string(OrnamentStyle style) {
   return kStyleNames[static_cast<std::size_t>(style)];
 }
@@ -194,7 +187,7 @@ std::vector<NoteEvent> ornament(const std::vector<NoteEvent>& notes, const Ornam
   note_options.allowNonPositiveDuration = true;
   assert_note_events(notes, "ornament notes", note_options);
   OrnamentStyle style = opts.style.value_or(OrnamentStyle::kGhost);
-  MeterData meter = to_meter_data(opts.ts.value_or(MeterArg(kOrnamentDefaultTs)), "ts");
+  MeterData meter = to_meter_data(opts.ts.value_or(MeterArg(kGenerateDefaultTs)), "ts");
   if (opts.amount) {
     assert_range(*opts.amount, 0, 1, "ornament amount");
   }

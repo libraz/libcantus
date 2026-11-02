@@ -46,6 +46,16 @@ HarmonizePass harmonize_once(const std::vector<NoteEvent>& melody, const KeyScal
     dp.push_back(value);
   }
   std::vector<std::vector<std::size_t>> back;
+  // The move between two chords does not depend on the segment, only its weight does.
+  std::vector<double> move;
+  if (segments.size() > 1) {
+    move.reserve(n * n);
+    for (std::size_t p = 0; p < n; ++p) {
+      for (std::size_t c = 0; c < n; ++c) {
+        move.push_back(transition_cost(cand_at(p), cand_at(c), tonic_pc));
+      }
+    }
+  }
 
   for (std::size_t s = 1; s < segments.size(); ++s) {
     const Segment& seg = segments[s];
@@ -62,8 +72,7 @@ HarmonizePass harmonize_once(const std::vector<NoteEvent>& melody, const KeyScal
           continue;
         }
         double cost =
-            (p < dp.size() ? dp[p] : kInfinity) +
-            transition_cost(cand_at(p), cand_at(c), tonic_pc) * seg.beats +
+            (p < dp.size() ? dp[p] : kInfinity) + move[p * n + c] * seg.beats +
             (closes ? phrase_end_bonus(&cand_at(p), cand_at(c), tonic_pc, seg, melody) : 0);
         if (cost < best) {
           best = cost;

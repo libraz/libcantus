@@ -5,7 +5,7 @@
 
 import type { MeterMap } from '../../core/meter/index.js';
 import { BEAT_EPS, barStartBeat, beatsPerBarAt, metricWeight } from '../../core/meter/index.js';
-import type { PlannedPhrase } from './types.js';
+import type { CompositionPlan, PlannedChord, PlannedPhrase } from './types.js';
 
 /** How a position stands in the bar: a strong pulse, a weak pulse, or off the pulses. */
 export type PositionClass = 'strong' | 'weak' | 'off';
@@ -40,4 +40,15 @@ export function finalDownbeat(phrase: PlannedPhrase, meters: MeterMap): number {
     downbeat += beatsPerBarAt(downbeat, meters);
   }
   return Math.max(downbeat, phrase.startBeat);
+}
+
+/**
+ * The planned chord sounding at a beat.
+ *
+ * @param plan The plan.
+ * @param beat The position, in quarter-note beats.
+ * @returns The first chord whose span holds the beat, or `undefined` where none does.
+ */
+export function chordEntryAt(plan: CompositionPlan, beat: number): PlannedChord | undefined {
+  return plan.harmony.find((chord) => beat >= chord.startBeat && beat < chord.endBeat);
 }

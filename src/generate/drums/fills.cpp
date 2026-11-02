@@ -9,6 +9,7 @@
 
 #include "cantus/core/validation.h"
 #include "core/validation/validation.h"
+#include "generate/vocabulary/types.h"
 #include "js/value.h"
 
 namespace cantus {
@@ -146,12 +147,7 @@ const std::array<FillArchetype, FILL_TYPES.size()> FILL_ARCHETYPES = make_fill_a
 std::string_view to_string(FillType type) { return kFillTypeNames[static_cast<std::size_t>(type)]; }
 
 std::optional<FillType> parse_fill_type(std::string_view name) {
-  for (std::size_t i = 0; i < kFillTypeNames.size(); ++i) {
-    if (kFillTypeNames[i] == name) {
-      return static_cast<FillType>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<FillType>(kFillTypeNames, name);
 }
 
 std::string_view to_string(FillVelocityBase base) {
@@ -159,16 +155,11 @@ std::string_view to_string(FillVelocityBase base) {
 }
 
 std::optional<FillVelocityBase> parse_fill_velocity_base(std::string_view name) {
-  for (std::size_t i = 0; i < kFillVelocityBaseNames.size(); ++i) {
-    if (kFillVelocityBaseNames[i] == name) {
-      return static_cast<FillVelocityBase>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<FillVelocityBase>(kFillVelocityBaseNames, name);
 }
 
 std::vector<std::string_view> fill_velocity_base_names() {
-  return {kFillVelocityBaseNames.begin(), kFillVelocityBaseNames.end()};
+  return names_of(kFillVelocityBaseNames);
 }
 
 void assert_fill_archetype(const FillArchetype& material, const std::string& label) {

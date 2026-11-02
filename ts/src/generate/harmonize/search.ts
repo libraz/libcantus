@@ -41,6 +41,15 @@ export function harmonizeOnce(
       (jitter[ci] ?? 0),
   );
   const back: number[][] = [];
+  // The move between two chords does not depend on the segment, only its weight does.
+  const move: number[] = [];
+  if (segments.length > 1) {
+    for (let p = 0; p < n; p += 1) {
+      for (let c = 0; c < n; c += 1) {
+        move.push(transitionCost(candAt(p), candAt(c), tonicPc));
+      }
+    }
+  }
 
   for (let s = 1; s < segments.length; s += 1) {
     const seg = segments[s];
@@ -68,7 +77,7 @@ export function harmonizeOnce(
         // chosen for the cadence it makes.
         const cost =
           (dp[p] ?? Number.POSITIVE_INFINITY) +
-          transitionCost(candAt(p), candAt(c), tonicPc) * seg.beats +
+          (move[p * n + c] ?? 0) * seg.beats +
           (closes ? phraseEndBonus(candAt(p), candAt(c), tonicPc, seg, melody) : 0);
         if (cost < best) {
           best = cost;

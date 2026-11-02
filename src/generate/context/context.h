@@ -9,12 +9,16 @@
 #include <optional>
 #include <string_view>
 
+#include "cantus/core/meter.h"
 #include "cantus/generate/context.h"
 
 namespace cantus {
 
 /** Path segment separating one algorithm version's draws from another's (`VERSION_SEGMENT`). */
 inline constexpr std::string_view kVersionSegment = "v";
+
+/** The meter every generator assumes when the caller names none (`DEFAULT_TS` of core/meter). */
+extern const TimeSignature kGenerateDefaultTs;
 
 /** A generator's own dial, merged into its context (`resolveContextWith`'s sugar). */
 struct ContextSugar {

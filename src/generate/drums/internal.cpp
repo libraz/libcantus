@@ -4,6 +4,8 @@
 
 #include <cstddef>
 
+#include "generate/drums/limits.gen.h"
+#include "generate/vocabulary/types.h"
 #include "js/math.h"
 
 namespace cantus {
@@ -35,12 +37,6 @@ constexpr bool style_map_in_order() {
 }
 static_assert(style_map_in_order(), "STYLE_MAP and GROOVE_STYLES disagree");
 
-/** The names of a list, for assert_one_of(). */
-template <std::size_t N>
-std::vector<std::string_view> names_of(const std::array<std::string_view, N>& names) {
-  return {names.begin(), names.end()};
-}
-
 }  // namespace
 
 std::string_view to_string(Section section) {
@@ -48,12 +44,7 @@ std::string_view to_string(Section section) {
 }
 
 std::optional<Section> parse_section(std::string_view name) {
-  for (std::size_t i = 0; i < kSectionNames.size(); ++i) {
-    if (kSectionNames[i] == name) {
-      return static_cast<Section>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<Section>(kSectionNames, name);
 }
 
 std::string_view to_string(DrumStyle style) {
@@ -92,12 +83,7 @@ std::optional<DrumStyle> parse_drum_style(std::string_view name) {
 std::string_view to_string(GrooveFeel feel) { return kFeelNames[static_cast<std::size_t>(feel)]; }
 
 std::optional<GrooveFeel> parse_groove_feel(std::string_view name) {
-  for (std::size_t i = 0; i < kFeelNames.size(); ++i) {
-    if (kFeelNames[i] == name) {
-      return static_cast<GrooveFeel>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<GrooveFeel>(kFeelNames, name);
 }
 
 std::string_view to_string(GrooveStyle style) {
@@ -105,23 +91,13 @@ std::string_view to_string(GrooveStyle style) {
 }
 
 std::optional<GrooveStyle> parse_groove_style(std::string_view name) {
-  for (std::size_t i = 0; i < kGrooveStyleNames.size(); ++i) {
-    if (kGrooveStyleNames[i] == name) {
-      return static_cast<GrooveStyle>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<GrooveStyle>(kGrooveStyleNames, name);
 }
 
 std::string_view to_string(DrumRole role) { return kDrumRoleNames[static_cast<std::size_t>(role)]; }
 
 std::optional<DrumRole> parse_drum_role(std::string_view name) {
-  for (std::size_t i = 0; i < kDrumRoleNames.size(); ++i) {
-    if (kDrumRoleNames[i] == name) {
-      return static_cast<DrumRole>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<DrumRole>(kDrumRoleNames, name);
 }
 
 std::vector<std::string_view> feel_names() { return names_of(kFeelNames); }
@@ -222,7 +198,7 @@ int section_index(SectionType section) {
     case SectionType::kBridge:
       return 4;
     case SectionType::kOutro:
-      return 6;
+      return 5;
   }
   return 1;
 }
@@ -281,9 +257,13 @@ double section_density_multiplier(SectionType section) {
 double calculate_velocity(SectionType section, double beat) {
   double base = 80;
   double beat_adj = beat == 0 ? 10 : beat == 2 ? 5 : 0;
-  return clamp_vel((base + beat_adj) * section_velocity_multiplier(section));
+  return clamp_velocity((base + beat_adj) * section_velocity_multiplier(section));
 }
 
-double clamp_vel(double velocity) { return js::max(1, js::min(127, js::round(velocity))); }
+bool is_midi_pitch(double pitch) { return pitch >= 0 && pitch <= 127; }
+
+double clamp_velocity(double velocity) {
+  return js::max(DRUM_MIN_VELOCITY, js::min(DRUM_MAX_VELOCITY, js::round(velocity)));
+}
 
 }  // namespace cantus

@@ -76,9 +76,6 @@ std::vector<NoteEvent> imitation_answers(const std::vector<NoteEvent>& sounding,
                                          const std::vector<std::size_t>& subject,
                                          const ImitationPlan& plan);
 
-/** The meter assumed when none is supplied (`DEFAULT_TS`). */
-extern const TimeSignature kCounterDefaultTs;
-
 /** The names of the rhythms, for assert_one_of(). */
 std::vector<std::string_view> counter_rhythm_names();
 

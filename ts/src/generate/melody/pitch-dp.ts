@@ -23,6 +23,11 @@ export type PitchSlot = {
   fixed: boolean;
 };
 
+/** A note held at `pitch`: the search cannot move it and it costs nothing. */
+export function pinnedSlot(pitch: number): PitchSlot {
+  return { candidates: [pitch], cost: () => 0, fixed: true };
+}
+
 /**
  * An extra cost on the step into note `index` (from note `index - 1`), added to
  * the interval cost.
@@ -69,24 +74,6 @@ function leapOf(delta: number): number {
     return NO_LEAP;
   }
   return delta > 0 ? LEAP_UP : LEAP_DOWN;
-}
-
-/**
- * Cost of stepping from `from` (reached by a leap in state `leap`) to `to`, or
- * `Infinity` where the step is forbidden. A step between two held notes is
- * never forbidden: both were prescribed, and the search cannot move either.
- */
-function stepCost(from: number, to: number, leap: number, bothFixed: boolean): number {
-  const delta = to - from;
-  const size = Math.abs(delta);
-  if (!bothFixed && isForbiddenMelodicLeap(from, to)) {
-    return Number.POSITIVE_INFINITY;
-  }
-  let cost = intervalCost(size);
-  if ((leap === LEAP_UP && delta > 0) || (leap === LEAP_DOWN && delta < 0)) {
-    cost += LEAP_CONTINUATION_COST;
-  }
-  return cost;
 }
 
 /**
@@ -138,24 +125,38 @@ export function searchPitches(
       budget,
     ).fill(-1);
     const bothFixed = before.fixed && slot.fixed;
-    for (let state = 0; state < previous.length; state += 1) {
-      const reached = previous[state] as number;
-      if (reached === Number.POSITIVE_INFINITY) {
-        continue;
-      }
-      const from = before.candidates[Math.floor(state / LEAP_STATES)] as number;
-      const leap = state % LEAP_STATES;
-      for (let j = 0; j < slot.candidates.length; j += 1) {
-        const to = slot.candidates[j] as number;
-        const step = stepCost(from, to, leap, bothFixed);
-        if (step === Number.POSITIVE_INFINITY) {
+    for (let fromIndex = 0; fromIndex * LEAP_STATES < previous.length; fromIndex += 1) {
+      const from = before.candidates[fromIndex] as number;
+      // The size cost of each step out of `from`, Infinity where it is forbidden. A step
+      // between two held notes is never forbidden: both were prescribed, and the search
+      // cannot move either. The leap states of one pitch share it.
+      let sizeCosts: number[] | undefined;
+      for (let leap = 0; leap < LEAP_STATES; leap += 1) {
+        const state = fromIndex * LEAP_STATES + leap;
+        const reached = previous[state] as number;
+        if (reached === Number.POSITIVE_INFINITY) {
           continue;
         }
-        const total = reached + step + (unary[j] as number) + (extra ? extra(k, from, to) : 0);
-        const index = j * LEAP_STATES + leapOf(to - from);
-        if (total < (current[index] as number)) {
-          current[index] = total;
-          back[index] = state;
+        sizeCosts ??= slot.candidates.map((to) =>
+          !bothFixed && isForbiddenMelodicLeap(from, to)
+            ? Number.POSITIVE_INFINITY
+            : intervalCost(Math.abs(to - from)),
+        );
+        for (let j = 0; j < slot.candidates.length; j += 1) {
+          const to = slot.candidates[j] as number;
+          const size = sizeCosts[j] as number;
+          if (size === Number.POSITIVE_INFINITY) {
+            continue;
+          }
+          const delta = to - from;
+          const continues = (leap === LEAP_UP && delta > 0) || (leap === LEAP_DOWN && delta < 0);
+          const step = continues ? size + LEAP_CONTINUATION_COST : size;
+          const total = reached + step + (unary[j] as number) + (extra ? extra(k, from, to) : 0);
+          const index = j * LEAP_STATES + leapOf(to - from);
+          if (total < (current[index] as number)) {
+            current[index] = total;
+            back[index] = state;
+          }
         }
       }
     }

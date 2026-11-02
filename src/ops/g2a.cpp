@@ -21,6 +21,7 @@
 #include "generate/bass/internal.h"
 #include "generate/bass/licks.h"
 #include "generate/bass/limits.gen.h"
+#include "generate/context/context.h"
 #include "generate/context/limits.gen.h"
 #include "generate/countermelody/countermelody.h"
 #include "generate/vocabulary/types.h"
@@ -49,7 +50,7 @@ namespace {
 /** `opts.ts ?? DEFAULT_TS`, read as `meterAt(0, toMeterData(ts, 'ts'))`. */
 TimeSignature read_ts_option(const json::Value& opts) {
   const json::Value* ts = opt_null_default(opts, "ts");
-  return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : meter_at(0, kBassDefaultTs);
+  return ts != nullptr ? meter_at(0, read_meter_like(*ts, "ts")) : meter_at(0, kGenerateDefaultTs);
 }
 
 /** `bassRegister(context.instrument('bass'), opts.instrument, octave)` over the wire. */
@@ -255,7 +256,7 @@ void register_countermelody() {
                                         line_options(undefined_value()));
     request.ts = meter_at(0, [&opts]() {
       const json::Value* ts = opt_null_default(opts, "ts");
-      return ts != nullptr ? read_meter_like(*ts, "ts") : MeterData(kCounterDefaultTs);
+      return ts != nullptr ? read_meter_like(*ts, "ts") : MeterData(kGenerateDefaultTs);
     }());
     cantus::assert_time_signature(request.ts);
     const json::Value* rhythm = opt_null_default(opts, "rhythm");

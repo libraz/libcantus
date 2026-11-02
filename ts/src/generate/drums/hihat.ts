@@ -16,6 +16,20 @@ export const FHH_VEL_MIN = 45;
 export const FHH_VEL_MAX = 60;
 /** Velocity boost applied to dynamic open hi-hat accents. */
 export const OHH_VEL_BOOST = 7;
+/** The quietest a hi-hat stroke is written. */
+export const HH_VEL_FLOOR = 20;
+/** Factor an open hi-hat on a metric accent lifts the closed stroke's velocity by. */
+export const OHH_VEL_LIFT = 1.1;
+
+/** A hi-hat velocity raised to the floor. */
+export function hiHatVelocity(velocity: number): number {
+  return Math.max(HH_VEL_FLOOR, velocity);
+}
+
+/** The velocity of an open hi-hat on a metric accent, lifted from the closed stroke's. */
+export function openHatVelocity(hhVel: number): number {
+  return hiHatVelocity(hhVel * OHH_VEL_LIFT);
+}
 
 /** True unless the role suppresses timekeeping cymbals entirely. */
 export function shouldPlayHiHat(role: DrumRole): boolean {
@@ -37,18 +51,12 @@ function sparser(level: HiHatLevel): HiHatLevel {
   if (level === 'sixteenth') {
     return 'eighth';
   }
-  if (level === 'eighth') {
-    return 'quarter';
-  }
   return 'quarter';
 }
 
 function denser(level: HiHatLevel): HiHatLevel {
   if (level === 'quarter') {
     return 'eighth';
-  }
-  if (level === 'eighth') {
-    return 'sixteenth';
   }
   return 'sixteenth';
 }

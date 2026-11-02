@@ -156,7 +156,7 @@ void register_groove() {
     const json::Value& asked = assert_options(a[1], "opts");
     // The meter is read once, here, and every position below is weighed against it.
     HumanizeRequest request;
-    request.ts = read_meter_or(asked, kGrooveDefaultTs);
+    request.ts = read_meter_or(asked, kGenerateDefaultTs);
     std::vector<NoteEvent> events =
         assert_note_events(a[0], "humanize events", line_options(undefined_value()));
     Sounding sounding = sounding_of(a[0], events);
@@ -274,7 +274,7 @@ void register_ornament() {
         assert_note_events(a[0], "ornament notes", line_options(undefined_value()));
     OrnamentStyle style = *parse_ornament_style(assert_one_of(
         opt_or(asked, "style", json::Value("ghost")), ornament_style_names(), "ornament style"));
-    MeterData ts = read_meter_or(asked, kOrnamentDefaultTs);
+    MeterData ts = read_meter_or(asked, kGenerateDefaultTs);
     std::optional<double> amount;
     if (const json::Value* given = opt_strict(asked, "amount")) {
       amount = assert_range(*given, 0, 1, "ornament amount");
@@ -330,7 +330,7 @@ void register_motif() {
                                            motif_contour_names(), "motif contour"));
     plan.bars = assert_positive_int(get(opts, "bars"), "motif bars");
     // The meter is read once, here: a motif is one repeated bar grid.
-    plan.barBeats = beats_per_bar(read_ts_or(opts, kMotifDefaultTs));
+    plan.barBeats = beats_per_bar(read_ts_or(opts, kGenerateDefaultTs));
     assert_generation_budget(json::Value(js::max(3.0, plan.bars * 2)), "motif notes",
                              undefined_value());
     // The dial is handed over as it was given: `jitter` is sugar for the context's ornament dial.
@@ -508,7 +508,7 @@ void register_progression() {
     plan.degrees = preset->degrees;
     plan.cadenceStrong = cadence_strong;
     // One chord per bar of the meter the caller counts in.
-    plan.barBeats = beats_per_bar(read_ts_or(opts, kProgressionDefaultTs));
+    plan.barBeats = beats_per_bar(read_ts_or(opts, kGenerateDefaultTs));
     return to_json(generate_progression_with(plan, ctx.resolved));
   });
 }

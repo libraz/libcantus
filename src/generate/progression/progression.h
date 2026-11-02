@@ -17,9 +17,6 @@
 
 namespace cantus {
 
-/** The meter a progression is laid out in when the caller names none (`DEFAULT_TS`). */
-extern const TimeSignature kProgressionDefaultTs;
-
 /** The names of PROG_STYLES, for assert_one_of(). */
 std::vector<std::string_view> prog_style_names();
 

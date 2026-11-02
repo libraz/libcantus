@@ -67,6 +67,9 @@ inline constexpr int HARMONIZE_STEP_SEMITONES = 2;
 /** TIE_BREAK_JITTER of ts/src/generate/harmonize/internal.ts. */
 inline constexpr double HARMONIZE_TIE_BREAK_JITTER = 0.000001;
 
+/** MIN_NOTE_WEIGHT of ts/src/generate/harmonize/internal.ts. */
+inline constexpr double HARMONIZE_MIN_NOTE_WEIGHT = 0.25;
+
 }  // namespace cantus
 
 #endif  // CANTUS_SRC_GENERATE_HARMONIZE_LIMITS_GEN_H_

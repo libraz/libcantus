@@ -86,27 +86,21 @@ double get_ghost_density(MoodCategory mood, SectionType section, double bpm) {
 }
 
 double get_ghost_velocity(SectionType section, double beat_position) {
-  double base = 0.4;
   double even = std::fmod(beat_position, 2) == 0 ? 0.05 : 0;
   switch (section) {
     case SectionType::kA:
-      base = 0.35 + even;
-      break;
+      return 0.35 + even;
     case SectionType::kChorus:
-      base = 0.5 + even;
-      break;
+      return 0.5 + even;
     case SectionType::kBridge:
-      base = 0.25 + even;
-      break;
+      return 0.25 + even;
     case SectionType::kB:
-      base = 0.4 + even;
-      break;
+      return 0.4 + even;
     case SectionType::kIntro:
     case SectionType::kOutro:
-      base = 0.38;
-      break;
+      return 0.38;
   }
-  return js::max(0.25, js::min(0.65, base));
+  return 0.4;
 }
 
 double get_ghost_probability_at_position(double beat, int sixteenth_in_beat,

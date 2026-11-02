@@ -68,6 +68,12 @@ bool should_use_foot_hi_hat(SectionType section, DrumRole role);
 /** The hi-hat articulation a section leans on (`sectionHiHatType`). */
 HiHatType section_hi_hat_type(SectionType section, DrumRole role);
 
+/** A hi-hat velocity raised to the floor (`hiHatVelocity`). */
+double hi_hat_velocity(double velocity);
+
+/** The velocity of an open hi-hat on a metric accent, lifted from the closed stroke's. */
+double open_hat_velocity(double hh_vel);
+
 /** GM note for a hi-hat articulation (`hiHatNote`). */
 int hi_hat_note(HiHatType type);
 

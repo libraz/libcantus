@@ -1,6 +1,14 @@
 {
   "tables": [
     {
+      "module": "core/meter/index.ts",
+      "export": "DEFAULT_TS",
+      "form": "record",
+      "cxx_type": "TimeSignature",
+      "cxx_name": "kGenerateDefaultTs",
+      "fields": ["numerator", "denominator", "grouping"]
+    },
+    {
       "module": "generate/context/draw.ts",
       "export": "DRAW_METHODS",
       "cxx_type": "std::string_view",

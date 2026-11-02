@@ -19,9 +19,6 @@ inline constexpr double PLAN_NEUTRAL_PEAK_POSITION = 0.6;
 /** SHAPE_KEEP_THRESHOLD of ts/src/generate/plan/derive.ts. */
 inline constexpr double PLAN_SHAPE_KEEP_THRESHOLD = 0.5;
 
-/** STRONG_WEIGHT of ts/src/generate/plan/derive.ts. */
-inline constexpr int PLAN_DERIVE_STRONG_WEIGHT = 2;
-
 /** HEPTATONIC_DEGREES of ts/src/generate/plan/derive.ts. */
 inline constexpr int PLAN_HEPTATONIC_DEGREES = 7;
 

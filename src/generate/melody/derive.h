@@ -17,6 +17,7 @@
 
 #include "cantus/analyze/melody.h"
 #include "cantus/core/types.h"
+#include "cantus/generate/motif.h"
 
 namespace cantus {
 
@@ -66,6 +67,27 @@ std::vector<double> relation_levels(MotifRelationKind kind, double low, double h
 std::vector<MotifNote> replay_at(const std::vector<MotifNote>& source,
                                  const MotifRelationSummary& relation, double level,
                                  double start_beat, const KeyScale& key);
+
+/** A statement as a motif cell: pitches narrowed to MIDI integers. */
+MotifCell to_cell(const std::vector<MotifNote>& notes);
+
+/**
+ * replay_at() of one source and relation over many levels: the relation's shape is read on the
+ * first replay and kept. Both arguments must outlive the replayer.
+ */
+class Replayer {
+ public:
+  Replayer(const std::vector<MotifNote>& source, const MotifRelationSummary& relation)
+      : source_(source), relation_(relation) {}
+
+  /** The statement replayed at `level` and `start_beat` (`replayAt`). */
+  std::vector<MotifNote> at(double level, double start_beat, const KeyScale& key);
+
+ private:
+  const std::vector<MotifNote>& source_;
+  const MotifRelationSummary& relation_;
+  std::optional<MotifCell> shaped_;
+};
 
 /** A statement cut at `end_beat`: notes starting there or later are dropped (`clipStatement`). */
 std::vector<MotifNote> clip_statement(const std::vector<MotifNote>& notes, double end_beat);

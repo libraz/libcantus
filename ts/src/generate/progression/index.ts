@@ -1,6 +1,6 @@
 import { tonicizableDegrees } from '../../analyze/functional/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
-import { beatsPerBar, type MeterLike } from '../../core/meter/index.js';
+import { beatsPerBar, DEFAULT_TS, type MeterLike } from '../../core/meter/index.js';
 import type { Note } from '../../core/pitch/index.js';
 import type { KeyScale } from '../../core/types.js';
 import {
@@ -26,11 +26,9 @@ import {
   type ResolvedContext,
   resolveContext,
 } from '../context/index.js';
+import { HEPTATONIC_DEGREES } from '../plan/derive.js';
 
 export type { ChordSpan } from '../../theory/chord/index.js';
-
-/** The meter a progression is laid out in when the caller names none. */
-export const DEFAULT_TS = { numerator: 4, denominator: 4 };
 
 /**
  * Every production style a preset may suit, in declaration order.
@@ -369,7 +367,7 @@ export function progressionsByStyle(style: ProgStyle): ProgressionPreset[] {
  * sixth degree with the first.
  */
 function degreeToRootPc(degree: number, key: KeyScale): number {
-  if (degree >= 1 && degree <= 7) {
+  if (degree >= 1 && degree <= HEPTATONIC_DEGREES) {
     const tones = scaleTonesInDegreeOrder(heptatonicFrameOf(key));
     return tones[degree - 1] ?? key.rootPc % 12;
   }
@@ -390,7 +388,7 @@ function autoQuality(
   tonic: Note,
   harmonicDominant: boolean,
 ): ChordQuality {
-  if (degree >= 1 && degree <= 7) {
+  if (degree >= 1 && degree <= HEPTATONIC_DEGREES) {
     // A cadence-oriented progression needs a leading tone in minor too: use
     // the conventional harmonic-minor V rather than the natural-minor v. A mode
     // keeps its own fifth degree.
@@ -440,7 +438,7 @@ function resolveCycle(
           ? ext
           : autoQuality(degree, key, tonic, harmonicDominant),
     };
-    if (degree >= 1 && degree <= 7) {
+    if (degree >= 1 && degree <= HEPTATONIC_DEGREES) {
       step.degree = degree;
     }
     return step;
@@ -597,7 +595,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       degrees: degrees.map((degree, index) => {
         assertDegree(degree, `progression preset degrees[${index}]`);
         const supported =
-          (degree >= 1 && degree <= 7) ||
+          (degree >= 1 && degree <= HEPTATONIC_DEGREES) ||
           (Object.values(BORROWED_DEGREES) as number[]).includes(degree);
         if (!supported) {
           throw new InvalidInputError(
@@ -626,11 +624,11 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       ? 'auto'
       : assertOneOf(opts.ext, ['auto', ...chordQualities()], 'progression extension');
   const cycle = resolveCycle(
-    preset?.degrees ?? [0],
+    preset.degrees,
     key,
     tonic,
     ext,
-    preset?.functional === 'cadenceStrong',
+    preset.functional === 'cadenceStrong',
   );
   // One chord per bar of the meter the caller counts in, so the chord changes
   // fall on the bar lines every other part is written against.
@@ -651,7 +649,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
 
   const harmonic = ctx.harmonic ?? DEFAULT_HARMONIC;
   if (harmonic > 0) {
-    const tonicPc = (((key.rootPc % 12) + 12) % 12) as number;
+    const tonicPc = ((key.rootPc % 12) + 12) % 12;
     const tonicizable = tonicizableRootPcs(key);
     const draw = ctx.part('progression');
     let tonicStatements = chords.filter((chord) => chord.rootPc === tonicPc).length;

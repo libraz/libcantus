@@ -13,14 +13,6 @@
       "cxx_type": "std::string_view",
       "cxx_name": "kProvenanceBasisNames",
       "fields": []
-    },
-    {
-      "module": "generate/vocabulary/transform.ts",
-      "export": "FIGURE_TS",
-      "form": "record",
-      "cxx_type": "TimeSignature",
-      "cxx_name": "kFigureTs",
-      "fields": ["numerator", "denominator", "grouping"]
     }
   ],
   "limits": [

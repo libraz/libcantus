@@ -144,7 +144,7 @@ MoodCategory ghost_mood_category(DrumStyle style);
 /** Percussion mood category derived from the internal style (`percMoodCategory`). */
 PercMoodCategory perc_mood_category(DrumStyle style);
 
-/** Zero-based section index shared by the ghost and percussion tables (`sectionIndex`). */
+/** Zero-based section index into the percussion table (`sectionIndex`). */
 int section_index(SectionType section);
 
 /** Section energy used to size fills (`sectionEnergy`). */
@@ -159,8 +159,11 @@ double section_density_multiplier(SectionType section);
 /** Base drum velocity for a section beat, downbeats accented (`calculateVelocity`). */
 double calculate_velocity(SectionType section, double beat);
 
-/** Round and clamp a velocity into the valid MIDI range (`clampVel`). */
-double clamp_vel(double velocity);
+/** Whether a pitch lies in the MIDI range 0..127 (`isMidiPitch`). */
+bool is_midi_pitch(double pitch);
+
+/** Round a velocity and clamp it into the range a generated note carries (`clampVelocity`). */
+double clamp_velocity(double velocity);
 
 }  // namespace cantus
 

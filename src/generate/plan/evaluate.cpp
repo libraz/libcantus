@@ -151,18 +151,31 @@ std::vector<CompositionViolation> span_violation(const Notes& melody, const Comp
                     "the candidate's last note runs past the plan's span")};
 }
 
+/** The candidate's notes whose onsets fall in `[start_beat, end_beat)`, as positions. */
+Indices notes_in_range(const Notes& melody, double start_beat, double end_beat) {
+  Indices out;
+  for (std::size_t index = 0; index < melody.size(); ++index) {
+    if (melody[index].startBeat >= start_beat - BEAT_EPS &&
+        melody[index].startBeat < end_beat - BEAT_EPS) {
+      out.push_back(index);
+    }
+  }
+  return out;
+}
+
+Notes pick(const Notes& melody, const Indices& indices) {
+  Notes out;
+  for (std::size_t index : indices) {
+    out.push_back(melody[index]);
+  }
+  return out;
+}
+
 /** A phrase's notes, as indices into the time-ordered candidate, one list per planned phrase. */
 std::vector<Indices> phrase_lines(const Notes& melody, const CompositionPlan& plan) {
   std::vector<Indices> lines;
   for (const PlannedPhrase& phrase : plan.phrases) {
-    Indices line;
-    for (std::size_t index = 0; index < melody.size(); ++index) {
-      if (melody[index].startBeat >= phrase.startBeat - BEAT_EPS &&
-          melody[index].startBeat < phrase.endBeat - BEAT_EPS) {
-        line.push_back(index);
-      }
-    }
-    lines.push_back(std::move(line));
+    lines.push_back(notes_in_range(melody, phrase.startBeat, phrase.endBeat));
   }
   return lines;
 }
@@ -210,11 +223,7 @@ std::vector<CompositionViolation> harmony_violations(const Notes& melody,
   HarmonyMisfits misfits = plan_harmony_misfits(plan, timeline);
   std::vector<CompositionViolation> violations;
   for (const Indices& line : lines) {
-    Notes phrase_notes;
-    for (std::size_t index : line) {
-      phrase_notes.push_back(melody[index]);
-    }
-    auto read = misfits(phrase_notes);
+    auto read = misfits(pick(melody, line));
     for (std::size_t at = 0; at < read.size(); ++at) {
       if (!read[at]) {
         continue;
@@ -251,26 +260,6 @@ std::vector<CompositionViolation> harmony_violations(const Notes& melody,
     }
   }
   return violations;
-}
-
-/** The candidate's notes whose onsets fall in `[start_beat, end_beat)`, as positions. */
-Indices notes_in_range(const Notes& melody, double start_beat, double end_beat) {
-  Indices out;
-  for (std::size_t index = 0; index < melody.size(); ++index) {
-    if (melody[index].startBeat >= start_beat - BEAT_EPS &&
-        melody[index].startBeat < end_beat - BEAT_EPS) {
-      out.push_back(index);
-    }
-  }
-  return out;
-}
-
-Notes pick(const Notes& melody, const Indices& indices) {
-  Notes out;
-  for (std::size_t index : indices) {
-    out.push_back(melody[index]);
-  }
-  return out;
 }
 
 const PlannedPhrase* phrase_at(const CompositionPlan& plan, double beat) {
@@ -336,9 +325,10 @@ std::optional<Replay> replay_level(const Notes& melody, const Indices& source,
     double outside;
   };
   std::vector<Candidate> replays;
+  Replayer replayer(cell, relation);
   for (double level : relation_levels(relation.kind)) {
     std::vector<MotifNote> notes =
-        clip_statement(replay_at(cell, relation, level, statement.startBeat, key), derived_end);
+        clip_statement(replayer.at(level, statement.startBeat, key), derived_end);
     double away = 0;
     for (const MotifNote& note : notes) {
       if (outside(note.pitch)) {

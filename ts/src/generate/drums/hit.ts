@@ -1,6 +1,6 @@
 import type { Articulation } from '../../core/instrument/index.js';
 import { assertMidiPitch } from '../../core/validation/index.js';
-import { clampVel, GM } from './internal.js';
+import { clampVelocity, GM, SIXTEENTH } from './internal.js';
 
 /**
  * The percussion voices the generator emits, as General MIDI note numbers.
@@ -153,7 +153,7 @@ export class HitList {
       pitch,
       startBeat: beat,
       durationBeat,
-      velocity: clampVel(velocity),
+      velocity: clampVelocity(velocity),
     };
     // Left off entirely rather than set to undefined, so a plain stroke stays
     // deep-equal to the same stroke written before articulations existed.
@@ -189,7 +189,7 @@ export class HitList {
   hasCrashNear(startBeat: number): boolean {
     // The window is a 16th either way, and every grid in use is at least a
     // 128th, so it is enough to probe the quantized positions inside it.
-    const steps = Math.round(0.25 * ONSET_KEY_SCALE);
+    const steps = Math.round(SIXTEENTH * ONSET_KEY_SCALE);
     for (let step = -steps + 1; step < steps; step += 1) {
       if (this.hasOnset(GM.CRASH, startBeat + step / ONSET_KEY_SCALE)) {
         return true;
@@ -212,5 +212,5 @@ function beatSlot(startBeat: number): number {
  * accumulator indexes them by.
  */
 export function onsetKey(pitch: number, startBeat: number): string {
-  return `${pitch}:${Math.round(startBeat * ONSET_KEY_SCALE)}`;
+  return `${pitch}:${beatSlot(startBeat)}`;
 }

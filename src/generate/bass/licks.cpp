@@ -18,6 +18,7 @@
 #include "generate/bass/internal.h"
 #include "generate/bass/licks_data.h"
 #include "generate/bass/limits.gen.h"
+#include "generate/context/context.h"
 #include "generate/context/difficulty.h"
 #include "generate/drums/vocabulary.h"
 #include "generate/vocabulary/transform.h"
@@ -28,30 +29,9 @@ namespace cantus {
 namespace {
 
 /** A lick note as a grid model: the stream is the limb, else the voice. */
-struct LickNoteModel {
-  using Event = LickNote;
-  using Velocity = double;
-  using StreamKey = std::string;
-
-  static double step(const LickNote& e) { return e.step; }
-  static double velocity(const LickNote& e) { return e.velocity; }
-  static double scaled(double v, double factor) { return v * factor; }
-  static bool louder(double a, double b) { return a > b; }
+struct LickNoteModel : StepModel<LickNoteModel, LickNote> {
   static std::string stream_text(const LickNote& e) {
     return e.limb ? *e.limb : (e.voice ? *e.voice : std::string());
-  }
-  static std::string stream_key(const LickNote& e) { return stream_text(e); }
-  static bool same_stream(const std::string& a, const std::string& b) { return a == b; }
-  static LickNote placed(const LickNote& e, double at) {
-    LickNote out = e;
-    out.step = at;
-    return out;
-  }
-  static LickNote placed(const LickNote& e, double at, double v) {
-    LickNote out = e;
-    out.step = at;
-    out.velocity = v;
-    return out;
   }
 };
 
@@ -191,7 +171,8 @@ std::vector<NoteEvent> place_licks_with(const LickRequest& request,
     assert_lick_material(caller_licks[index].material,
                          "lick vocabulary[" + index_text(index) + "]");
   }
-  std::vector<BassLick> dictionary = merge_vocabulary(BASS_LICKS, std::make_optional(caller_licks));
+  std::vector<BassLick> dictionary =
+      merge_vocabulary(BASS_LICKS, std::make_optional(std::move(caller_licks)));
   std::optional<InstrumentProfile> instrument;
   if (request.instrument) {
     instrument = InstrumentProfile(*request.instrument);
@@ -234,14 +215,16 @@ std::vector<NoteEvent> place_licks_with(const LickRequest& request,
       if (quality != nullptr && quality->foreign) {
         // A quality no figure names fits only the figures that name none.
         detail::check_pick(draw, choice_path);
-        std::vector<BassLick> fitting;
-        for (const BassLick& candidate : select_vocabulary(dictionary, query)) {
-          if (!candidate.fitsOver) {
-            fitting.push_back(candidate);
+        std::vector<BassLick> selected = select_vocabulary(dictionary, query);
+        std::vector<std::size_t> fitting;
+        for (std::size_t i = 0; i < selected.size(); ++i) {
+          if (!selected[i].fitsOver) {
+            fitting.push_back(i);
           }
         }
         if (!fitting.empty()) {
-          entry = fitting[detail::pick_index(fitting.size(), draw, choice_path)];
+          std::size_t chosen = detail::pick_index(fitting.size(), draw, choice_path);
+          entry = std::move(selected[fitting[chosen]]);
         }
       } else {
         entry = pick_vocabulary(dictionary, query, draw, choice_path);
@@ -254,11 +237,11 @@ std::vector<NoteEvent> place_licks_with(const LickRequest& request,
                                tile_index, bpm, difficulty, ts);
       }
       last_tile_played = notes.has_value();
-      if (notes && entry) {
-        played_tile = PlayedTile{entry->material, tile_start};
-      }
 
       double root_step = entry ? anchor_step_of(entry->material, remaining) : 0;
+      if (notes && entry) {
+        played_tile = PlayedTile{std::move(entry->material), tile_start};
+      }
       double root_at = tile_start + root_step * STEP_BEATS;
       if (tile == 0) {
         first_onset = root_at;
@@ -268,10 +251,8 @@ std::vector<NoteEvent> place_licks_with(const LickRequest& request,
 
       if (notes) {
         // Over a slash chord the figure is written above the bass the chord names.
-        double figure_root =
-            !segment.chord.bassPc
-                ? place_pc(pitch_class_of(segment.chord.rootPc), root_midi, low)
-                : place_above_bass(pitch_class_of(segment.chord.rootPc), root_midi);
+        double figure_root = place_tone(pitch_class_of(segment.chord.rootPc), root_midi, low,
+                                        segment.chord.bassPc.has_value());
         for (const LickNote& lick_note : *notes) {
           double at = tile_start + lick_note.step * STEP_BEATS;
           double alter = lick_note.alter.value_or(0);
@@ -316,10 +297,7 @@ std::vector<NoteEvent> place_licks_with(const LickRequest& request,
   std::stable_sort(raw.begin(), raw.end(), [](const RawLickNote& a, const RawLickNote& b) {
     return a.startBeat < b.startBeat;
   });
-  double last_end = -std::numeric_limits<double>::infinity();
-  for (const BassSegment& seg : segments) {
-    last_end = js::max(last_end, seg.endBeat);
-  }
+  double last_end = segments_end(segments);
   std::vector<NoteEvent> out;
   for (std::size_t i = 0; i < raw.size(); ++i) {
     const RawLickNote& item = raw[i];
@@ -332,10 +310,7 @@ std::vector<NoteEvent> place_licks_with(const LickRequest& request,
     if (duration_beat <= BEAT_EPS) {
       continue;
     }
-    double placed = item.pitch;
-    if (instrument) {
-      placed = fold_in(static_cast<int>(assert_midi_pitch(item.pitch, "pitch")), *instrument);
-    }
+    double placed = sounding_pitch(item.pitch, instrument);
     NoteEvent event;
     event.pitch = static_cast<int>(clamp_to_midi(placed, "generated bass pitch"));
     event.startBeat = item.startBeat;
@@ -354,18 +329,12 @@ std::vector<NoteEvent> place_licks(const std::vector<BassSegmentArg>& timeline, 
   assert_generation_budget(static_cast<double>(timeline.size()), "lick segments", opts.budget);
   LickRequest request;
   request.genre = opts.genre;
-  request.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kBassDefaultTs)), "ts"));
+  request.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kGenerateDefaultTs)), "ts"));
   double octave = opts.octave.value_or(BASS_DEFAULT_OCTAVE);
   assert_integer(octave, "lick octave", -1, 8);
   // Key and chords are read into their plain form once, here at the boundary.
   request.scale = to_key_scale(key);
-  std::vector<BassSegment> segments;
-  for (const BassSegmentArg& segment : timeline) {
-    segments.push_back(
-        BassSegment{segment.startBeat, segment.endBeat, to_chord_data(segment.chord)});
-  }
-  sort_bass_segments(segments);
-  assert_bass_segments(segments);
+  std::vector<BassSegment> segments = read_bass_segments(timeline);
   if (segments.empty()) {
     return {};
   }

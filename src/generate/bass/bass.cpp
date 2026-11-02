@@ -15,6 +15,8 @@
 #include "core/validation/validation.h"
 #include "generate/bass/internal.h"
 #include "generate/bass/limits.gen.h"
+#include "generate/context/context.h"
+#include "generate/drums/internal.h"
 #include "js/math.h"
 #include "theory/chord/chord.h"
 
@@ -57,25 +59,13 @@ struct BuildContext {
   std::optional<double> difficulty;
 };
 
-/** The pitch a placement actually sounds as. */
-double sounding(const BuildContext& ctx, double placed) {
-  if (!ctx.instrument) {
-    return placed;
-  }
-  return fold_in(static_cast<int>(assert_midi_pitch(placed, "pitch")), *ctx.instrument);
-}
-
-/** Where a tone of the chord being written goes, band or inversion. */
-double place_tone(const BuildContext& ctx, double pc) {
-  return ctx.overBass ? place_above_bass(pc, ctx.rootMidi) : place_pc(pc, ctx.rootMidi, ctx.low);
-}
-
 /** Append a note for pitch class `pc` at `pos`, placed against the chord's bass. */
 double emit(BuildContext& ctx, double pos, double pc,
             std::optional<double> midi_override = std::nullopt) {
-  double placed =
-      clamp_to_midi(midi_override ? *midi_override : place_tone(ctx, pc), "generated bass pitch");
-  double midi = sounding(ctx, placed);
+  double placed = clamp_to_midi(
+      midi_override ? *midi_override : place_tone(pc, ctx.rootMidi, ctx.low, ctx.overBass),
+      "generated bass pitch");
+  double midi = sounding_pitch(placed, ctx.instrument);
   double velocity = is_strong_beat(pos, ctx.ts) ? BASS_STRONG_VELOCITY : BASS_WEAK_VELOCITY;
   ctx.notes.push_back(RawNote{pos, midi, velocity});
   ctx.prevMidi = midi;
@@ -100,9 +90,9 @@ void build_root_fifth(BuildContext& ctx, const BassSegment& seg) {
 
 /** Where an octave pickup goes, or nothing when the instrument has no octave. */
 std::optional<double> octave_pickup(const BuildContext& ctx) {
-  double root = sounding(ctx, ctx.rootMidi);
+  double root = sounding_pitch(ctx.rootMidi, ctx.instrument);
   for (double candidate : {ctx.rootMidi - 12, ctx.rootMidi + 12}) {
-    if (candidate >= 0 && candidate <= 127 && sounding(ctx, candidate) != root) {
+    if (is_midi_pitch(candidate) && sounding_pitch(candidate, ctx.instrument) != root) {
       return candidate;
     }
   }
@@ -120,12 +110,13 @@ bool reachable_leap(const BuildContext& ctx, double pos, double semitones) {
 bool pickup(BuildContext& ctx, const BassSegment& seg, double pos, double index) {
   std::optional<double> octave = octave_pickup(ctx);
   if (ctx.draw.prob(0.5, {std::string("pickupKind"), index, pos}) && octave &&
-      reachable_leap(ctx, pos, std::abs(sounding(ctx, *octave) - ctx.prevMidi))) {
+      reachable_leap(ctx, pos, std::abs(sounding_pitch(*octave, ctx.instrument) - ctx.prevMidi))) {
     emit(ctx, pos, bass_pc_of(seg.chord), octave);
     return true;
   }
   int fifth_pc = bass_fifth_pc_of(seg.chord);
-  if (sounding(ctx, place_tone(ctx, fifth_pc)) == sounding(ctx, ctx.rootMidi)) {
+  if (sounding_pitch(place_tone(fifth_pc, ctx.rootMidi, ctx.low, ctx.overBass), ctx.instrument) ==
+      sounding_pitch(ctx.rootMidi, ctx.instrument)) {
     return false;
   }
   emit(ctx, pos, fifth_pc);
@@ -255,10 +246,7 @@ std::vector<NoteEvent> generate_bass_line_with(const BassLineRequest& request,
 
   std::stable_sort(ctx.notes.begin(), ctx.notes.end(),
                    [](const RawNote& a, const RawNote& b) { return a.startBeat < b.startBeat; });
-  double last_end = -std::numeric_limits<double>::infinity();
-  for (const BassSegment& seg : segments) {
-    last_end = js::max(last_end, seg.endBeat);
-  }
+  double last_end = segments_end(segments);
 
   std::vector<NoteEvent> out;
   for (std::size_t i = 0; i < ctx.notes.size(); ++i) {
@@ -281,19 +269,13 @@ std::vector<NoteEvent> generate_bass_line_with(const BassLineRequest& request,
 std::vector<NoteEvent> generate_bass_line(const BassLineOptions& opts) {
   assert_generation_budget(static_cast<double>(opts.segments.size()), "bass segments", opts.budget);
   // The chords are read into their plain form once, here at the boundary.
-  std::vector<BassSegment> segments;
-  for (const BassSegmentArg& segment : opts.segments) {
-    segments.push_back(
-        BassSegment{segment.startBeat, segment.endBeat, to_chord_data(segment.chord)});
-  }
-  sort_bass_segments(segments);
-  assert_bass_segments(segments);
+  std::vector<BassSegment> segments = read_bass_segments(opts.segments);
   if (segments.empty()) {
     return {};
   }
 
   BassLineRequest request;
-  request.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kBassDefaultTs)), "ts"));
+  request.ts = meter_at(0, to_meter_data(opts.ts.value_or(MeterArg(kGenerateDefaultTs)), "ts"));
   request.style = opts.style.value_or(BassStyle::kRoot);
   double octave = opts.octave.value_or(BASS_DEFAULT_OCTAVE);
   // The band spans `low..low + 12`, so octave 8 is the highest base that keeps every pitch in MIDI.
