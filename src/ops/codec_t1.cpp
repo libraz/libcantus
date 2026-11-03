@@ -162,6 +162,13 @@ KeyScale read_key_like(const json::Value& value) {
                           describe_rejected(value));
 }
 
+const std::string& scale_name_arg(const json::Value& name) {
+  if (!name.is_string()) {
+    throw InvalidInputError("scale name must be a string; received " + describe_rejected(name));
+  }
+  return name.as_string();
+}
+
 KeyArg read_key_arg(const json::Value& value) {
   if (value.is_string()) {
     return KeyArg(value.as_string());

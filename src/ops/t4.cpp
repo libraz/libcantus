@@ -4,7 +4,6 @@
 // (ops/validate.h, ops/codec_t4.h), in the TS order and with the TS names, then calls the typed
 // function.
 
-#include <array>
 #include <optional>
 #include <string>
 #include <utility>
@@ -34,19 +33,6 @@ json::Value profile_weights_object() {
   return json::Value(std::move(o));
 }
 
-/** An enum as TS emits it: the value-to-name mapping and the name-to-value one. */
-template <std::size_t N>
-json::Value enum_object(const std::array<std::pair<double, const char*>, N>& entries) {
-  json::Object o;
-  for (const auto& [value, name] : entries) {
-    o.set(js::to_string(value), name);
-  }
-  for (const auto& [value, name] : entries) {
-    o.set(name, value);
-  }
-  return json::Value(std::move(o));
-}
-
 /** The weight fields a wire override may name, with the member each one replaces. */
 struct WeightField {
   std::string_view name;
@@ -71,34 +57,31 @@ constexpr WeightField kWeightFields[] = {
 void register_safety() {
   def("$const:PROFILE_WEIGHTS", [](Args&) -> json::Value { return profile_weights_object(); });
   def("$const:NoteSafety", [](Args&) -> json::Value {
-    return enum_object<3>({{{0, "Safe"}, {1, "Warning"}, {2, "Dissonant"}}});
+    return enum_object({{0, "Safe"}, {1, "Warning"}, {2, "Dissonant"}});
   });
   def("$const:ReasonFlag", [](Args&) -> json::Value {
-    return enum_object<17>(
-        {{{static_cast<double>(ReasonFlag::kChordTone), "ChordTone"},
-          {static_cast<double>(ReasonFlag::kTension), "Tension"},
-          {static_cast<double>(ReasonFlag::kAvoidNote), "AvoidNote"},
-          {static_cast<double>(ReasonFlag::kScaleTone), "ScaleTone"},
-          {static_cast<double>(ReasonFlag::kNonScale), "NonScale"},
-          {static_cast<double>(ReasonFlag::kOutOfRange), "OutOfRange"},
-          {static_cast<double>(ReasonFlag::kTritone), "Tritone"},
-          {static_cast<double>(ReasonFlag::kLargeLeap), "LargeLeap"},
-          {static_cast<double>(ReasonFlag::kMinorSecond), "MinorSecond"},
-          {static_cast<double>(ReasonFlag::kMajorSeventh), "MajorSeventh"},
-          {static_cast<double>(ReasonFlag::kVerticalDissonance), "VerticalDissonance"},
-          {static_cast<double>(ReasonFlag::kParallelPerfect), "ParallelPerfect"},
-          {static_cast<double>(ReasonFlag::kHiddenParallel), "HiddenParallel"},
-          {static_cast<double>(ReasonFlag::kVoiceCrossing), "VoiceCrossing"},
-          {static_cast<double>(ReasonFlag::kSuspension), "Suspension"},
-          {static_cast<double>(ReasonFlag::kNeedsResolution), "NeedsResolution"},
-          {static_cast<double>(ReasonFlag::kMelodicTritone), "MelodicTritone"}}});
+    return enum_object(
+        {{static_cast<double>(ReasonFlag::kChordTone), "ChordTone"},
+         {static_cast<double>(ReasonFlag::kTension), "Tension"},
+         {static_cast<double>(ReasonFlag::kAvoidNote), "AvoidNote"},
+         {static_cast<double>(ReasonFlag::kScaleTone), "ScaleTone"},
+         {static_cast<double>(ReasonFlag::kNonScale), "NonScale"},
+         {static_cast<double>(ReasonFlag::kOutOfRange), "OutOfRange"},
+         {static_cast<double>(ReasonFlag::kTritone), "Tritone"},
+         {static_cast<double>(ReasonFlag::kLargeLeap), "LargeLeap"},
+         {static_cast<double>(ReasonFlag::kMinorSecond), "MinorSecond"},
+         {static_cast<double>(ReasonFlag::kMajorSeventh), "MajorSeventh"},
+         {static_cast<double>(ReasonFlag::kVerticalDissonance), "VerticalDissonance"},
+         {static_cast<double>(ReasonFlag::kParallelPerfect), "ParallelPerfect"},
+         {static_cast<double>(ReasonFlag::kHiddenParallel), "HiddenParallel"},
+         {static_cast<double>(ReasonFlag::kVoiceCrossing), "VoiceCrossing"},
+         {static_cast<double>(ReasonFlag::kSuspension), "Suspension"},
+         {static_cast<double>(ReasonFlag::kNeedsResolution), "NeedsResolution"},
+         {static_cast<double>(ReasonFlag::kMelodicTritone), "MelodicTritone"}});
   });
   def("profileWeights", [](Args& a) -> json::Value {
-    std::vector<std::string_view> names;
-    for (const NamedProfileWeights& row : PROFILE_WEIGHTS) {
-      names.push_back(row.name);
-    }
-    SafetyProfile profile = *parse_safety_profile(assert_one_of(a[0], names, "safety profile"));
+    SafetyProfile profile =
+        *parse_safety_profile(assert_one_of(a[0], safety_profile_names(), "safety profile"));
     ProfileWeightOverrides overrides;
     // A field the table does not have is checked all the same and added after the table's own.
     std::vector<std::pair<std::string, double>> extra;
@@ -136,13 +119,7 @@ void register_safety() {
     query.candidatePitch =
         static_cast<int>(assert_midi_pitch(get(a[0], "candidatePitch"), "candidatePitch"));
     const json::Value& asked = assert_options(a[1], "opts");
-    EvaluateSafetyOptions opts;
-    if (const json::Value* suggestions = opt_null_default(asked, "suggestions")) {
-      opts.suggestions = js::truthy(*suggestions);
-    }
-    if (const json::Value* partners = opt_null_default(asked, "partners")) {
-      opts.partners = js::truthy(*partners);
-    }
+    EvaluateSafetyOptions opts = read_evaluate_safety_options(asked);
     read_safety_harmony(a[0], query);
     read_safety_chord(a[0], query.candidatePitch);
     return to_json(evaluate_safety(query, opts));

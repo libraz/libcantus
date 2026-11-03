@@ -53,8 +53,6 @@ CANTUS_JSON_FIELDS(TempoEvent, startBeat, bpm)
 //--------------------------------------------------------------------------------------------
 // Plain data, in the key order the TS classes write it
 
-/** Key data `{scale, tonic, variant}` (`Key#toJSON`, `keyIdentity`). */
-json::Value key_data_json(const ResolvedKey& key);
 /** Chord data in copyChord's key order (`Chord#toJSON`). */
 json::Value copied_chord_json(const Chord& chord);
 /** A chord's `data`: copyChord's fields, then the spellings the carried key derives. */
@@ -67,6 +65,10 @@ json::Value timeline_data_json(const TimelineData& data);
 json::Value score_data_json(const ScoreData& data);
 /** The plain wire record of named values; an undefined one is left out. */
 json::Value wire_record(std::initializer_list<std::pair<const char*, const json::Value*>> fields);
+/** A record with the named fields left out. */
+json::Value without(const json::Value& record, std::initializer_list<std::string_view> names);
+/** `spanEnd(...runs)` over settled wire spans: where the last ends, never before beat 0. */
+double settled_span_end(std::initializer_list<const json::Value*> runs);
 /** `{...value}` into `out`: the own enumerable fields of a plain record, array or string. */
 void spread_into(json::Object& out, const json::Value& value);
 

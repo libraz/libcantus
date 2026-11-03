@@ -198,6 +198,16 @@ void register_detect() {
 //--------------------------------------------------------------------------------------------
 // analyze/keys
 
+/** `expectedKeyBeats` (four bars unless given), then `minKeyBeats` (one bar unless given). */
+std::pair<double, double> read_key_beats(const json::Value& opts, const MeterMap& meters) {
+  double bar = beats_per_bar_at(0, MeterArg(meters));
+  double expected = assert_range_option(opts, "expectedKeyBeats", bar * 4, kMinValue,
+                                        kMaxSafeInteger, "expectedKeyBeats");
+  double minimum =
+      assert_range_option(opts, "minKeyBeats", bar, kMinValue, kMaxSafeInteger, "minKeyBeats");
+  return {expected, minimum};
+}
+
 KeyTimelineOptions read_timeline_options(const json::Value& opts, const MeterMap& meters,
                                          double expected, double minimum) {
   KeyTimelineOptions typed;
@@ -212,11 +222,7 @@ void register_keys() {
   def("keyTimelineFromNotes", [](Args& a) -> json::Value {
     json::Value opts = default_options(a, 1);
     MeterMap meters = resolve_wire_meters(opts, "key timeline meters");
-    double bar = beats_per_bar_at(0, MeterArg(meters));
-    double expected = assert_range_option(opts, "expectedKeyBeats", bar * 4, kMinValue,
-                                          kMaxSafeInteger, "expectedKeyBeats");
-    double minimum =
-        assert_range_option(opts, "minKeyBeats", bar, kMinValue, kMaxSafeInteger, "minKeyBeats");
+    auto [expected, minimum] = read_key_beats(opts, meters);
     json::Object note_bag;
     note_bag.set("allowNonPositiveDuration", true);
     note_bag.set("budget", get(opts, "budget"));
@@ -237,11 +243,7 @@ void register_keys() {
       assert_record(chords[index], "modulation chord segments[" + index_text(index) + "]");
     }
     MeterMap meters = resolve_wire_meters(opts, "modulation meters");
-    double bar = beats_per_bar_at(0, MeterArg(meters));
-    double expected = assert_range_option(opts, "expectedKeyBeats", bar * 4, kMinValue,
-                                          kMaxSafeInteger, "expectedKeyBeats");
-    double minimum =
-        assert_range_option(opts, "minKeyBeats", bar, kMinValue, kMaxSafeInteger, "minKeyBeats");
+    auto [expected, minimum] = read_key_beats(opts, meters);
     assert_generation_budget(json::Value(static_cast<double>(chords.size() * 24)),
                              "modulation chord segments", get(opts, "budget"));
     KeyTimelineOptions typed = read_timeline_options(opts, meters, expected, minimum);

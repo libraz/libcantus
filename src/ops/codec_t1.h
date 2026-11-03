@@ -9,6 +9,7 @@
 #ifndef CANTUS_SRC_OPS_CODEC_T1_H_
 #define CANTUS_SRC_OPS_CODEC_T1_H_
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -52,7 +53,10 @@ CANTUS_JSON_FIELDS(ChordSpan, rootPc, quality, startBeat, bassPc, intervals, deg
                    secondaryDominant)
 CANTUS_JSON_FIELDS(ChordSegment, startBeat, endBeat, chord)
 
-/** A resolved key in the order resolveKey and tryResolveKeyName write it: scale first. */
+/**
+ * A resolved key `{scale, tonic, variant}`, the order resolveKey, tryResolveKeyName and
+ * `Key#toJSON` write it.
+ */
 json::Value scale_first(const ResolvedKey& key);
 
 /** The names of the key variants, for assert_one_of(). */
@@ -60,6 +64,9 @@ std::vector<std::string_view> key_variant_names();
 
 /** `toKeyScale` over a wire KeyLike: a validated key/scale. */
 KeyScale read_key_like(const json::Value& value);
+
+/** A scale name argument, which TS refuses unless it is a string (`resolveScaleName`). */
+const std::string& scale_name_arg(const json::Value& name);
 
 /**
  * `resolveKey`'s reading of a wire KeyLike: a name, or the scale with the tonic and variant it

@@ -47,6 +47,9 @@ void read_max_candidates_option(const json::Value& asked, VoicingOptions& out);
 /** The `key` of wire options, as `resolvedKeyOf` reads it; `out.key` stays empty when absent. */
 void read_key_option(const json::Value& asked, VoicingOptions& out);
 
+/** The style, octave, top note and rootless flag of wire options to `voiceChordStyled`. */
+StyledVoicingOptions read_styled_voicing_options(const json::Value& asked);
+
 /** `resolvedKeyOf` over options read_key_option() has read: the key resolved, or nullopt. */
 std::optional<ResolvedKey> resolve_key_option(const VoicingOptions& opts);
 

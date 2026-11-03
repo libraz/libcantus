@@ -119,15 +119,7 @@ void register_random() {
 
 void register_interval() {
   def("$const:ConsonanceClass", [](Args&) -> json::Value {
-    json::Object o;
-    const char* names[] = {"PerfectConsonance", "ImperfectConsonance", "Dissonance"};
-    for (int value = 0; value < 3; ++value) {
-      o.set(js::to_string(value), names[value]);
-    }
-    for (int value = 0; value < 3; ++value) {
-      o.set(names[value], static_cast<double>(value));
-    }
-    return json::Value(std::move(o));
+    return enum_object({{0, "PerfectConsonance"}, {1, "ImperfectConsonance"}, {2, "Dissonance"}});
   });
   def("classifyInterval", [](Args& a) -> json::Value {
     bool two_voice = assert_flag(arg_or(a, 1, true), "twoVoice");
@@ -250,30 +242,15 @@ void register_pitch() {
   def("noteToMidi", [](Args& a) -> json::Value { return note_to_midi(read_note(a[0], "note")); });
   def("midiToNote", [](Args& a) -> json::Value {
     double midi = assert_finite_number(a[0], "midi");
-    std::string spelling =
-        assert_one_of(arg_or(a, 1, "sharp"),
-                      std::vector<std::string_view>{to_string(MidiSpelling::kSharp),
-                                                    to_string(MidiSpelling::kFlat)},
-                      "midi spelling");
-    return to_json(midi_to_note(midi, *parse_midi_spelling(spelling)));
+    MidiSpelling spelling = read_midi_spelling(arg_or(a, 1, "sharp"));
+    return to_json(midi_to_note(midi, spelling));
   });
   def("transposeNote", [](Args& a) -> json::Value {
     NoteData note = read_note(a[0], "note");
     const json::Value& asked = assert_options(a[2], "opts");
-    std::optional<double> semitones = number_of(a[1]);
-    if (!semitones || !std::isfinite(*semitones)) {
-      throw InvalidInputError("semitones must be a finite number; received " +
-                              js::template_string(a[1]));
-    }
-    TransposeNoteOptions opts;
-    if (const json::Value* spelling = opt_strict(asked, "spelling")) {
-      opts.spelling = parse_midi_spelling(
-          assert_one_of(*spelling,
-                        std::vector<std::string_view>{to_string(MidiSpelling::kSharp),
-                                                      to_string(MidiSpelling::kFlat)},
-                        "midi spelling"));
-    }
-    return to_json(transpose_note(note, *semitones, opts));
+    double semitones = read_transpose_semitones(a[1]);
+    TransposeNoteOptions opts = read_transpose_note_options(asked);
+    return to_json(transpose_note(note, semitones, opts));
   });
   def("intervalSemitones", [](Args& a) -> json::Value {
     double number = assert_integer(a[0], "interval number", 1, MAX_INTERVAL_NUMBER);

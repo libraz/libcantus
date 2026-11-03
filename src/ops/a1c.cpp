@@ -82,26 +82,10 @@ void carry_notes(json::Value& motif, const json::Array& ordered_wire, const Moti
 }
 
 void register_melody() {
-  def("$const:MELODIC_CONTOUR_SHAPES", [](Args&) -> json::Value {
-    std::vector<std::string_view> names;
-    for (MelodicContourShape shape : {MelodicContourShape::kArch, MelodicContourShape::kAscending,
-                                      MelodicContourShape::kDescending, MelodicContourShape::kWave,
-                                      MelodicContourShape::kStatic}) {
-      names.push_back(to_string(shape));
-    }
-    return to_json(names);
-  });
-  def("$const:MOTIF_RELATION_KINDS", [](Args&) -> json::Value {
-    std::vector<std::string_view> names;
-    for (MotifRelationKind kind :
-         {MotifRelationKind::kRepetition, MotifRelationKind::kTransposition,
-          MotifRelationKind::kTonalTransposition, MotifRelationKind::kInversion,
-          MotifRelationKind::kRetrograde, MotifRelationKind::kRetrogradeInversion,
-          MotifRelationKind::kAugmentation, MotifRelationKind::kDiminution}) {
-      names.push_back(to_string(kind));
-    }
-    return to_json(names);
-  });
+  def("$const:MELODIC_CONTOUR_SHAPES",
+      [](Args&) -> json::Value { return to_json(names_of(melodic_contour_shapes())); });
+  def("$const:MOTIF_RELATION_KINDS",
+      [](Args&) -> json::Value { return to_json(names_of(motif_relation_kinds())); });
   def("melodicContour", [](Args& a) -> json::Value {
     PhraseLine line = read_ordered(read_phrase_notes(a[0]), "contour notes", undefined_value());
     return to_json(contour_of(line.ordered));

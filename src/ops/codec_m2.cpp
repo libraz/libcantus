@@ -10,6 +10,7 @@
 #include "cantus/core/errors.h"
 #include "core/validation/validation.h"
 #include "js/format.h"
+#include "js/math.h"
 #include "js/number.h"
 #include "js/utf16.h"
 #include "js/value.h"
@@ -22,24 +23,10 @@
 
 namespace cantus {
 
-namespace {
-
-/** `{"$class": name, ...fields}`: the tag goes first, as the TS backend writes it. */
-json::Value with_class(std::string_view name, const json::Value& fields) {
-  json::Object o;
-  o.set("$class", std::string(name));
-  for (const json::Member& m : fields.as_object()) {
-    o.set(m.key, m.value);
-  }
-  return json::Value(std::move(o));
-}
-
-}  // namespace
-
-json::Value to_json(const Key& key) { return with_class("Key", ops::key_data_json(key.data())); }
+json::Value to_json(const Key& key) { return ops::with_class("Key", ops::scale_first(key.data())); }
 
 json::Value to_json(const ChordValue& chord) {
-  json::Value out = with_class("Chord", ops::copied_chord_json(chord.to_json()));
+  json::Value out = ops::with_class("Chord", ops::copied_chord_json(chord.to_json()));
   if (chord.key()) {
     out.as_object().set("key", to_json(*chord.key()));
   }
@@ -61,11 +48,11 @@ json::Value to_json(const Progression& progression) {
 }
 
 json::Value to_json(const Timeline& timeline) {
-  return with_class("Timeline", ops::timeline_data_json(timeline.data()));
+  return ops::with_class("Timeline", ops::timeline_data_json(timeline.data()));
 }
 
 json::Value to_json(const Score& score) {
-  return with_class("Score", ops::score_data_json(score.data()));
+  return ops::with_class("Score", ops::score_data_json(score.data()));
 }
 
 }  // namespace cantus
@@ -78,31 +65,6 @@ namespace {
 bool answers_to_json(const json::Value& value) {
   Tag tag = tag_of(value);
   return tag == Tag::kClass || tag == Tag::kToJson;
-}
-
-/** `value.length` of an array or a string, else the field of that name. */
-json::Value wire_length(const json::Value& value) {
-  if (value.is_array()) {
-    return json::Value(static_cast<double>(value.as_array().size()));
-  }
-  if (value.is_string()) {
-    return json::Value(static_cast<double>(js::utf16_length(value.as_string())));
-  }
-  return property_of(value, "length");
-}
-
-/** `list[index]` of an array or a string, else the field of that name. */
-json::Value wire_element(const json::Value& list, std::size_t index) {
-  if (list.is_array()) {
-    return index < list.as_array().size() ? list.as_array()[index] : undefined_value();
-  }
-  if (list.is_string()) {
-    return js::utf16_length(list.as_string()) > index
-               ? json::Value(js::utf16_slice(list.as_string(), static_cast<double>(index),
-                                             static_cast<double>(index + 1)))
-               : undefined_value();
-  }
-  return get(list, js::to_string(static_cast<double>(index)));
 }
 
 /** A spelling hint as written: the letter and the alteration the caller gave. */
@@ -127,12 +89,12 @@ std::optional<std::vector<PitchSpelling>> wire_tone_spellings(
   if (is_undefined(hints)) {
     return std::nullopt;
   }
-  if (!js::strict_equals(wire_length(hints), json::Value(static_cast<double>(intervals.size())))) {
+  if (!js::strict_equals(length_of(hints), json::Value(static_cast<double>(intervals.size())))) {
     return std::nullopt;
   }
   std::vector<PitchSpelling> usable;
   for (std::size_t index = 0; index < intervals.size(); ++index) {
-    json::Value hint = wire_element(hints, index);
+    json::Value hint = element_of(hints, index);
     if (is_undefined(hint)) {
       return std::nullopt;
     }
@@ -200,14 +162,6 @@ void write_chord_base(const Chord& chord, json::Object& o) {
 //--------------------------------------------------------------------------------------------
 // Plain data
 
-json::Value key_data_json(const ResolvedKey& key) {
-  json::Object o;
-  o.set("scale", to_json(key.scale));
-  o.set("tonic", to_json(key.tonic));
-  o.set("variant", to_json(key.variant));
-  return json::Value(std::move(o));
-}
-
 json::Value copied_chord_json(const Chord& chord) {
   json::Object o;
   write_chord_base(chord, o);
@@ -245,7 +199,7 @@ json::Value key_region_json(const KeyRegion& region) {
   json::Object o;
   o.set("startBeat", to_json(region.startBeat));
   o.set("endBeat", to_json(region.endBeat));
-  o.set("key", key_data_json(region.key));
+  o.set("key", scale_first(region.key));
   o.set("confidence", to_json(region.confidence));
   if (region.modulation) {
     o.set("modulation", to_json(*region.modulation));
@@ -291,7 +245,7 @@ json::Value score_data_json(const ScoreData& data) {
   o.set("meters", to_json(data.meters));
   o.set("tempo", to_json(data.tempo));
   if (data.key) {
-    o.set("key", key_data_json(*data.key));
+    o.set("key", scale_first(*data.key));
   }
   return json::Value(std::move(o));
 }
@@ -304,6 +258,32 @@ json::Value wire_record(std::initializer_list<std::pair<const char*, const json:
     }
   }
   return json::Value(std::move(o));
+}
+
+double settled_span_end(std::initializer_list<const json::Value*> runs) {
+  double end = 0;
+  for (const json::Value* run : runs) {
+    if (run->is_array()) {
+      for (const json::Value& span : run->as_array()) {
+        end = js::max(end, *number_of(get(span, "endBeat")));
+      }
+    }
+  }
+  return end;
+}
+
+json::Value without(const json::Value& record, std::initializer_list<std::string_view> names) {
+  json::Object out;
+  for (const json::Member& m : record.as_object()) {
+    bool named = false;
+    for (std::string_view name : names) {
+      named = named || m.key == name;
+    }
+    if (!named) {
+      out.set(m.key, m.value);
+    }
+  }
+  return json::Value(std::move(out));
 }
 
 void spread_into(json::Object& out, const json::Value& value) {
@@ -459,7 +439,7 @@ json::Value member_of(const json::Value& value, std::string_view name) {
   }
   if (value.is_array() || value.is_string()) {
     if (name == "length") {
-      return wire_length(value);
+      return length_of(value);
     }
     if (is_list_method(name)) {
       return function_value();
@@ -498,14 +478,14 @@ json::Value call_member(const json::Value& value, std::string_view name, json::A
                         const CallContext& host) {
   if ((value.is_array() || value.is_string()) && name == "at") {
     // `Array.prototype.at` / `String.prototype.at`: a relative integer index.
-    double length = *number_of(wire_length(value));
+    double length = *number_of(length_of(value));
     double index = args.empty() ? 0 : js::to_math_number(args[0]);
     index = std::isnan(index) ? 0 : std::trunc(index);
     double position = index < 0 ? index + length : index;
     if (position < 0 || position >= length) {
       return undefined_value();
     }
-    return wire_element(value, static_cast<std::size_t>(position));
+    return element_of(value, static_cast<std::size_t>(position));
   }
   std::string cls = class_name_of(value);
   if (cls.empty() && value.is_object() && tag_of(value) == Tag::kNone) {
@@ -559,7 +539,7 @@ json::Array spread_iterable(const json::Value& value, std::string_view name) {
     json::Array out;
     std::size_t length = js::utf16_length(value.as_string());
     for (std::size_t index = 0; index < length; ++index) {
-      out.push_back(wire_element(value, index));
+      out.push_back(element_of(value, index));
     }
     return out;
   }

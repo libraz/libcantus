@@ -15,6 +15,7 @@
 #include "ops/accessors.h"
 #include "ops/validate.h"
 #include "theory/voicing/limits.gen.h"
+#include "theory/voicing/satb.h"
 
 namespace cantus::ops {
 
@@ -68,6 +69,22 @@ void read_key_option(const json::Value& asked, VoicingOptions& out) {
   if (const json::Value* given = opt_strict(asked, "key")) {
     out.key = read_key_arg(*given);
   }
+}
+
+StyledVoicingOptions read_styled_voicing_options(const json::Value& asked) {
+  StyledVoicingOptions opts;
+  opts.style =
+      parse_voicing_style(assert_one_of(opt_or(asked, "style", to_string(VoicingStyle::kClose)),
+                                        voicing_style_names(), "styled voicing style"));
+  if (const json::Value* octave = opt_null_default(asked, "octave")) {
+    opts.octave = assert_integer(*octave, "styled voicing octave", -10, 10);
+  }
+  if (const json::Value* top = opt_strict(asked, "topNote")) {
+    opts.topNote = assert_finite_number(*top, "styled voicing topNote");
+  }
+  const json::Value& rootless = get(asked, "rootless");
+  opts.rootless = rootless.is_bool() && rootless.as_bool();
+  return opts;
 }
 
 std::optional<ResolvedKey> resolve_key_option(const VoicingOptions& opts) {

@@ -259,15 +259,7 @@ void register_motif() {
     json::Value theirs = member_or_throw(a[1], "data");
     json::Value notes = member_or_throw(theirs, "notes");
     const json::Array& mine = get(self, "notes").as_array();
-    if (!js::strict_equals(json::Value(static_cast<double>(mine.size())), length_of(notes))) {
-      return false;
-    }
-    for (std::size_t index = 0; index < mine.size(); ++index) {
-      if (!same_motif_note(mine[index], element_of(notes, index))) {
-        return false;
-      }
-    }
-    return true;
+    return same_elements(mine, notes, same_motif_note);
   });
 }
 
@@ -507,13 +499,8 @@ void register_rhythm() {
     json::Value theirs = member_or_throw(a[1], "data");
     json::Value events = member_or_throw(theirs, "events");
     const json::Array& mine = get(self, "events").as_array();
-    if (!js::strict_equals(json::Value(static_cast<double>(mine.size())), length_of(events))) {
+    if (!same_elements(mine, events, same_event)) {
       return false;
-    }
-    for (std::size_t index = 0; index < mine.size(); ++index) {
-      if (!same_event(mine[index], element_of(events, index))) {
-        return false;
-      }
     }
     return same_signature(get(self, "ts"), member_of(theirs, "ts"));
   });
@@ -521,19 +508,6 @@ void register_rhythm() {
 
 //--------------------------------------------------------------------------------------------
 // model/arrangement
-
-/** `spanEnd(...runs)` over settled wire spans. */
-double settled_span_end(std::initializer_list<const json::Value*> runs) {
-  double end = 0;
-  for (const json::Value* run : runs) {
-    if (run->is_array()) {
-      for (const json::Value& span : run->as_array()) {
-        end = js::max(end, *number_of(get(span, "endBeat")));
-      }
-    }
-  }
-  return end;
-}
 
 /** `new Timeline({ segments, totalBeats: spanEnd(segments), ...more })`, as its wire. */
 json::Value timeline_over(const json::Value& segments, const json::Value& keys) {
@@ -622,30 +596,6 @@ json::Value arrangement_score_options(const json::Value& data) {
     set_defined(opts, "key", get(settings, "key"));
   }
   return json::Value(std::move(opts));
-}
-
-/** The options referenceFromReadings reads, from the bag it is handed, in its order. */
-ReferenceProfileOptions reference_options(const json::Value& bag, const json::Value& notes,
-                                          std::vector<NoteEvent>& typed_notes) {
-  const json::Value& asked = assert_options(bag, "reference options");
-  ReferenceProfileOptions typed;
-  typed.meters = MeterArg(resolve_wire_meters(asked, "reference meters"));
-  const json::Value& budget = get(asked, "budget");
-  if (std::optional<double> read = number_of(budget)) {
-    typed.budget = read;
-  }
-  typed_notes = assert_note_events(notes, "reference notes", line_options(budget));
-  const json::Value& total = get(asked, "totalBeats");
-  if (!is_undefined(total)) {
-    typed.totalBeats = assert_range(total, 0, kMaxSafeInteger, "reference totalBeats");
-  }
-  if (const json::Value* melody = opt_null_default(asked, "melody")) {
-    typed.melody = assert_note_events(*melody, "reference melody", line_options(budget));
-  }
-  if (const json::Value* key = field(asked, "key")) {
-    typed.key = read_key_arg(*key);
-  }
-  return typed;
 }
 
 /** The readings an arrangement's analysis holds, typed for referenceFromReadings. */

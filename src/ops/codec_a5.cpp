@@ -40,15 +40,6 @@ void write_fields(const ReferenceMelody& v, FieldWriter& w) {
 
 namespace {
 
-template <class E>
-std::vector<std::string_view> names_of(const std::vector<E>& values) {
-  std::vector<std::string_view> names;
-  for (E value : values) {
-    names.push_back(to_string(value));
-  }
-  return names;
-}
-
 /** `assertString`. */
 std::string assert_string(const json::Value& value, std::string_view name) {
   if (!value.is_string()) {
@@ -56,19 +47,6 @@ std::string assert_string(const json::Value& value, std::string_view name) {
                             describe_rejected(value));
   }
   return value.as_string();
-}
-
-/** `assertNullable`: a field that has to be present but may be null. */
-template <class F>
-auto read_nullable(const json::Value& value, std::string_view name,
-                   F&& read) -> Nullable<std::decay_t<decltype(read(value, name))>> {
-  if (is_undefined(value)) {
-    throw InvalidInputError(std::string(name) + " must be present; received undefined");
-  }
-  if (value.is_null()) {
-    return std::nullopt;
-  }
-  return read(value, name);
 }
 
 /** The beats of a span, ordered (`assertFiniteNumber` twice, then `assertSpanOrder`). */
@@ -252,16 +230,6 @@ ReferenceForm read_reference_form(const json::Value& value, std::string_view nam
                                                 span, section_count, node_count));
   }
   return out;
-}
-
-/** `assertResolvedKeyField`: the key as the library reads every key-shaped argument. */
-ResolvedKey read_resolved_key_field(const json::Value& value, std::string_view name) {
-  const json::Value& read = assert_record(value, name);
-  try {
-    return resolve_key(read_key_arg(read));
-  } catch (const InvalidInputError& error) {
-    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.message());
-  }
 }
 
 ReferenceKeyRegion read_reference_key_region(const json::Value& value, std::string_view name) {
@@ -481,6 +449,38 @@ ReferenceMelody read_reference_melody(const json::Value& value, std::string_view
 }
 
 }  // namespace
+
+ResolvedKey read_resolved_key_field(const json::Value& value, std::string_view name) {
+  const json::Value& read = assert_record(value, name);
+  try {
+    return resolve_key(read_key_arg(read));
+  } catch (const InvalidInputError& error) {
+    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.message());
+  }
+}
+
+ReferenceProfileOptions reference_options(const json::Value& bag, const json::Value& notes,
+                                          std::vector<NoteEvent>& typed_notes) {
+  const json::Value& asked = assert_options(bag, "reference options");
+  ReferenceProfileOptions typed;
+  typed.meters = MeterArg(resolve_wire_meters(asked, "reference meters"));
+  const json::Value& budget = get(asked, "budget");
+  if (std::optional<double> read = number_of(budget)) {
+    typed.budget = read;
+  }
+  typed_notes = assert_note_events(notes, "reference notes", line_options(budget));
+  const json::Value& total = get(asked, "totalBeats");
+  if (!is_undefined(total)) {
+    typed.totalBeats = assert_range(total, 0, kMaxSafeInteger, "reference totalBeats");
+  }
+  if (const json::Value* melody = opt_null_default(asked, "melody")) {
+    typed.melody = assert_note_events(*melody, "reference melody", line_options(budget));
+  }
+  if (const json::Value* key = field(asked, "key")) {
+    typed.key = read_key_arg(*key);
+  }
+  return typed;
+}
 
 ReferenceProfile read_reference_profile(const json::Value& value, std::string_view name) {
   const json::Value& read = assert_record(value, name);

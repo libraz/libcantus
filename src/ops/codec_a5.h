@@ -9,9 +9,15 @@
 #ifndef CANTUS_SRC_OPS_CODEC_A5_H_
 #define CANTUS_SRC_OPS_CODEC_A5_H_
 
+#include <string>
 #include <string_view>
+#include <type_traits>
+#include <vector>
 
 #include "cantus/analyze/reference.h"
+#include "cantus/core/errors.h"
+#include "cantus/core/nullable.h"
+#include "json/json.h"
 #include "ops/codec.h"
 #include "ops/codec_a1a.h"
 #include "ops/codec_a1b.h"
@@ -51,6 +57,29 @@ CANTUS_JSON_FIELDS(MelodyLikeness, surfaceSimilarity, motifStructureSimilarity, 
 CANTUS_JSON_FIELDS(RhythmLikeness, onsetSimilarity, densitySimilarity, durationSimilarity,
                    syncopationSimilarity)
 CANTUS_JSON_FIELDS(ReferenceComparison, form, harmony, melody, rhythm, rationale)
+
+/** `assertNullable`: a field that has to be present but may be null. */
+template <class F>
+auto read_nullable(const json::Value& value, std::string_view name,
+                   F&& read) -> Nullable<std::decay_t<decltype(read(value, name))>> {
+  if (is_undefined(value)) {
+    throw InvalidInputError(std::string(name) + " must be present; received undefined");
+  }
+  if (value.is_null()) {
+    return std::nullopt;
+  }
+  return read(value, name);
+}
+
+/** `assertResolvedKeyField`: the key as the library reads every key-shaped argument. */
+ResolvedKey read_resolved_key_field(const json::Value& value, std::string_view name);
+
+/**
+ * The options referenceFromReadings reads, from the bag it is handed, in its order; the notes
+ * checked against the bag's budget go to `typed_notes`.
+ */
+ReferenceProfileOptions reference_options(const json::Value& bag, const json::Value& notes,
+                                          std::vector<NoteEvent>& typed_notes);
 
 /**
  * `assertReferenceProfile(value, name)` over a wire value, read into the typed profile.

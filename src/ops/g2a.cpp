@@ -35,6 +35,7 @@
 #include "ops/codec_c2.h"
 #include "ops/codec_g1.h"
 #include "ops/codec_g2a.h"
+#include "ops/codec_t4.h"
 #include "ops/register_all.h"
 #include "ops/registry.h"
 #include "ops/validate.h"
@@ -128,15 +129,6 @@ void register_bass() {
 
 //--------------------------------------------------------------------------------------------
 // generate/countermelody
-
-/** The names of the safety profiles, for assert_one_of(). */
-std::vector<std::string_view> safety_profile_names() {
-  std::vector<std::string_view> names;
-  for (const NamedProfileWeights& row : PROFILE_WEIGHTS) {
-    names.push_back(row.name);
-  }
-  return names;
-}
 
 /** A chord a host or a timeline answered with: a falsy value is none (`chord && ...`). */
 Nullable<Chord> read_host_chord_answer(const json::Value& answer) {

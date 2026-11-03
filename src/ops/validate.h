@@ -30,6 +30,7 @@
 #include "cantus/core/validation.h"
 #include "core/validation/validation.h"
 #include "js/format.h"
+#include "js/value.h"
 #include "json/json.h"
 #include "ops/args.h"
 #include "ops/codec.h"
@@ -126,6 +127,16 @@ std::string assert_one_of(const json::Value& value, const json::Value& allowed,
 std::string assert_one_of(const json::Value& value, const std::vector<std::string_view>& allowed,
                           std::string_view name);
 
+/** The TS names of `values`, in order, for assert_one_of() or a name-list constant. */
+template <class E>
+std::vector<std::string_view> names_of(const std::vector<E>& values) {
+  std::vector<std::string_view> names;
+  for (E value : values) {
+    names.push_back(to_string(value));
+  }
+  return names;
+}
+
 /** `assertPositiveInt` with a cap the library supplies. */
 double assert_positive_int(const json::Value& value, std::string_view name,
                            double max = DEFAULT_GENERATION_BUDGET);
@@ -213,6 +224,20 @@ json::Value element_of(const json::Value& list, std::size_t index);
 /** element_of() reading a record's property through `member`. */
 json::Value element_of(const json::Value& list, std::size_t index, MemberReader member);
 
+/** `held.length === list.length && held.every((x, i) => same(x, list[i]))` over a wire list. */
+template <class Same>
+bool same_elements(const json::Array& held, const json::Value& list, Same&& same) {
+  if (!js::strict_equals(json::Value(static_cast<double>(held.size())), length_of(list))) {
+    return false;
+  }
+  for (std::size_t index = 0; index < held.size(); ++index) {
+    if (!same(held[index], element_of(list, index))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** `${name}` of argument `i`, where TS declares no default. */
 inline std::string name_arg(const Args& a, std::size_t i) { return js::template_string(a[i]); }
 
@@ -252,6 +277,15 @@ decltype(auto) with_name_arg(const Args& a, std::size_t i, std::string_view fall
 template <class Check>
 decltype(auto) with_name_arg(const Args& a, std::size_t i, Check&& check) {
   return with_name_arg(a, i, "undefined", std::forward<Check>(check));
+}
+
+/** The wire arguments from index `from` on, as an array. */
+inline json::Array arguments_from(const Args& a, std::size_t from) {
+  json::Array out;
+  for (std::size_t index = from; index < a.size(); ++index) {
+    out.push_back(a[index]);
+  }
+  return out;
 }
 
 /** Argument `i`, or the TS default when it is undefined. */

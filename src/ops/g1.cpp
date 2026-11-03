@@ -43,15 +43,6 @@ namespace cantus::ops {
 
 namespace {
 
-/** Arguments `from` onwards. */
-json::Array rest_of(const Args& a, std::size_t from) {
-  json::Array out;
-  for (std::size_t i = from; i < a.size(); ++i) {
-    out.push_back(a[i]);
-  }
-  return out;
-}
-
 json::Value names_json(const std::vector<std::string_view>& names) {
   json::Array out;
   for (std::string_view name : names) {
@@ -245,7 +236,7 @@ void register_context() {
   for (std::string_view method : kDrawMethods) {
     def("Draw#" + std::string(method), [method](Args& a) -> json::Value {
       a.hybrid(0, "Draw");
-      return draw_method(a, a[0], method, rest_of(a, 1));
+      return draw_method(a, a[0], method, arguments_from(a, 1));
     });
   }
 }

@@ -58,6 +58,15 @@ SpelledInterval read_interval_like(const json::Value& value);
 /** The `system` of a note-name options bag (`assertSystem`); absent when the bag has none. */
 std::optional<NoteNameSystem> read_note_name_system(const json::Value& opts);
 
+/** A MIDI spelling name (`assertOneOf(value, ['sharp', 'flat'], 'midi spelling')`). */
+MidiSpelling read_midi_spelling(const json::Value& value);
+
+/** The semitones of a note transposition: a finite number, else rejected with `${value}`. */
+double read_transpose_semitones(const json::Value& value);
+
+/** The `spelling` of a note transposition's wire options. */
+TransposeNoteOptions read_transpose_note_options(const json::Value& asked);
+
 /** `assertDuration` over a wire `NoteValue | DurationData`. */
 DurationArg read_duration(const json::Value& value, std::string_view name);
 

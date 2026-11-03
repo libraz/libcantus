@@ -63,15 +63,6 @@ void write_fields(const CompositionFit& v, FieldWriter& w) {
 
 namespace {
 
-template <class E>
-std::vector<std::string_view> names_of(const std::vector<E>& values) {
-  std::vector<std::string_view> names;
-  for (E value : values) {
-    names.push_back(to_string(value));
-  }
-  return names;
-}
-
 /** Number of the highest index an array of `count` entries admits; 0 for none. */
 double last_index(std::size_t count) { return js::max(static_cast<double>(count) - 1, 0.0); }
 
@@ -82,19 +73,6 @@ std::string assert_string(const json::Value& value, std::string_view name) {
                             describe_rejected(value));
   }
   return value.as_string();
-}
-
-/** `assertNullable`: a field that has to be present but may be null. */
-template <class F>
-auto read_nullable(const json::Value& value, std::string_view name,
-                   F&& read) -> Nullable<std::decay_t<decltype(read(value, name))>> {
-  if (is_undefined(value)) {
-    throw InvalidInputError(std::string(name) + " must be present; received undefined");
-  }
-  if (value.is_null()) {
-    return std::nullopt;
-  }
-  return read(value, name);
 }
 
 /** The beats of a span, ordered. */
@@ -120,16 +98,6 @@ std::vector<double> read_mass_distribution(const json::Value& value, double leng
   }
   assert_plan_mass_sum(sum, name);
   return out;
-}
-
-/** `assertResolvedKeyField`. */
-ResolvedKey read_resolved_key_field(const json::Value& value, std::string_view name) {
-  const json::Value& read = assert_record(value, name);
-  try {
-    return resolve_key(read_key_arg(read));
-  } catch (const InvalidInputError& error) {
-    throw InvalidInputError(std::string(name) + " must be a valid key: " + error.message());
-  }
 }
 
 PlannedSection read_section(const json::Value& value, std::string_view name) {

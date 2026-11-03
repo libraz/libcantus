@@ -94,23 +94,10 @@ Options read_numeral_options(const json::Value& asked) {
 }
 
 void register_functional() {
-  def("$const:HARMONIC_FUNCTIONS", [](Args&) -> json::Value {
-    std::vector<std::string_view> names;
-    for (HarmonicFunction function :
-         {HarmonicFunction::kTonic, HarmonicFunction::kSubdominant, HarmonicFunction::kDominant}) {
-      names.push_back(to_string(function));
-    }
-    return to_json(names);
-  });
-  def("$const:CADENCE_TYPES", [](Args&) -> json::Value {
-    std::vector<std::string_view> names;
-    for (CadenceType type :
-         {CadenceType::kAuthentic, CadenceType::kPlagal, CadenceType::kHalf,
-          CadenceType::kDeceptive, CadenceType::kPhrygian, CadenceType::kModal}) {
-      names.push_back(to_string(type));
-    }
-    return to_json(names);
-  });
+  def("$const:HARMONIC_FUNCTIONS",
+      [](Args&) -> json::Value { return to_json(names_of(harmonic_functions())); });
+  def("$const:CADENCE_TYPES",
+      [](Args&) -> json::Value { return to_json(names_of(cadence_types())); });
 
   // functional/function
   def("isMinorKey",

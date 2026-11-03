@@ -13,15 +13,6 @@ namespace cantus::ops {
 
 namespace {
 
-/** The names of the profiles, for assert_one_of(). */
-std::vector<std::string_view> profile_names() {
-  std::vector<std::string_view> names;
-  for (const NamedProfileWeights& row : PROFILE_WEIGHTS) {
-    names.push_back(row.name);
-  }
-  return names;
-}
-
 /** A pitch field of the query that is present: a MIDI pitch. */
 std::optional<int> read_pitch_field(const json::Value& object, std::string_view key,
                                     std::string_view name) {
@@ -34,11 +25,19 @@ std::optional<int> read_pitch_field(const json::Value& object, std::string_view 
 
 }  // namespace
 
+std::vector<std::string_view> safety_profile_names() {
+  std::vector<std::string_view> names;
+  for (const NamedProfileWeights& row : PROFILE_WEIGHTS) {
+    names.push_back(row.name);
+  }
+  return names;
+}
+
 SafetyContext read_safety_context(const json::Value& query) {
   assert_record(query, "safety query");
   SafetyContext context;
   context.profile = *parse_safety_profile(
-      assert_one_of(get(query, "profile"), profile_names(), "safety profile"));
+      assert_one_of(get(query, "profile"), safety_profile_names(), "safety profile"));
   context.prevPitch = read_pitch_field(query, "prevPitch", "prevPitch");
   context.vocalLow = read_pitch_field(query, "vocalLow", "vocalLow");
   context.vocalHigh = read_pitch_field(query, "vocalHigh", "vocalHigh");
@@ -79,6 +78,17 @@ bool read_safety_chord(const json::Value& query, double pitch) {
   }
   assert_chord(chord);
   return true;
+}
+
+EvaluateSafetyOptions read_evaluate_safety_options(const json::Value& asked) {
+  EvaluateSafetyOptions opts;
+  if (const json::Value* suggestions = opt_null_default(asked, "suggestions")) {
+    opts.suggestions = js::truthy(*suggestions);
+  }
+  if (const json::Value* partners = opt_null_default(asked, "partners")) {
+    opts.partners = js::truthy(*partners);
+  }
+  return opts;
 }
 
 void read_safety_harmony(const json::Value& query, SafetyContext& context) {

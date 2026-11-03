@@ -59,15 +59,6 @@ json::Value forward(const Args& a, std::string_view op, json::Array args) {
   return find_op(op)->fn(delegated);
 }
 
-/** The wire arguments from index `from` on, as an array. */
-json::Array rest_of(const Args& a, std::size_t from) {
-  json::Array out;
-  for (std::size_t index = from; index < a.size(); ++index) {
-    out.push_back(a[index]);
-  }
-  return out;
-}
-
 /** `value?.key`, read through the value's public surface. */
 json::Value optional_property(const json::Value& value, std::string_view key) {
   return is_null_or_undefined(value) ? undefined_value() : member_of(value, key);
@@ -117,13 +108,7 @@ json::Value with_field(const json::Value& record, std::string_view name, const j
  * spells its root on read.
  */
 json::Value without_spelling(const json::Value& chord) {
-  json::Object out;
-  for (const json::Member& m : chord.as_object()) {
-    if (m.key != "rootSpelling" && m.key != "bassSpelling" && m.key != "toneSpellings") {
-      out.set(m.key, m.value);
-    }
-  }
-  return json::Value(std::move(out));
+  return without(chord, {"rootSpelling", "bassSpelling", "toneSpellings"});
 }
 
 /** A typed value with the signs of the zeros its source wrote at the same place. */
@@ -148,7 +133,7 @@ json::Value with_tonic_zeros(json::Value out, const json::Value& source) {
 
 /** A key's plain data with the zeros its instance argument wrote in the tonic. */
 json::Value key_data_echo(const Key& key, const json::Value& source) {
-  return with_tonic_zeros(key_data_json(key.data()), source);
+  return with_tonic_zeros(scale_first(key.data()), source);
 }
 
 /** A key instance with the zeros its source wrote in the tonic. */
@@ -398,14 +383,13 @@ void register_key() {
       throw js::TypeError("other.toJSON is not a function");
     }
     return forward(a, "keyRelationBetween",
-                   json::Array{key_data_json(self.data()), class_to_json(a[1])});
+                   json::Array{scale_first(self.data()), class_to_json(a[1])});
   });
   def_class_method("Key#pivotsTo", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
     assert_key_argument(a[1], "key");
     json::Array out;
-    json::Value pivot_list =
-        forward(a, "pivotChords", json::Array{key_data_json(self.data()), a[1]});
+    json::Value pivot_list = forward(a, "pivotChords", json::Array{scale_first(self.data()), a[1]});
     for (const json::Value& pivot : pivot_list.as_array()) {
       out.push_back(with_field(pivot, "chord", wrapped_chord(get(pivot, "chord"), self)));
     }
@@ -486,7 +470,7 @@ void register_key() {
   });
   def_class_method("Key#chord", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
-    json::Value key = key_data_json(self.data());
+    json::Value key = scale_first(self.data());
     json::Value data = is_undefined(a[2])
                            ? forward(a, "diatonicTriad", json::Array{a[1], key})
                            : forward(a, "chordFromDegree", json::Array{a[1], a[2], key});
@@ -494,14 +478,14 @@ void register_key() {
   });
   def_class_method("Key#diatonicTriad", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
-    return wrapped_chord(without_spelling(forward(a, "diatonicTriad",
-                                                  json::Array{a[1], key_data_json(self.data())})),
-                         self);
+    return wrapped_chord(
+        without_spelling(forward(a, "diatonicTriad", json::Array{a[1], scale_first(self.data())})),
+        self);
   });
   def_class_method("Key#diatonicSeventh", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
     return wrapped_chord(without_spelling(forward(a, "diatonicSeventh",
-                                                  json::Array{a[1], key_data_json(self.data())})),
+                                                  json::Array{a[1], scale_first(self.data())})),
                          self);
   });
   def_class_method("Key#roman", [](Args& a) -> json::Value {
@@ -511,13 +495,13 @@ void register_key() {
   def_class_method("Key#augmentedSixth", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
     return wrapped_chord(
-        forward(a, "augmentedSixthChord", json::Array{a[1], key_data_json(key_identity(self))}),
+        forward(a, "augmentedSixthChord", json::Array{a[1], scale_first(key_identity(self))}),
         self);
   });
   def_class_method("Key#progression", [](Args& a) -> json::Value {
     Key self = read_key_instance(a, 0);
     json::Array chords;
-    for (const json::Value& text : rest_of(a, 1)) {
+    for (const json::Value& text : arguments_from(a, 1)) {
       chords.push_back(
           wrapped_chord(forward(a, "romanToChord", json::Array{text, key_wire(self)}), self));
     }
@@ -839,7 +823,7 @@ void register_chord() {
   def_class_method("Chord#progressionTo", [](Args& a) -> json::Value {
     ChordValue self = read_chord_instance(a, 0);
     json::Array chords{a[0]};
-    for (json::Value& other : rest_of(a, 1)) {
+    for (json::Value& other : arguments_from(a, 1)) {
       chords.push_back(std::move(other));
     }
     json::Value key = self.key() ? key_wire(*self.key()) : undefined_value();
@@ -1017,12 +1001,12 @@ void register_progression() {
     json::Object o;
     o.set("chords", json::Value(std::move(chords)));
     if (plain.key) {
-      o.set("key", key_data_json(*plain.key));
+      o.set("key", scale_first(*plain.key));
     }
     if (plain.chordKeys) {
       json::Array keys;
       for (const Nullable<ResolvedKey>& entry : *plain.chordKeys) {
-        keys.push_back(entry ? key_data_json(*entry) : json::Value(nullptr));
+        keys.push_back(entry ? scale_first(*entry) : json::Value(nullptr));
       }
       o.set("chordKeys", json::Value(std::move(keys)));
     }
@@ -1350,19 +1334,6 @@ json::Value timeline_hybrid(const json::Value& segments) {
   return json::Value(std::move(o));
 }
 
-/** Where the last of the segments and the regions ends, never before beat 0 (`spanEnd`). */
-double wire_span_end(const json::Value& segments, const json::Value& keys) {
-  double end = 0;
-  for (const json::Value* run : {&segments, &keys}) {
-    if (run->is_array()) {
-      for (const json::Value& span : run->as_array()) {
-        end = js::max(end, *number_of(get(span, "endBeat")));
-      }
-    }
-  }
-  return end;
-}
-
 /** Whether a timeline carries nothing a move would read its step for. */
 bool nothing_to_move(const Timeline& timeline) {
   return timeline.length() == 0 && timeline.keys().empty();
@@ -1384,7 +1355,7 @@ void register_timeline() {
     // The analysis reports where the chords and the keys end, so the span is read back off them.
     json::Value total = optional_property(a[1], "totalBeats");
     if (is_null_or_undefined(total)) {
-      total = json::Value(wire_span_end(segments, keys));
+      total = json::Value(settled_span_end({&segments, &keys}));
     }
     json::Object data;
     data.set("segments", segments);
@@ -1493,7 +1464,7 @@ void register_timeline() {
       ResolvedKey key = given ? *given : KeyLookup(self.keys(), *prevailing)(segment.startBeat);
       json::Value roman =
           forward(a, "chordToRoman",
-                  json::Array{segment_chord(segment), key_data_json(key), options_view(a[2])});
+                  json::Array{segment_chord(segment), scale_first(key), options_view(a[2])});
       json::Object entry;
       entry.set("startBeat", to_json(segment.startBeat));
       entry.set("endBeat", to_json(segment.endBeat));
@@ -1570,7 +1541,7 @@ json::Value analysis_context(const Score& score) {
   json::Object o;
   o.set("meters", to_json(score.meters()));
   if (score.data().key) {
-    o.set("key", key_data_json(*score.data().key));
+    o.set("key", scale_first(*score.data().key));
   }
   return json::Value(std::move(o));
 }
@@ -1615,7 +1586,7 @@ json::Value score_of(const json::Value& notes, const json::Value& opts) {
   const json::Value& key = optional_property(opts, "key");
   if (!is_undefined(key)) {
     // Read through the resolver that keeps a spelled tonic and a scale form.
-    data.set("key", key_data_json(read_key_value(key).data()));
+    data.set("key", scale_first(read_key_value(key).data()));
   }
   return to_json(read_score_data(json::Value(std::move(data))));
 }
@@ -1666,36 +1637,15 @@ std::variant<json::Value, KeyAtBeat> score_key_context(const Args& a, const Scor
                                                        const json::Value& key) {
   assert_key_argument(key, "score key");
   if (!is_undefined(key)) {
-    return key_data_json(key_identity(read_key_value(key)));
+    return scale_first(key_identity(read_key_value(key)));
   }
   if (score.data().key) {
-    return key_data_json(*score.data().key);
+    return scale_first(*score.data().key);
   }
   std::vector<KeyRegion> regions = typed_regions(score_key_regions(a, score));
   Nullable<ResolvedKey> found = prevailing_key_of(regions);
   ResolvedKey prevailing = found ? *found : key_identity(Key::major("C"));
   return key_at_beat(std::move(regions), prevailing);
-}
-
-/** The options referenceFromReadings reads, from the bag a score hands it, in its order. */
-ReferenceProfileOptions reference_options(const json::Value& bag, const json::Value& notes) {
-  const json::Value& asked = assert_options(bag, "reference options");
-  ReferenceProfileOptions typed;
-  typed.meters = MeterArg(resolve_wire_meters(asked, "reference meters"));
-  const json::Value& budget = get(asked, "budget");
-  typed.budget = budget_of(asked);
-  assert_note_events(notes, "reference notes", line_options(budget));
-  const json::Value& total = get(asked, "totalBeats");
-  if (!is_undefined(total)) {
-    typed.totalBeats = assert_range(total, 0, kMaxSafeInteger, "reference totalBeats");
-  }
-  if (const json::Value* melody = opt_null_default(asked, "melody")) {
-    typed.melody = assert_note_events(*melody, "reference melody", line_options(budget));
-  }
-  if (const json::Value* key = field(asked, "key")) {
-    typed.key = read_key_arg(*key);
-  }
-  return typed;
 }
 
 /** `{ ...note, field: convert(note.field) }` for each note, through a tick conversion op. */
@@ -1890,7 +1840,7 @@ void register_score() {
   });
   def_class_method("Score#withKey", [](Args& a) -> json::Value {
     const Score& self = score_instance(a, 0);
-    return score_with(self, "key", key_data_json(read_key_value(a[1]).data()));
+    return score_with(self, "key", scale_first(read_key_value(a[1]).data()));
   });
   def_class_method("Score#quantize", [](Args& a) -> json::Value {
     const Score& self = score_instance(a, 0);
@@ -2028,7 +1978,7 @@ void register_score() {
     context.set("meters", to_json(self.meters()));
     context.set("totalBeats", self.total_beats());
     if (self.data().key) {
-      context.set("key", key_data_json(*self.data().key));
+      context.set("key", scale_first(*self.data().key));
     }
     json::Value base(std::move(context));
     json::Value asked = merged({&base, &a[1]});
@@ -2043,7 +1993,8 @@ void register_score() {
     }
     ChordTimelineResult result = chord_timeline_from_notes(self.notes(), analysis);
     ReferenceReadings readings{result.timeline, result.keys, result.prevailingKey};
-    ReferenceProfileOptions opts = reference_options(asked, notes_of(self));
+    std::vector<NoteEvent> typed_notes;
+    ReferenceProfileOptions opts = reference_options(asked, notes_of(self), typed_notes);
     return to_json(reference_from_readings(self.notes(), readings, opts));
   });
   def_class_method("Score#rhythm", [](Args& a) -> json::Value {

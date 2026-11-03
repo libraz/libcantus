@@ -34,27 +34,6 @@ namespace {
 /** The host of a reader run outside any call: the readers call no host function. */
 const CallContext kNoHost;
 
-/** `{"$class": name, ...fields}`: the tag goes first, as the TS backend writes it. */
-json::Value with_class(std::string_view name, const json::Value& fields) {
-  json::Object o;
-  o.set("$class", std::string(name));
-  for (const json::Member& m : fields.as_object()) {
-    o.set(m.key, m.value);
-  }
-  return json::Value(std::move(o));
-}
-
-/** A record with the named field left out. */
-json::Value without(const json::Value& record, std::string_view name) {
-  json::Object out;
-  for (const json::Member& m : record.as_object()) {
-    if (m.key != name) {
-      out.set(m.key, m.value);
-    }
-  }
-  return json::Value(std::move(out));
-}
-
 /** `copyTrack(track, index, budget)`. */
 json::Value copy_track(const json::Value& track, std::size_t index, const json::Value& budget) {
   std::string label = "tracks[" + index_text(index) + "]";
@@ -409,7 +388,7 @@ json::Value composer_options(const json::Value& options, const CallContext& cont
   return json::Value(std::move(out));
 }
 
-json::Value composer_data(const json::Value& held) { return without(held, "rng"); }
+json::Value composer_data(const json::Value& held) { return without(held, {"rng"}); }
 
 json::Value composer_wire(const json::Value& held) { return with_class("Composer", held); }
 

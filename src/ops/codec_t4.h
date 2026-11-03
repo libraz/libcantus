@@ -9,6 +9,9 @@
 #ifndef CANTUS_SRC_OPS_CODEC_T4_H_
 #define CANTUS_SRC_OPS_CODEC_T4_H_
 
+#include <string_view>
+#include <vector>
+
 #include "cantus/theory/safety.h"
 #include "json/json.h"
 #include "ops/codec.h"
@@ -29,6 +32,9 @@ CANTUS_JSON_FIELDS(SafetyPartner, index, reasons)
 /** The order evaluateSafety builds a result in. */
 CANTUS_JSON_FIELDS(SafetyResult, safety, reasons, rationale, resolveTo, suggestions, partners)
 
+/** The names of the safety profiles, in PROFILE_WEIGHTS order, for assert_one_of(). */
+std::vector<std::string_view> safety_profile_names();
+
 /**
  * `assertSafetyContext` over a wire query, and the fields of it that carry no further checks: the
  * profile, the pitches, the other voices and the beat. The harmony is read by
@@ -38,6 +44,9 @@ SafetyContext read_safety_context(const json::Value& query);
 
 /** The chord and the key of a wire query, which TS reads once a pitch is being evaluated. */
 void read_safety_harmony(const json::Value& query, SafetyContext& context);
+
+/** The `suggestions` and `partners` flags of evaluateSafety's wire options. */
+EvaluateSafetyOptions read_evaluate_safety_options(const json::Value& asked);
 
 /**
  * What evaluating `pitch` asserts of the query's chord: the guards of its tones (`isChordMember`),

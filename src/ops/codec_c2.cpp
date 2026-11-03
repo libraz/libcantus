@@ -106,6 +106,31 @@ std::optional<NoteNameSystem> read_note_name_system(const json::Value& opts) {
   return parse_note_name_system(assert_one_of(*system, note_name_system_names(), "system"));
 }
 
+MidiSpelling read_midi_spelling(const json::Value& value) {
+  return *parse_midi_spelling(
+      assert_one_of(value,
+                    std::vector<std::string_view>{to_string(MidiSpelling::kSharp),
+                                                  to_string(MidiSpelling::kFlat)},
+                    "midi spelling"));
+}
+
+double read_transpose_semitones(const json::Value& value) {
+  std::optional<double> semitones = number_of(value);
+  if (!semitones || !std::isfinite(*semitones)) {
+    throw InvalidInputError("semitones must be a finite number; received " +
+                            js::template_string(value));
+  }
+  return *semitones;
+}
+
+TransposeNoteOptions read_transpose_note_options(const json::Value& asked) {
+  TransposeNoteOptions opts;
+  if (const json::Value* spelling = opt_strict(asked, "spelling")) {
+    opts.spelling = read_midi_spelling(*spelling);
+  }
+  return opts;
+}
+
 DurationArg read_duration(const json::Value& value, std::string_view name) {
   if (value.is_string()) {
     return DurationArg(*parse_note_value(assert_one_of(value, note_value_names(), name)));

@@ -39,14 +39,6 @@ namespace cantus::ops {
 
 namespace {
 
-/** A scale name argument, which TS refuses unless it is a string (`resolveScaleName`). */
-const std::string& scale_name_arg(const json::Value& name) {
-  if (!name.is_string()) {
-    throw InvalidInputError("scale name must be a string; received " + describe_rejected(name));
-  }
-  return name.as_string();
-}
-
 /** Whether a chord's intervals hold a third, so that `thirdSlotOf` reads no spec. */
 bool states_third(const Chord& chord) {
   for (double interval : chord.intervals) {

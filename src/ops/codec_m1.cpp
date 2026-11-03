@@ -23,46 +23,36 @@
 
 namespace cantus {
 
-namespace {
-
-/** `{"$class": name, ...fields}`: the tag goes first, as the TS backend writes it. */
-json::Value with_class(std::string_view name, const json::Value& fields) {
-  json::Object o;
-  o.set("$class", std::string(name));
-  for (const json::Member& m : fields.as_object()) {
-    o.set(m.key, m.value);
-  }
-  return json::Value(std::move(o));
-}
-
-}  // namespace
-
-json::Value to_json(const Note& note) { return with_class("Note", ops::to_json(note.data())); }
+json::Value to_json(const Note& note) { return ops::with_class("Note", ops::to_json(note.data())); }
 
 json::Value to_json(const Interval& interval) {
-  return with_class("Interval", ops::to_json(interval.data()));
+  return ops::with_class("Interval", ops::to_json(interval.data()));
 }
 
 json::Value to_json(const Duration& duration) {
-  return with_class("Duration", ops::to_json(duration.data()));
+  return ops::with_class("Duration", ops::to_json(duration.data()));
 }
 
-json::Value to_json(const Meter& meter) { return with_class("Meter", ops::to_json(meter.data())); }
+json::Value to_json(const Meter& meter) {
+  return ops::with_class("Meter", ops::to_json(meter.data()));
+}
 
-json::Value to_json(const Tempo& tempo) { return with_class("Tempo", ops::to_json(tempo.data())); }
+json::Value to_json(const Tempo& tempo) {
+  return ops::with_class("Tempo", ops::to_json(tempo.data()));
+}
 
 json::Value to_json(const Tuning& tuning) {
-  return with_class("Tuning", ops::to_json(tuning.data()));
+  return ops::with_class("Tuning", ops::to_json(tuning.data()));
 }
 
 json::Value to_json(const Instrument& instrument) {
-  return with_class("Instrument", ops::instrument_data_json(instrument.data()));
+  return ops::with_class("Instrument", ops::instrument_data_json(instrument.data()));
 }
 
 json::Value to_json(const Voicing& voicing) {
   json::Object o;
   o.set("pitches", ops::to_json(voicing.pitches()));
-  return with_class("Voicing", json::Value(std::move(o)));
+  return ops::with_class("Voicing", json::Value(std::move(o)));
 }
 
 }  // namespace cantus
@@ -101,6 +91,15 @@ bool is_key_shaped(const json::Value& value) {
 }
 
 }  // namespace
+
+json::Value with_class(std::string_view name, const json::Value& fields) {
+  json::Object o;
+  o.set("$class", std::string(name));
+  for (const json::Member& m : fields.as_object()) {
+    o.set(m.key, m.value);
+  }
+  return json::Value(std::move(o));
+}
 
 json::Value instrument_data_json(const InstrumentProfile& profile) {
   json::Object o;

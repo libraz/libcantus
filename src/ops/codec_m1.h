@@ -58,6 +58,9 @@ namespace cantus::ops {
 
 CANTUS_JSON_FIELDS(TempoData, bpm)
 
+/** `{"$class": name, ...fields}`: the tag goes first, as the TS backend writes it. */
+json::Value with_class(std::string_view name, const json::Value& fields);
+
 /** An instrument profile in the key order `Instrument#toJSON` writes it. */
 json::Value instrument_data_json(const InstrumentProfile& profile);
 

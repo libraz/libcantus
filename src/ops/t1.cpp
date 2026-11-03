@@ -33,14 +33,6 @@ namespace cantus::ops {
 
 namespace {
 
-/** A scale name argument, which TS refuses unless it is a string (`resolveScaleName`). */
-const std::string& scale_name_arg(const json::Value& name) {
-  if (!name.is_string()) {
-    throw InvalidInputError("scale name must be a string; received " + describe_rejected(name));
-  }
-  return name.as_string();
-}
-
 /** The names of the two key modes, for assert_one_of(). */
 std::vector<std::string_view> key_mode_names() {
   return {to_string(KeyMode::kMajor), to_string(KeyMode::kMinor)};

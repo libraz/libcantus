@@ -30,6 +30,7 @@
 #include "model/limits.gen.h"
 #include "ops/accessors.h"
 #include "ops/codec_m1.h"
+#include "ops/codec_m2.h"
 #include "ops/codec_t1.h"
 #include "ops/codec_t2.h"
 #include "ops/codec_t3.h"
@@ -53,17 +54,6 @@ json::Value echoed(const T& value, const json::Value& source) {
   json::Value out = to_json(value);
   restore_signed_zero(out, source);
   return out;
-}
-
-/** The wire object `{...fields}` of the named values; an undefined one is left out. */
-json::Value record(std::initializer_list<std::pair<const char*, const json::Value*>> fields) {
-  json::Object o;
-  for (const auto& [name, value] : fields) {
-    if (!is_undefined(*value)) {
-      o.set(name, *value);
-    }
-  }
-  return json::Value(std::move(o));
 }
 
 /** Whether argument `i` is a `$class` instance named `name`. */
@@ -182,7 +172,7 @@ void register_note() {
   def_class_method("Note.of", [](Args& a) -> json::Value {
     json::Value letter = letter_number_of(a[0]);
     json::Value alter = arg_or(a, 1, 0);
-    json::Value data = record({{"letter", &letter}, {"alter", &alter}, {"octave", &a[2]}});
+    json::Value data = wire_record({{"letter", &letter}, {"alter", &alter}, {"octave", &a[2]}});
     return echoed(read_note_data(data), data);
   });
   def_class_method("Note.parse", [](Args& a) -> json::Value {
@@ -192,12 +182,8 @@ void register_note() {
                    [](Args& a) -> json::Value { return to_json(try_parse_note_text(a[0], a[1])); });
   def_class_method("Note.fromMidi", [](Args& a) -> json::Value {
     double midi = assert_finite_number(a[0], "midi");
-    std::string spelling =
-        assert_one_of(arg_or(a, 1, "sharp"),
-                      std::vector<std::string_view>{to_string(MidiSpelling::kSharp),
-                                                    to_string(MidiSpelling::kFlat)},
-                      "midi spelling");
-    return to_json(Note::from_midi(midi, *parse_midi_spelling(spelling)));
+    MidiSpelling spelling = read_midi_spelling(arg_or(a, 1, "sharp"));
+    return to_json(Note::from_midi(midi, spelling));
   });
 
   def_class_method("Note#name",
@@ -241,19 +227,9 @@ void register_note() {
       return echoed(self, a[0]);
     }
     const json::Value& asked = assert_options(a[2], "opts");
-    if (!given || !std::isfinite(*given)) {
-      throw InvalidInputError("semitones must be a finite number; received " +
-                              js::template_string(a[1]));
-    }
-    TransposeNoteOptions opts;
-    if (const json::Value* spelling = opt_strict(asked, "spelling")) {
-      opts.spelling = parse_midi_spelling(
-          assert_one_of(*spelling,
-                        std::vector<std::string_view>{to_string(MidiSpelling::kSharp),
-                                                      to_string(MidiSpelling::kFlat)},
-                        "midi spelling"));
-    }
-    return to_json(self.transpose(*given, opts));
+    double semitones = read_transpose_semitones(a[1]);
+    TransposeNoteOptions opts = read_transpose_note_options(asked);
+    return to_json(self.transpose(semitones, opts));
   });
   def_class_method("Note#intervalTo", [](Args& a) -> json::Value {
     Note self = read_note_instance(a, 0);
@@ -265,7 +241,7 @@ void register_note() {
   });
   def_class_method("Note#withOctave", [](Args& a) -> json::Value {
     read_note_instance(a, 0);
-    json::Value data = record(
+    json::Value data = wire_record(
         {{"letter", &get(a[0], "letter")}, {"alter", &get(a[0], "alter")}, {"octave", &a[1]}});
     return echoed(read_note_data(data), data);
   });
@@ -333,7 +309,7 @@ void register_interval_class() {
     return to_json(Interval::between(read_note_instance(a, 0), read_note_peer(a, 1, "b")));
   });
   def_class_method("Interval.of", [](Args& a) -> json::Value {
-    json::Value data = record({{"number", &a[0]}, {"quality", &a[1]}, {"semitones", &a[2]}});
+    json::Value data = wire_record({{"number", &a[0]}, {"quality", &a[1]}, {"semitones", &a[2]}});
     return echoed(read_interval_data(data), data);
   });
   auto from_data = [](Args& a) -> json::Value {
@@ -405,7 +381,7 @@ double read_positive_beats(const json::Value& beats) {
 void register_duration_class() {
   def_class_method("Duration.of", [](Args& a) -> json::Value {
     json::Value dots = arg_or(a, 1, 0);
-    json::Value data = record({{"base", &a[0]}, {"dots", &dots}, {"tuplet", &a[2]}});
+    json::Value data = wire_record({{"base", &a[0]}, {"dots", &dots}, {"tuplet", &a[2]}});
     return echoed(read_duration_data(data), data);
   });
   def_class_method("Duration.ofBeats", [](Args& a) -> json::Value {
@@ -469,7 +445,8 @@ std::string time_signature_rejected(const json::Value& text) {
 
 void register_meter_class() {
   def_class_method("Meter.of", [](Args& a) -> json::Value {
-    json::Value data = record({{"numerator", &a[0]}, {"denominator", &a[1]}, {"grouping", &a[2]}});
+    json::Value data =
+        wire_record({{"numerator", &a[0]}, {"denominator", &a[1]}, {"grouping", &a[2]}});
     return to_json(read_meter_data(data));
   });
   def_class_method("Meter.parse", [](Args& a) -> json::Value {
@@ -763,15 +740,9 @@ void restore_range_zeros(json::Value& range, const json::Value& instrument) {
 
 /** `sameList(held, read)`: the same length and the same value at every index. */
 bool same_list(const std::vector<json::Value>& held, const json::Value& read) {
-  if (!js::strict_equals(json::Value(static_cast<double>(held.size())), length_of(read))) {
-    return false;
-  }
-  for (std::size_t index = 0; index < held.size(); ++index) {
-    if (!js::strict_equals(held[index], element_of(read, index))) {
-      return false;
-    }
-  }
-  return true;
+  return same_elements(held, read, [](const json::Value& x, const json::Value& y) {
+    return js::strict_equals(x, y);
+  });
 }
 
 template <class T, class F>
@@ -1047,17 +1018,17 @@ json::Value build_safety_query(const Voicing& self, const json::Value& query) {
     json::Value before =
         is_null_or_undefined(previous) ? undefined_value() : element_of(previous, index);
     json::Value pitch(self.pitches()[index]);
-    voices.push_back(record({{"pitch", &pitch}, {"prevPitch", &before}}));
+    voices.push_back(wire_record({{"pitch", &pitch}, {"prevPitch", &before}}));
   }
   json::Value other_voices(std::move(voices));
-  return record({{"profile", &get(query, "profile")},
-                 {"chord", &chord_data},
-                 {"key", &scale},
-                 {"otherVoices", &other_voices},
-                 {"strongBeat", &get(query, "strongBeat")},
-                 {"prevPitch", &get(query, "prevPitch")},
-                 {"vocalLow", &get(query, "vocalLow")},
-                 {"vocalHigh", &get(query, "vocalHigh")}});
+  return wire_record({{"profile", &get(query, "profile")},
+                      {"chord", &chord_data},
+                      {"key", &scale},
+                      {"otherVoices", &other_voices},
+                      {"strongBeat", &get(query, "strongBeat")},
+                      {"prevPitch", &get(query, "prevPitch")},
+                      {"vocalLow", &get(query, "vocalLow")},
+                      {"vocalHigh", &get(query, "vocalHigh")}});
 }
 
 void register_voicing_class() {
@@ -1071,18 +1042,7 @@ void register_voicing_class() {
   def_class_method("Voicing.forChord", [](Args& a) -> json::Value {
     const json::Value& asked = assert_options(a[1], "opts");
     ChordData data = read_chord_like(a[0]);
-    StyledVoicingOptions opts;
-    opts.style =
-        parse_voicing_style(assert_one_of(opt_or(asked, "style", to_string(VoicingStyle::kClose)),
-                                          voicing_style_names(), "styled voicing style"));
-    if (const json::Value* octave = opt_null_default(asked, "octave")) {
-      opts.octave = assert_integer(*octave, "styled voicing octave", -10, 10);
-    }
-    if (const json::Value* top = opt_strict(asked, "topNote")) {
-      opts.topNote = assert_finite_number(*top, "styled voicing topNote");
-    }
-    const json::Value& rootless = get(asked, "rootless");
-    opts.rootless = rootless.is_bool() && rootless.as_bool();
+    StyledVoicingOptions opts = read_styled_voicing_options(asked);
     return to_json(Voicing::for_chord(ChordArg(data.chord), opts));
   });
   def_class_method("Voicing.satb", [](Args& a) -> json::Value {
@@ -1310,13 +1270,7 @@ void register_voicing_class() {
     static_cast<SafetyContext&>(query) = read_safety_context(built);
     query.candidatePitch = static_cast<int>(assert_midi_pitch(a[1], "candidatePitch"));
     const json::Value& asked = assert_options(a[3], "opts");
-    EvaluateSafetyOptions opts;
-    if (const json::Value* suggestions = opt_null_default(asked, "suggestions")) {
-      opts.suggestions = js::truthy(*suggestions);
-    }
-    if (const json::Value* partners = opt_null_default(asked, "partners")) {
-      opts.partners = js::truthy(*partners);
-    }
+    EvaluateSafetyOptions opts = read_evaluate_safety_options(asked);
     read_safety_harmony(built, query);
     return to_json(evaluate_safety(query, opts));
   });

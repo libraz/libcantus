@@ -101,18 +101,7 @@ void register_voicing() {
   def("voiceChordStyled", [](Args& a) -> json::Value {
     const json::Value& asked = assert_options(a[1], "opts");
     ChordData data = read_chord_like(a[0]);
-    StyledVoicingOptions opts;
-    opts.style =
-        parse_voicing_style(assert_one_of(opt_or(asked, "style", to_string(VoicingStyle::kClose)),
-                                          voicing_style_names(), "styled voicing style"));
-    if (const json::Value* octave = opt_null_default(asked, "octave")) {
-      opts.octave = assert_integer(*octave, "styled voicing octave", -10, 10);
-    }
-    if (const json::Value* top = opt_strict(asked, "topNote")) {
-      opts.topNote = assert_finite_number(*top, "styled voicing topNote");
-    }
-    const json::Value& rootless = get(asked, "rootless");
-    opts.rootless = rootless.is_bool() && rootless.as_bool();
+    StyledVoicingOptions opts = read_styled_voicing_options(asked);
     return to_json(voice_chord_styled(data.chord, opts));
   });
 }

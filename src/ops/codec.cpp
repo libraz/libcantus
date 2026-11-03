@@ -6,6 +6,7 @@
 
 #include "core/validation/validation.h"
 #include "js/format.h"
+#include "js/number.h"
 #include "ops/error_map.h"
 #include "ops/handles.h"
 
@@ -364,6 +365,17 @@ std::optional<double> number_of(const json::Value& v) noexcept {
   if (s == "-Infinity") return -std::numeric_limits<double>::infinity();
   if (s == "-0") return -0.0;
   return std::nullopt;
+}
+
+json::Value enum_object(std::initializer_list<std::pair<double, const char*>> entries) {
+  json::Object o;
+  for (const auto& [value, name] : entries) {
+    o.set(js::to_string(value), name);
+  }
+  for (const auto& [value, name] : entries) {
+    o.set(name, value);
+  }
+  return json::Value(std::move(o));
 }
 
 std::string escape_key(std::string_view key) {

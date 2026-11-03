@@ -18,6 +18,7 @@
 #define CANTUS_SRC_OPS_CODEC_H_
 
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -93,6 +94,9 @@ bool is_undefined(const json::Value& v) noexcept;
 
 /** The number `v` stands for (a JSON number or a `$n` tag), or nullopt. */
 std::optional<double> number_of(const json::Value& v) noexcept;
+
+/** An enum as TS emits it: each value mapped to its name, then each name to its value. */
+json::Value enum_object(std::initializer_list<std::pair<double, const char*>> entries);
 
 /** Wire key of a user key: a leading `$` gains one more `$`. */
 std::string escape_key(std::string_view key);
