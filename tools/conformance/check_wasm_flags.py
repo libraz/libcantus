@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Check that every translation unit of the WebAssembly build compiles with -fexceptions.
+"""Check that every translation unit of the WebAssembly build compiles with -fwasm-exceptions.
 
 The core throws internally and cantus_call catches at the boundary; a TU built without exception
-support would abort instead of reaching that catch. Reads the compile_commands.json of the
-emscripten build (build-wasm/ by default) and fails when any TU's effective setting is not
--fexceptions, or when the database lists no TU at all.
+support would abort instead of reaching that catch, and one built with the JS-emulated kind
+(-fexceptions alone) cannot share a module with native wasm exceptions. Reads the
+compile_commands.json of the emscripten build (build-wasm/ by default) and fails when a TU lacks
+-fwasm-exceptions or turns exceptions off, or when the database lists no TU at all.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-EXCEPTION_FLAGS = {"-fexceptions", "-fno-exceptions"}
+EXCEPTION_FLAGS = {"-fwasm-exceptions", "-fexceptions", "-fno-exceptions"}
 
 
 def check(path: Path) -> tuple[int, list[str]]:
@@ -32,8 +33,8 @@ def check(path: Path) -> tuple[int, list[str]]:
             rel = file.as_posix()
         args = entry.get("arguments") or shlex.split(entry["command"])
         flags = [a for a in args if a in EXCEPTION_FLAGS]
-        if not flags or flags[-1] != "-fexceptions":
-            problems.append(f"{rel}: effective {flags[-1] if flags else 'no -fexceptions'}")
+        if "-fwasm-exceptions" not in flags or "-fno-exceptions" in flags:
+            problems.append(f"{rel}: exception flags {' '.join(flags) or 'none'}")
     return len(entries), problems
 
 
