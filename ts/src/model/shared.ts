@@ -217,7 +217,7 @@ export function sameTimeSignature(signature: TimeSignature, other: TimeSignature
  *
  * @param name - What the signature is called in an error message.
  */
-export function copyTimeSignature(ts: TimeSignature, name?: string): TimeSignature {
+export function copyCheckedTimeSignature(ts: TimeSignature, name?: string): TimeSignature {
   assertDataObject(ts, name ?? 'time signature');
   assertTimeSignature(ts, name);
   const copy: TimeSignature = { numerator: ts.numerator, denominator: ts.denominator };

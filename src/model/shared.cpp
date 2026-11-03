@@ -33,7 +33,7 @@ std::vector<NoteEvent> copy_checked_notes(const std::vector<NoteEvent>& notes,
   return out;
 }
 
-TimeSignature copy_time_signature(const TimeSignature& ts, std::string_view name) {
+TimeSignature copy_checked_time_signature(const TimeSignature& ts, std::string_view name) {
   assert_time_signature(ts, name);
   TimeSignature copy;
   copy.numerator = ts.numerator;

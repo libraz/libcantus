@@ -30,7 +30,7 @@ import {
   assertDataArray,
   assertDataObject,
   assertDataObjects,
-  copyTimeSignature,
+  copyCheckedTimeSignature,
   sameTimeSignature,
   withoutNegativeZero,
 } from './shared.js';
@@ -103,7 +103,7 @@ function copyRhythm(data: RhythmData): RhythmData {
   assertDataObject(data, 'rhythm data');
   return {
     events: copyEvents(data.events, 'rhythm events'),
-    ts: copyTimeSignature(data.ts, 'rhythm ts'),
+    ts: copyCheckedTimeSignature(data.ts, 'rhythm ts'),
   };
 }
 
@@ -249,7 +249,7 @@ export class Rhythm {
 
   /** The meter the onsets are counted in. */
   get ts(): TimeSignature {
-    return copyTimeSignature(this.#data.ts, 'rhythm ts');
+    return copyCheckedTimeSignature(this.#data.ts, 'rhythm ts');
   }
 
   /** Where the pattern stops: the furthest point any onset sounds to. */
@@ -261,7 +261,7 @@ export class Rhythm {
   get data(): RhythmData {
     return {
       events: this.#data.events.map((event) => ({ ...event })),
-      ts: copyTimeSignature(this.#data.ts, 'rhythm ts'),
+      ts: copyCheckedTimeSignature(this.#data.ts, 'rhythm ts'),
     };
   }
 

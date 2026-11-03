@@ -158,7 +158,8 @@ struct RhythmDeformPlan {
 }  // namespace
 
 Rhythm::Rhythm(const RhythmData& data)
-    : data_{copy_events(data.events, "rhythm events"), copy_time_signature(data.ts, "rhythm ts")} {}
+    : data_{copy_events(data.events, "rhythm events"),
+            copy_checked_time_signature(data.ts, "rhythm ts")} {}
 
 Rhythm Rhythm::generate(const MeterArg& ts, const RhythmOptions& opts) {
   TimeSignature meter = meter_at(0, to_meter_data(ts, "ts"));

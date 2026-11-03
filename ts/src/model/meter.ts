@@ -14,7 +14,7 @@ import {
   tryParseTimeSignature,
   tuplet,
 } from '../core/meter/index.js';
-import { copyTimeSignature } from './shared.js';
+import { copyCheckedTimeSignature } from './shared.js';
 
 /**
  * An immutable time signature: a numerator over a note-value denominator, with
@@ -35,7 +35,7 @@ export class Meter {
   readonly #ts: TimeSignature;
 
   private constructor(ts: TimeSignature) {
-    this.#ts = copyTimeSignature(ts);
+    this.#ts = copyCheckedTimeSignature(ts);
   }
 
   /**
@@ -301,7 +301,7 @@ export class Meter {
    * @returns A copy of the numerator, denominator, and grouping.
    */
   toJSON(): TimeSignature {
-    return copyTimeSignature(this.#ts);
+    return copyCheckedTimeSignature(this.#ts);
   }
 
   /**

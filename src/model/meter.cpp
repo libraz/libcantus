@@ -6,7 +6,7 @@
 
 namespace cantus {
 
-Meter::Meter(const TimeSignature& ts) : ts_(copy_time_signature(ts)) {}
+Meter::Meter(const TimeSignature& ts) : ts_(copy_checked_time_signature(ts)) {}
 
 Meter Meter::of(int numerator, int denominator, std::optional<std::vector<int>> grouping) {
   return Meter(TimeSignature{numerator, denominator, std::move(grouping)});

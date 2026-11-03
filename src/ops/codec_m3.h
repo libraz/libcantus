@@ -27,8 +27,8 @@ namespace cantus::ops {
 /** Op `op` called with wire arguments under a call's host. */
 json::Value call_op(const CallContext& context, std::string_view op, json::Array args);
 
-/** `copyTimeSignature(ts, name)` over a wire value. */
-json::Value copy_time_signature_wire(const json::Value& ts, std::string_view name);
+/** `copyCheckedTimeSignature(ts, name)` over a wire value. */
+json::Value copy_checked_time_signature_wire(const json::Value& ts, std::string_view name);
 
 /** `new Motif(cell)`: the cell's data, `{notes}`. */
 json::Value motif_data(const json::Value& cell);

@@ -77,8 +77,8 @@ void lay_over(std::optional<T>& mine, const std::optional<T>& theirs) {
  * A defensive copy of a time signature, checked the way every meter function checks it.
  * @throws InvalidInputError if the signature is not one the library accepts.
  */
-TimeSignature copy_time_signature(const TimeSignature& ts,
-                                  std::string_view name = "time signature");
+TimeSignature copy_checked_time_signature(const TimeSignature& ts,
+                                          std::string_view name = "time signature");
 
 /** Whether two signatures name the same meter, an absent grouping equal to an empty one. */
 bool same_time_signature(const TimeSignature& a, const TimeSignature& b);

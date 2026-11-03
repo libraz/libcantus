@@ -105,7 +105,7 @@ Note read_note_data(const json::Value& data);
 Interval read_interval_data(const json::Value& data);
 /** `copyDuration`, then the Duration. */
 Duration read_duration_data(const json::Value& data);
-/** `copyTimeSignature`, then the Meter. */
+/** `copyCheckedTimeSignature`, then the Meter. */
 Meter read_meter_data(const json::Value& data);
 /** `Tempo.fromData`: the marking of a data record. */
 Tempo read_tempo_data(const json::Value& data);

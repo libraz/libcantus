@@ -411,7 +411,8 @@ void register_rhythm() {
     return field_of(read_rhythm_instance(a, 0), "events");
   });
   def_class_method("Rhythm#ts", [](Args& a) -> json::Value {
-    return copy_time_signature_wire(field_of(read_rhythm_instance(a, 0), "ts"), "rhythm ts");
+    return copy_checked_time_signature_wire(field_of(read_rhythm_instance(a, 0), "ts"),
+                                            "rhythm ts");
   });
   def_class_method("Rhythm#totalBeats", [](Args& a) -> json::Value {
     return to_json(rhythm_span(read_rhythm_instance(a, 0)));

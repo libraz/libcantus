@@ -249,7 +249,7 @@ json::Value call_op(const CallContext& context, std::string_view op, json::Array
   return find_op(op)->fn(delegated);
 }
 
-json::Value copy_time_signature_wire(const json::Value& ts, std::string_view name) {
+json::Value copy_checked_time_signature_wire(const json::Value& ts, std::string_view name) {
   assert_data_object(ts, name);
   return to_json(assert_time_signature(ts, name));
 }
