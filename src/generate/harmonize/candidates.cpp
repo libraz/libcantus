@@ -10,6 +10,7 @@
 #include "analyze/functional/function.h"
 #include "cantus/analyze/functional.h"
 #include "cantus/core/pitch.h"
+#include "generate/context/context.h"
 #include "generate/harmonize/limits.gen.h"
 #include "js/math.h"
 #include "theory/tendency/tendency.h"
@@ -36,10 +37,6 @@ constexpr int kSecondaryDominantEntryOrder[] =
 
 constexpr int kBorrowedEntryOrder[] =
 #include "generate/harmonize/borrowed_entry_order.gen.inc"
-    ;
-
-constexpr std::string_view kReharmonizeStrengths[] =
-#include "generate/harmonize/reharmonize_strengths.gen.inc"
     ;
 
 /** A generated dial row: the strength's name and its position on the harmonic dial. */
@@ -103,8 +100,7 @@ Candidate candidate_of(int root_pc, ChordQuality quality, double base) {
 }  // namespace
 
 std::vector<std::string_view> reharmonize_strength_names() {
-  return std::vector<std::string_view>(std::begin(kReharmonizeStrengths),
-                                       std::end(kReharmonizeStrengths));
+  return names_of(kReharmonizeStrengthNames);
 }
 
 double reharmonize_dial(ReharmonizeStrength strength) {

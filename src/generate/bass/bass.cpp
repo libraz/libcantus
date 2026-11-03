@@ -3,7 +3,9 @@
 #include "generate/bass/bass.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <string>
 #include <utility>
@@ -24,11 +26,11 @@ namespace cantus {
 
 namespace {
 
-constexpr std::string_view kStyleNames[] =
+/** BASS_STYLES as names, indexed by BassStyle. */
+constexpr std::array<std::string_view, BASS_STYLES.size()> kStyleNames =
 #include "generate/bass/bass_styles.gen.inc"
     ;
-static_assert(sizeof(kStyleNames) / sizeof(kStyleNames[0]) == BASS_STYLES.size(),
-              "BASS_STYLES and BassStyle disagree");
+static_assert(!kStyleNames.back().empty(), "BASS_STYLES and BassStyle disagree");
 
 struct RawNote {
   double startBeat;
@@ -183,17 +185,10 @@ void build_walking(BuildContext& ctx, const BassSegment& seg, const BassSegment*
 
 std::string_view to_string(BassStyle style) { return kStyleNames[static_cast<std::size_t>(style)]; }
 
-std::vector<std::string_view> bass_style_names() {
-  return std::vector<std::string_view>(std::begin(kStyleNames), std::end(kStyleNames));
-}
+std::vector<std::string_view> bass_style_names() { return names_of(kStyleNames); }
 
 std::optional<BassStyle> parse_bass_style(std::string_view name) {
-  for (BassStyle style : BASS_STYLES) {
-    if (to_string(style) == name) {
-      return style;
-    }
-  }
-  return std::nullopt;
+  return parse_named<BassStyle>(kStyleNames, name);
 }
 
 double estimated_bass_notes(const std::vector<BassSegment>& segments) {

@@ -2,7 +2,9 @@
 
 #include "generate/vocabulary/transform.h"
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <string>
 #include <variant>
 
@@ -16,6 +18,13 @@
 namespace cantus {
 
 namespace {
+
+/** FIGURE_RATES as names, indexed by FigureRate. */
+constexpr std::array<std::string_view, static_cast<std::size_t>(FigureRate::kDouble) + 1>
+    kRateNames =
+#include "generate/vocabulary/figure_rates.gen.inc"
+    ;
+static_assert(!kRateNames.back().empty(), "FIGURE_RATES and FigureRate disagree");
 
 /** The first subdivision of a pulse: half of it in a simple meter, a third in a compound one. */
 double subdivision_beats(const TimeSignature& ts) {
@@ -88,30 +97,12 @@ double assert_span_steps(double span_steps) {
 
 TimeSignature figure_signature(const MeterArg& ts) { return meter_at(0, to_meter_data(ts, "ts")); }
 
-std::string_view to_string(FigureRate rate) {
-  switch (rate) {
-    case FigureRate::kStraight:
-      return "straight";
-    case FigureRate::kHalf:
-      return "half";
-    case FigureRate::kDouble:
-      return "double";
-  }
-  return "straight";
-}
+std::string_view to_string(FigureRate rate) { return kRateNames[static_cast<std::size_t>(rate)]; }
 
-std::vector<std::string_view> figure_rate_names() {
-  return {to_string(FigureRate::kStraight), to_string(FigureRate::kHalf),
-          to_string(FigureRate::kDouble)};
-}
+std::vector<std::string_view> figure_rate_names() { return names_of(kRateNames); }
 
 std::optional<FigureRate> parse_figure_rate(std::string_view name) {
-  for (FigureRate rate : {FigureRate::kStraight, FigureRate::kHalf, FigureRate::kDouble}) {
-    if (to_string(rate) == name) {
-      return rate;
-    }
-  }
-  return std::nullopt;
+  return parse_named<FigureRate>(kRateNames, name);
 }
 
 int grid_metric_weight(double step, const MeterArg& ts) {

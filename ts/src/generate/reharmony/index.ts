@@ -47,6 +47,9 @@ import { spellPitchClass } from '../../theory/spelling/index.js';
 import { type ChordLike, toChordData } from '../../theory/symbol/index.js';
 import { soundsDominantSeventh } from '../../theory/tendency/index.js';
 
+/** Every substitution type, in declaration order. */
+export const SUBSTITUTION_TYPES = ['tritone', 'relative', 'borrowed', 'chromaticMediant'] as const;
+
 /**
  * The kind of substitution relationship a candidate realizes.
  *
@@ -58,7 +61,7 @@ import { soundsDominantSeventh } from '../../theory/tendency/index.js';
  *
  * @category Reharmonization
  */
-export type SubstitutionType = 'tritone' | 'relative' | 'borrowed' | 'chromaticMediant';
+export type SubstitutionType = (typeof SUBSTITUTION_TYPES)[number];
 
 /**
  * A proposed chord substitution with its relationship, numeral, and function.

@@ -6,6 +6,20 @@
       "cxx_type": "std::string_view",
       "cxx_name": "kImitationAnswerNames",
       "fields": []
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "COUNTER_REGISTERS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kCounterRegisterNames",
+      "fields": []
+    },
+    {
+      "module": "generate/countermelody/index.ts",
+      "export": "COUNTER_RHYTHMS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kCounterRhythmNames",
+      "fields": []
     }
   ],
   "limits": [

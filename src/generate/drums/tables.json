@@ -260,6 +260,13 @@
       "cxx_type": "SwingNodesRow",
       "cxx_name": "kSwingNodes",
       "fields": []
+    },
+    {
+      "module": "generate/drums/internal.ts",
+      "export": "DRUM_STYLES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kDrumStyleNames",
+      "fields": []
     }
   ],
   "limits": [

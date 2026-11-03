@@ -46,12 +46,15 @@ export const PROG_STYLES = Object.freeze(['minimal', 'dance', 'idol', 'rock'] as
  */
 export type ProgStyle = (typeof PROG_STYLES)[number];
 
+/** Every progression function, in declaration order. */
+export const PROG_FUNCTIONS = ['loop', 'tensionBuild', 'cadenceStrong', 'stable'] as const;
+
 /**
  * Harmonic-function role of a progression as a whole.
  *
  * @category Composition
  */
-export type ProgFunction = 'loop' | 'tensionBuild' | 'cadenceStrong' | 'stable';
+export type ProgFunction = (typeof PROG_FUNCTIONS)[number];
 
 /**
  * A named chord-progression preset expressed in scale degrees.
@@ -606,7 +609,7 @@ export function generateProgression(opts: ProgressionOptions): ChordSpan[] {
       }),
       functional: assertOneOf(
         custom.functional ?? 'loop',
-        ['loop', 'tensionBuild', 'cadenceStrong', 'stable'],
+        PROG_FUNCTIONS,
         'progression preset functional',
       ),
       styles: custom.styles ?? [opts.style],

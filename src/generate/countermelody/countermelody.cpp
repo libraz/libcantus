@@ -3,7 +3,9 @@
 #include "generate/countermelody/countermelody.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <set>
 #include <string>
@@ -27,6 +29,20 @@
 namespace cantus {
 
 namespace {
+
+/** COUNTER_REGISTERS as names, indexed by CounterRegister. */
+constexpr std::array<std::string_view, static_cast<std::size_t>(CounterRegister::kBelow) + 1>
+    kRegisterNames =
+#include "generate/countermelody/counter_registers.gen.inc"
+    ;
+static_assert(!kRegisterNames.back().empty(), "COUNTER_REGISTERS and CounterRegister disagree");
+
+/** COUNTER_RHYTHMS as names, indexed by CounterRhythm. */
+constexpr std::array<std::string_view, static_cast<std::size_t>(CounterRhythm::kFollow) + 1>
+    kRhythmNames =
+#include "generate/countermelody/counter_rhythms.gen.inc"
+    ;
+static_assert(!kRhythmNames.back().empty(), "COUNTER_RHYTHMS and CounterRhythm disagree");
 
 /** The melody note sounding at a beat (latest onset wins on overlaps). */
 std::optional<NoteEvent> melody_note_at(const NoteEventIndex& melody, double beat) {
@@ -256,50 +272,24 @@ std::optional<NoteSafety> held_pitch_safety(double pitch,
 
 }  // namespace
 
-std::vector<std::string_view> counter_rhythm_names() {
-  return {to_string(CounterRhythm::kComplement), to_string(CounterRhythm::kFollow)};
-}
+std::vector<std::string_view> counter_rhythm_names() { return names_of(kRhythmNames); }
 
-std::vector<std::string_view> counter_register_names() {
-  return {to_string(CounterRegister::kAbove), to_string(CounterRegister::kBelow)};
-}
+std::vector<std::string_view> counter_register_names() { return names_of(kRegisterNames); }
 
 std::string_view to_string(CounterRegister side) {
-  switch (side) {
-    case CounterRegister::kAbove:
-      return "above";
-    case CounterRegister::kBelow:
-      return "below";
-  }
-  return "below";
+  return kRegisterNames[static_cast<std::size_t>(side)];
 }
 
 std::optional<CounterRegister> parse_counter_register(std::string_view name) {
-  for (CounterRegister side : {CounterRegister::kAbove, CounterRegister::kBelow}) {
-    if (to_string(side) == name) {
-      return side;
-    }
-  }
-  return std::nullopt;
+  return parse_named<CounterRegister>(kRegisterNames, name);
 }
 
 std::string_view to_string(CounterRhythm rhythm) {
-  switch (rhythm) {
-    case CounterRhythm::kComplement:
-      return "complement";
-    case CounterRhythm::kFollow:
-      return "follow";
-  }
-  return "complement";
+  return kRhythmNames[static_cast<std::size_t>(rhythm)];
 }
 
 std::optional<CounterRhythm> parse_counter_rhythm(std::string_view name) {
-  for (CounterRhythm rhythm : {CounterRhythm::kComplement, CounterRhythm::kFollow}) {
-    if (to_string(rhythm) == name) {
-      return rhythm;
-    }
-  }
-  return std::nullopt;
+  return parse_named<CounterRhythm>(kRhythmNames, name);
 }
 
 void assert_weight_override(std::string_view field, double value) {

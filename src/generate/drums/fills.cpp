@@ -9,6 +9,7 @@
 
 #include "cantus/core/validation.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
 #include "generate/vocabulary/types.h"
 #include "js/value.h"
 

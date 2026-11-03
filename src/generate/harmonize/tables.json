@@ -55,6 +55,13 @@
       "cxx_type": "double",
       "cxx_name": "kRootMotionCost",
       "fields": []
+    },
+    {
+      "module": "generate/harmonize/nct.ts",
+      "export": "MELODY_TONE_ROLES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kMelodyToneRoleNames",
+      "fields": []
     }
   ],
   "limits": [

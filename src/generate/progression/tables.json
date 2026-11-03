@@ -27,6 +27,13 @@
       "cxx_type": "PresetRecord",
       "cxx_name": "kProgressionPresets",
       "fields": ["id", "name", "degrees", "functional", "styles"]
+    },
+    {
+      "module": "generate/progression/index.ts",
+      "export": "PROG_FUNCTIONS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kProgFunctionNames",
+      "fields": []
     }
   ],
   "limits": [

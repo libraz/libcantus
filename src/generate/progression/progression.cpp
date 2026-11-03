@@ -3,7 +3,9 @@
 #include "generate/progression/progression.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <set>
 #include <string>
 
@@ -23,11 +25,18 @@ namespace cantus {
 
 namespace {
 
-constexpr std::string_view kStyleNames[] =
+/** PROG_STYLES as names, indexed by ProgStyle. */
+constexpr std::array<std::string_view, PROG_STYLES.size()> kStyleNames =
 #include "generate/progression/prog_styles.gen.inc"
     ;
-static_assert(sizeof(kStyleNames) / sizeof(kStyleNames[0]) == PROG_STYLES.size(),
-              "PROG_STYLES and ProgStyle disagree");
+static_assert(!kStyleNames.back().empty(), "PROG_STYLES and ProgStyle disagree");
+
+/** PROG_FUNCTIONS as names, indexed by ProgFunction. */
+constexpr std::array<std::string_view, static_cast<std::size_t>(ProgFunction::kStable) + 1>
+    kFunctionNames =
+#include "generate/progression/prog_functions.gen.inc"
+    ;
+static_assert(!kFunctionNames.back().empty(), "PROG_FUNCTIONS and ProgFunction disagree");
 
 /** A generated borrowed-degree row: the name and the code. */
 struct BorrowedDegreeRow {
@@ -185,46 +194,20 @@ const BorrowedDegrees BORROWED_DEGREES = {borrowed_code("bVI"),  borrowed_code("
 std::string_view to_string(ProgStyle style) { return kStyleNames[static_cast<std::size_t>(style)]; }
 
 std::optional<ProgStyle> parse_prog_style(std::string_view name) {
-  for (ProgStyle style : PROG_STYLES) {
-    if (to_string(style) == name) {
-      return style;
-    }
-  }
-  return std::nullopt;
+  return parse_named<ProgStyle>(kStyleNames, name);
 }
 
 std::string_view to_string(ProgFunction function) {
-  switch (function) {
-    case ProgFunction::kLoop:
-      return "loop";
-    case ProgFunction::kTensionBuild:
-      return "tensionBuild";
-    case ProgFunction::kCadenceStrong:
-      return "cadenceStrong";
-    case ProgFunction::kStable:
-      return "stable";
-  }
-  return "loop";
+  return kFunctionNames[static_cast<std::size_t>(function)];
 }
 
 std::optional<ProgFunction> parse_prog_function(std::string_view name) {
-  for (ProgFunction function : {ProgFunction::kLoop, ProgFunction::kTensionBuild,
-                                ProgFunction::kCadenceStrong, ProgFunction::kStable}) {
-    if (to_string(function) == name) {
-      return function;
-    }
-  }
-  return std::nullopt;
+  return parse_named<ProgFunction>(kFunctionNames, name);
 }
 
-std::vector<std::string_view> prog_function_names() {
-  return {to_string(ProgFunction::kLoop), to_string(ProgFunction::kTensionBuild),
-          to_string(ProgFunction::kCadenceStrong), to_string(ProgFunction::kStable)};
-}
+std::vector<std::string_view> prog_function_names() { return names_of(kFunctionNames); }
 
-std::vector<std::string_view> prog_style_names() {
-  return std::vector<std::string_view>(std::begin(kStyleNames), std::end(kStyleNames));
-}
+std::vector<std::string_view> prog_style_names() { return names_of(kStyleNames); }
 
 const std::vector<ProgressionPreset>& builtin_presets() {
   static const std::vector<ProgressionPreset> presets = make_presets();

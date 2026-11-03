@@ -6,6 +6,13 @@
       "cxx_type": "int",
       "cxx_name": "kThirdOffsets",
       "fields": []
+    },
+    {
+      "module": "generate/reharmony/index.ts",
+      "export": "SUBSTITUTION_TYPES",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kSubstitutionTypeNames",
+      "fields": []
     }
   ],
   "limits": [

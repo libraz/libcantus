@@ -21,16 +21,20 @@ export const QUARTER = 1;
 export const EIGHTH = 0.5;
 export const SIXTEENTH = 0.25;
 
+/** Every internal drum style, in declaration order. */
+export const DRUM_STYLES = [
+  'sparse',
+  'standard',
+  'fourOnFloor',
+  'upbeat',
+  'rock',
+  'synth',
+  'trap',
+  'latin',
+] as const;
+
 /** Internal drum style selected by the public groove style. */
-export type DrumStyle =
-  | 'sparse'
-  | 'standard'
-  | 'fourOnFloor'
-  | 'upbeat'
-  | 'rock'
-  | 'synth'
-  | 'trap'
-  | 'latin';
+export type DrumStyle = (typeof DRUM_STYLES)[number];
 
 /** Every groove feel, in declaration order. */
 export const DRUM_FEELS = ['straight', 'swing', 'shuffle'] as const;

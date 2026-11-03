@@ -73,12 +73,15 @@ export type MotifCell = {
   notes: MotifNote[];
 };
 
+/** Every motif contour, in declaration order. */
+export const MOTIF_CONTOURS = ['arch', 'ascending', 'descending', 'wave'] as const;
+
 /**
  * Melodic contour shape for {@link generateMotif}.
  *
  * @category Composition
  */
-export type MotifContour = 'arch' | 'ascending' | 'descending' | 'wave';
+export type MotifContour = (typeof MOTIF_CONTOURS)[number];
 
 /**
  * Options controlling {@link generateMotif}.
@@ -304,11 +307,7 @@ function contourOffsets(contour: MotifContour, count: number): number[] {
  */
 export function generateMotif(opts: MotifOptions): MotifCell {
   assertRecord(opts, 'motif options');
-  const contour = assertOneOf(
-    opts.contour ?? 'arch',
-    ['arch', 'ascending', 'descending', 'wave'],
-    'motif contour',
-  );
+  const contour = assertOneOf(opts.contour ?? 'arch', MOTIF_CONTOURS, 'motif contour');
   const bars = assertPositiveInt(opts.bars, 'motif bars');
   // The meter is read once, here: a motif is one repeated bar grid, so a
   // caller who names a whole map gets the signature the map opens in.

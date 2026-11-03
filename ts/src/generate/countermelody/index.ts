@@ -33,6 +33,15 @@ import { type KeyLike, toKeyScale } from '../../theory/scale/index.js';
 import { type Draw, type GenerationContextInput, resolveContext } from '../context/index.js';
 import { clampVelocity } from '../drums/internal.js';
 
+/** Every side of the melody a counter line may occupy, in declaration order. */
+export const COUNTER_REGISTERS = ['above', 'below'] as const;
+
+/** Which side of the melody the counter line occupies. */
+type CounterRegister = (typeof COUNTER_REGISTERS)[number];
+
+/** Every counter-line onset strategy, in declaration order. */
+export const COUNTER_RHYTHMS = ['complement', 'follow'] as const;
+
 /**
  * Options controlling {@link generateCounterMelody}.
  *
@@ -424,7 +433,7 @@ function heldPitchSafety(
   prevPitch: number | undefined,
   key: KeyScale,
   profile: 'strict' | 'pop',
-  register: 'above' | 'below',
+  register: CounterRegister,
   low: number,
   high: number,
 ): NoteSafety | null {
@@ -511,7 +520,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
     timeline === undefined
       ? (opts.chordChangeBeats ?? [])
       : timeline.segments.flatMap((segment) => [segment.startBeat, segment.endBeat]);
-  const register = assertOneOf(opts.register ?? 'below', ['above', 'below'], 'register');
+  const register = assertOneOf(opts.register ?? 'below', COUNTER_REGISTERS, 'register');
   // The counter line writes against the voice on its own side of the texture,
   // so a chord in the melody track resolves to that voice rather than to
   // whichever note the caller happened to store last.
@@ -521,7 +530,7 @@ export function generateCounterMelody(opts: CounterMelodyOptions): NoteEvent[] {
   });
   const ts = meterAt(0, toMeterData(opts.ts ?? DEFAULT_TS, 'ts'));
   assertTimeSignature(ts);
-  const rhythm = assertOneOf(opts.rhythm ?? 'complement', ['complement', 'follow'], 'rhythm');
+  const rhythm = assertOneOf(opts.rhythm ?? 'complement', COUNTER_RHYTHMS, 'rhythm');
   const profile = assertOneOf(opts.profile ?? 'pop', ['strict', 'pop'], 'safety profile');
   assertWeightOverrides(opts.weights);
   const weights = profileWeights(profile, opts.weights);

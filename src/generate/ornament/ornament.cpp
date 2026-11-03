@@ -3,7 +3,9 @@
 #include "generate/ornament/ornament.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <numeric>
 #include <set>
@@ -21,11 +23,11 @@ namespace cantus {
 
 namespace {
 
-constexpr std::string_view kStyleNames[] =
+/** ORNAMENT_STYLES as names, indexed by OrnamentStyle. */
+constexpr std::array<std::string_view, ORNAMENT_STYLES.size()> kStyleNames =
 #include "generate/ornament/ornament_styles.gen.inc"
     ;
-static_assert(sizeof(kStyleNames) / sizeof(kStyleNames[0]) == ORNAMENT_STYLES.size(),
-              "ORNAMENT_STYLES and OrnamentStyle disagree");
+static_assert(!kStyleNames.back().empty(), "ORNAMENT_STYLES and OrnamentStyle disagree");
 
 /** The neighbours of a note in the ordered material, by index into `sounding`. */
 using Neighbours = std::vector<std::optional<std::size_t>>;
@@ -125,17 +127,10 @@ std::string_view to_string(OrnamentStyle style) {
 }
 
 std::optional<OrnamentStyle> parse_ornament_style(std::string_view name) {
-  for (OrnamentStyle style : ORNAMENT_STYLES) {
-    if (to_string(style) == name) {
-      return style;
-    }
-  }
-  return std::nullopt;
+  return parse_named<OrnamentStyle>(kStyleNames, name);
 }
 
-std::vector<std::string_view> ornament_style_names() {
-  return std::vector<std::string_view>(std::begin(kStyleNames), std::end(kStyleNames));
-}
+std::vector<std::string_view> ornament_style_names() { return names_of(kStyleNames); }
 
 std::vector<NoteEvent> ornament_with(const std::vector<NoteEvent>& sounding, OrnamentStyle style,
                                      const MeterData& meter, const ResolvedContext& ctx) {

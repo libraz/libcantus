@@ -4,7 +4,9 @@
 #include "generate/reharmony/reharmony.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <set>
 #include <string>
 #include <utility>
@@ -14,6 +16,7 @@
 #include "cantus/analyze/functional.h"
 #include "cantus/core/pitch.h"
 #include "cantus/theory/spelling.h"
+#include "generate/context/context.h"
 #include "generate/reharmony/limits.gen.h"
 #include "js/math.h"
 #include "theory/tendency/tendency.h"
@@ -26,7 +29,13 @@ constexpr int kThirdOffsets[] =
 #include "generate/reharmony/third_offsets.gen.inc"
     ;
 
-constexpr std::string_view kTypeNames[] = {"tritone", "relative", "borrowed", "chromaticMediant"};
+/** SUBSTITUTION_TYPES as names, indexed by SubstitutionType. */
+constexpr std::array<std::string_view,
+                     static_cast<std::size_t>(SubstitutionType::kChromaticMediant) + 1>
+    kTypeNames =
+#include "generate/reharmony/substitution_types.gen.inc"
+    ;
+static_assert(!kTypeNames.back().empty(), "SUBSTITUTION_TYPES and SubstitutionType disagree");
 
 int mod12(double value) { return pitch_class_of(value); }
 
@@ -159,12 +168,7 @@ std::string_view to_string(SubstitutionType type) {
 }
 
 std::optional<SubstitutionType> parse_substitution_type(std::string_view name) {
-  for (std::size_t index = 0; index < std::size(kTypeNames); ++index) {
-    if (kTypeNames[index] == name) {
-      return static_cast<SubstitutionType>(index);
-    }
-  }
-  return std::nullopt;
+  return parse_named<SubstitutionType>(kTypeNames, name);
 }
 
 std::vector<Substitution> substitute_chord(const ChordArg& chord, const KeyArg& key,

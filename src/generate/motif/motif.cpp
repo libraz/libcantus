@@ -3,7 +3,9 @@
 #include "generate/motif/motif.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <map>
 #include <string>
@@ -28,11 +30,18 @@ namespace cantus {
 
 namespace {
 
-constexpr std::string_view kTransformNames[] =
+/** MOTIF_TRANSFORMS as names, indexed by MotifTransform. */
+constexpr std::array<std::string_view, MOTIF_TRANSFORMS.size()> kTransformNames =
 #include "generate/motif/motif_transforms.gen.inc"
     ;
-static_assert(sizeof(kTransformNames) / sizeof(kTransformNames[0]) == MOTIF_TRANSFORMS.size(),
-              "MOTIF_TRANSFORMS and MotifTransform disagree");
+static_assert(!kTransformNames.back().empty(), "MOTIF_TRANSFORMS and MotifTransform disagree");
+
+/** MOTIF_CONTOURS as names, indexed by MotifContour. */
+constexpr std::array<std::string_view, static_cast<std::size_t>(MotifContour::kWave) + 1>
+    kContourNames =
+#include "generate/motif/motif_contours.gen.inc"
+    ;
+static_assert(!kContourNames.back().empty(), "MOTIF_CONTOURS and MotifContour disagree");
 
 /** Nearest chord tone to `pitch`, preferring the lower pitch on a tie. */
 double nearest_chord_tone(double pitch, const Chord& chord) {
@@ -236,45 +245,19 @@ std::string_view to_string(MotifTransform transform) {
 }
 
 std::optional<MotifTransform> parse_motif_transform(std::string_view name) {
-  for (MotifTransform transform : MOTIF_TRANSFORMS) {
-    if (to_string(transform) == name) {
-      return transform;
-    }
-  }
-  return std::nullopt;
+  return parse_named<MotifTransform>(kTransformNames, name);
 }
 
-std::vector<std::string_view> motif_transform_names() {
-  return std::vector<std::string_view>(std::begin(kTransformNames), std::end(kTransformNames));
-}
+std::vector<std::string_view> motif_transform_names() { return names_of(kTransformNames); }
 
 std::string_view to_string(MotifContour contour) {
-  switch (contour) {
-    case MotifContour::kArch:
-      return "arch";
-    case MotifContour::kAscending:
-      return "ascending";
-    case MotifContour::kDescending:
-      return "descending";
-    case MotifContour::kWave:
-      return "wave";
-  }
-  return "arch";
+  return kContourNames[static_cast<std::size_t>(contour)];
 }
 
-std::vector<std::string_view> motif_contour_names() {
-  return {to_string(MotifContour::kArch), to_string(MotifContour::kAscending),
-          to_string(MotifContour::kDescending), to_string(MotifContour::kWave)};
-}
+std::vector<std::string_view> motif_contour_names() { return names_of(kContourNames); }
 
 std::optional<MotifContour> parse_motif_contour(std::string_view name) {
-  for (MotifContour contour : {MotifContour::kArch, MotifContour::kAscending,
-                               MotifContour::kDescending, MotifContour::kWave}) {
-    if (to_string(contour) == name) {
-      return contour;
-    }
-  }
-  return std::nullopt;
+  return parse_named<MotifContour>(kContourNames, name);
 }
 
 double cell_span(const std::vector<NoteEvent>& notes) {

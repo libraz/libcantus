@@ -6,6 +6,8 @@
 #ifndef CANTUS_SRC_GENERATE_HARMONIZE_CANDIDATES_H_
 #define CANTUS_SRC_GENERATE_HARMONIZE_CANDIDATES_H_
 
+#include <array>
+#include <cstddef>
 #include <string_view>
 #include <vector>
 
@@ -14,6 +16,15 @@
 #include "generate/harmonize/internal.h"
 
 namespace cantus {
+
+/** REHARMONIZE_STRENGTHS as names, indexed by ReharmonizeStrength. */
+inline constexpr std::array<std::string_view,
+                            static_cast<std::size_t>(ReharmonizeStrength::kBorrowed) + 1>
+    kReharmonizeStrengthNames =
+#include "generate/harmonize/reharmonize_strengths.gen.inc"
+    ;
+static_assert(!kReharmonizeStrengthNames.back().empty(),
+              "REHARMONIZE_STRENGTHS and ReharmonizeStrength disagree");
 
 /** Every named reharmonization strength, in dial order (`REHARMONIZE_STRENGTHS`). */
 std::vector<std::string_view> reharmonize_strength_names();

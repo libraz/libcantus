@@ -3,12 +3,15 @@
 
 #include "generate/harmonize/nct.h"
 
+#include <array>
 #include <cmath>
+#include <cstddef>
 
 #include "analyze/limits.gen.h"
 #include "cantus/core/validation.h"
 #include "cantus/generate/harmonize.h"
 #include "core/event_index/order.h"
+#include "generate/context/context.h"
 #include "generate/harmonize/limits.gen.h"
 #include "js/math.h"
 
@@ -16,8 +19,12 @@ namespace cantus {
 
 namespace {
 
-constexpr std::string_view kRoleNames[] = {"structural", "passing",      "neighbor", "appoggiatura",
-                                           "suspension", "anticipation", "escape"};
+/** MELODY_TONE_ROLES as names, indexed by MelodyToneRole. */
+constexpr std::array<std::string_view, static_cast<std::size_t>(MelodyToneRole::kEscape) + 1>
+    kRoleNames =
+#include "generate/harmonize/melody_tone_roles.gen.inc"
+    ;
+static_assert(!kRoleNames.back().empty(), "MELODY_TONE_ROLES and MelodyToneRole disagree");
 
 bool is_step(double a, double b) {
   double d = std::abs(a - b);
@@ -91,12 +98,7 @@ std::string_view to_string(MelodyToneRole role) {
 }
 
 std::optional<MelodyToneRole> parse_melody_tone_role(std::string_view name) {
-  for (std::size_t index = 0; index < std::size(kRoleNames); ++index) {
-    if (kRoleNames[index] == name) {
-      return static_cast<MelodyToneRole>(index);
-    }
-  }
-  return std::nullopt;
+  return parse_named<MelodyToneRole>(kRoleNames, name);
 }
 
 double snap_to_pulse(double beat, double pulse) {

@@ -1,7 +1,9 @@
 // The imitative entries of ts/src/generate/countermelody/imitation.ts.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <optional>
 #include <string>
@@ -12,6 +14,7 @@
 #include "cantus/generate/countermelody.h"
 #include "cantus/theory/scale.h"
 #include "core/validation/validation.h"
+#include "generate/context/context.h"
 #include "generate/countermelody/countermelody.h"
 #include "generate/drums/internal.h"
 #include "js/math.h"
@@ -21,11 +24,11 @@ namespace cantus {
 
 namespace {
 
-constexpr std::string_view kAnswerNames[] =
+/** IMITATION_ANSWERS as names, indexed by ImitationAnswer. */
+constexpr std::array<std::string_view, IMITATION_ANSWERS.size()> kAnswerNames =
 #include "generate/countermelody/imitation_answers.gen.inc"
     ;
-static_assert(sizeof(kAnswerNames) / sizeof(kAnswerNames[0]) == IMITATION_ANSWERS.size(),
-              "IMITATION_ANSWERS and ImitationAnswer disagree");
+static_assert(!kAnswerNames.back().empty(), "IMITATION_ANSWERS and ImitationAnswer disagree");
 
 /** How many scale degrees a spelled interval spans, signed by its direction. */
 double degrees_of(const SpelledInterval& interval) {
@@ -47,17 +50,10 @@ std::string_view to_string(ImitationAnswer answer) {
   return kAnswerNames[static_cast<std::size_t>(answer)];
 }
 
-std::vector<std::string_view> imitation_answer_names() {
-  return std::vector<std::string_view>(std::begin(kAnswerNames), std::end(kAnswerNames));
-}
+std::vector<std::string_view> imitation_answer_names() { return names_of(kAnswerNames); }
 
 std::optional<ImitationAnswer> parse_imitation_answer(std::string_view name) {
-  for (ImitationAnswer answer : IMITATION_ANSWERS) {
-    if (to_string(answer) == name) {
-      return answer;
-    }
-  }
-  return std::nullopt;
+  return parse_named<ImitationAnswer>(kAnswerNames, name);
 }
 
 std::vector<std::size_t> imitation_subject(const std::vector<NoteEvent>& sounding, double from,

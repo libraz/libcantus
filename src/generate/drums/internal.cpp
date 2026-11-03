@@ -2,8 +2,10 @@
 
 #include "generate/drums/internal.h"
 
+#include <array>
 #include <cstddef>
 
+#include "generate/context/context.h"
 #include "generate/drums/limits.gen.h"
 #include "generate/vocabulary/types.h"
 #include "js/math.h"
@@ -11,6 +13,13 @@
 namespace cantus {
 
 namespace {
+
+/** DRUM_STYLES as names, indexed by DrumStyle. */
+constexpr std::array<std::string_view, static_cast<std::size_t>(DrumStyle::kLatin) + 1>
+    kDrumStyleNames =
+#include "generate/drums/drum_styles.gen.inc"
+    ;
+static_assert(!kDrumStyleNames.back().empty(), "DRUM_STYLES and DrumStyle disagree");
 
 /** A generated STYLE_MAP row, with the style and feel still by name. */
 struct StyleMapRow {
@@ -48,36 +57,11 @@ std::optional<Section> parse_section(std::string_view name) {
 }
 
 std::string_view to_string(DrumStyle style) {
-  switch (style) {
-    case DrumStyle::kSparse:
-      return "sparse";
-    case DrumStyle::kStandard:
-      return "standard";
-    case DrumStyle::kFourOnFloor:
-      return "fourOnFloor";
-    case DrumStyle::kUpbeat:
-      return "upbeat";
-    case DrumStyle::kRock:
-      return "rock";
-    case DrumStyle::kSynth:
-      return "synth";
-    case DrumStyle::kTrap:
-      return "trap";
-    case DrumStyle::kLatin:
-      return "latin";
-  }
-  return "standard";
+  return kDrumStyleNames[static_cast<std::size_t>(style)];
 }
 
 std::optional<DrumStyle> parse_drum_style(std::string_view name) {
-  for (DrumStyle style :
-       {DrumStyle::kSparse, DrumStyle::kStandard, DrumStyle::kFourOnFloor, DrumStyle::kUpbeat,
-        DrumStyle::kRock, DrumStyle::kSynth, DrumStyle::kTrap, DrumStyle::kLatin}) {
-    if (to_string(style) == name) {
-      return style;
-    }
-  }
-  return std::nullopt;
+  return parse_named<DrumStyle>(kDrumStyleNames, name);
 }
 
 std::string_view to_string(GrooveFeel feel) { return kFeelNames[static_cast<std::size_t>(feel)]; }

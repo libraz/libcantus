@@ -5,20 +5,24 @@ import { meterAt, metricWeight, pulseBeats, toMeterData } from '../../core/meter
 import type { NoteEvent } from '../../core/types.js';
 import { assertNoteEvents } from '../../core/validation/index.js';
 
+/** Every melody tone role, in declaration order. */
+export const MELODY_TONE_ROLES = [
+  'structural',
+  'passing',
+  'neighbor',
+  'appoggiatura',
+  'suspension',
+  'anticipation',
+  'escape',
+] as const;
+
 /**
  * What a melody note contributes to the harmony: either a structural tone the
  * chord has to account for, or the ornament figure that explains it away.
  *
  * @category Reharmonization
  */
-export type MelodyToneRole =
-  | 'structural'
-  | 'passing'
-  | 'neighbor'
-  | 'appoggiatura'
-  | 'suspension'
-  | 'anticipation'
-  | 'escape';
+export type MelodyToneRole = (typeof MELODY_TONE_ROLES)[number];
 
 /**
  * One melody note's classification: its index in the classified melody, the

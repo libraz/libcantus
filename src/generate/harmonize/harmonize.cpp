@@ -27,17 +27,11 @@
 namespace cantus {
 
 std::string_view to_string(ReharmonizeStrength strength) {
-  return reharmonize_strength_names()[static_cast<std::size_t>(strength)];
+  return kReharmonizeStrengthNames[static_cast<std::size_t>(strength)];
 }
 
 std::optional<ReharmonizeStrength> parse_reharmonize_strength(std::string_view name) {
-  std::vector<std::string_view> names = reharmonize_strength_names();
-  for (std::size_t index = 0; index < names.size(); ++index) {
-    if (names[index] == name) {
-      return static_cast<ReharmonizeStrength>(index);
-    }
-  }
-  return std::nullopt;
+  return parse_named<ReharmonizeStrength>(kReharmonizeStrengthNames, name);
 }
 
 HarmonizeResult harmonize_with(const HarmonizeRequest& request) {

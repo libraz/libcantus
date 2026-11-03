@@ -6,6 +6,13 @@
       "cxx_type": "std::string_view",
       "cxx_name": "kMotifTransformNames",
       "fields": []
+    },
+    {
+      "module": "generate/motif/index.ts",
+      "export": "MOTIF_CONTOURS",
+      "cxx_type": "std::string_view",
+      "cxx_name": "kMotifContourNames",
+      "fields": []
     }
   ],
   "limits": [
