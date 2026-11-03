@@ -43,7 +43,7 @@ ci-local:
 	$(MAKE) test-python
 	$(MAKE) test-node
 	$(MAKE) test-wasm
-	$(PYTHON) tools/conformance/check_wasm_flags.py
+	$(PYTHON) tools/conformance/check_wasm_flags.py --compile-commands $(WASM_BUILD_DIR)/compile_commands.json
 	$(NODE) tools/release/check_wasm_size.mjs
 	$(SPEC_COUNT) --compare facade-ts
 	$(SPEC_COUNT) --compare node
