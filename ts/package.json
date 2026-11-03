@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Pure-TypeScript music theory engine: harmonic analysis, chord and scale vocabulary, voicing, reharmonization, and seeded part generation over MIDI note events.",
   "type": "module",
   "license": "Apache-2.0",
@@ -145,13 +145,13 @@
   "devDependencies": {
     "@libraz/typedoc-theme": "^0.1.1",
     "@types/node": "^26.6.6",
-    "@vitest/coverage-v8": "5.0.5",
+    "@vitest/coverage-v8": "5.1.0",
     "tsup": "9.0.0",
     "typedoc": "0.28.20",
     "typedoc-plugin-extras": "4.0.1",
     "typedoc-plugin-mdn-links": "5.1.1",
     "typescript": "6.0.3",
     "vite": "8.3.5",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   }
 }

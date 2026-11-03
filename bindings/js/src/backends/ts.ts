@@ -23,7 +23,7 @@ import { escapeKey, isTagKey, numberText, setOwn, unescapeKey } from '../runtime
 const PURE = Pure as unknown as Record<string, unknown>;
 
 /** The library version `$version` reports. */
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 /** CANTUS_ABI_VERSION of the C ABI this backend stands in for. */
 const ABI_VERSION = 1;
 /** Path segment `resolveContext` puts between a part name and the algorithm version. */

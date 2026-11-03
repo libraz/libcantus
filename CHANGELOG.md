@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-04
+
 ### Changed
 
 - **The WebAssembly module is a third smaller and about twice as fast.**
@@ -2665,7 +2667,8 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
-[Unreleased]: https://github.com/libraz/libcantus/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/libraz/libcantus/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/libraz/libcantus/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/libraz/libcantus/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/libraz/libcantus/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/libraz/libcantus/compare/v1.1.0...v1.2.0

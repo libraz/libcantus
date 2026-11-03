@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus-facade",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "description": "TS facade over the libcantus op boundary; bundled by the wasm and node packages.",
