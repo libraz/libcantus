@@ -33,7 +33,7 @@ import {
   resolveKey,
 } from '../../theory/scale/index.js';
 import { soundsDominantSeventh, THIRD_SEMITONES } from '../../theory/tendency/index.js';
-import { BEAT_EPS } from '../adjacency.js';
+import { BEAT_EPS, countStartingAtOrBefore } from '../adjacency.js';
 import type { KeyProfileName, KeyProfilePair } from '../detect/index.js';
 import { profileScore, resolveKeyProfile } from '../detect/profiles.js';
 import { firstSoundingBeat } from '../form/internal.js';
@@ -1261,17 +1261,7 @@ export function keyLookup(
   fallback: ResolvedKey,
 ): (beat: number) => ResolvedKey {
   return (beat) => {
-    let low = 0;
-    let high = regions.length;
-    while (low < high) {
-      const middle = Math.floor((low + high) / 2);
-      if ((regions[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat) {
-        low = middle + 1;
-      } else {
-        high = middle;
-      }
-    }
-    const candidate = regions[low - 1];
+    const candidate = regions[countStartingAtOrBefore(regions, beat) - 1];
     return candidate !== undefined && beat < candidate.endBeat ? candidate.key : fallback;
   };
 }

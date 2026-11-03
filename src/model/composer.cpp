@@ -1,5 +1,6 @@
 #include "cantus/model/composer.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -339,16 +340,11 @@ bool same_profile(const InstrumentProfile& a, const InstrumentProfile& b) {
 }
 
 bool same_meters(const MeterMap& a, const MeterMap& b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (a[i].startBeat != b[i].startBeat || a[i].ts.numerator != b[i].ts.numerator ||
-        a[i].ts.denominator != b[i].ts.denominator || a[i].ts.grouping != b[i].ts.grouping) {
-      return false;
-    }
-  }
-  return true;
+  return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+                    [](const MeterChange& x, const MeterChange& y) {
+                      return x.startBeat == y.startBeat && x.ts.numerator == y.ts.numerator &&
+                             x.ts.denominator == y.ts.denominator && x.ts.grouping == y.ts.grouping;
+                    });
 }
 
 /**

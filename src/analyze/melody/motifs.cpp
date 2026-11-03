@@ -28,18 +28,6 @@ struct WindowGroup {
   std::vector<std::size_t> starts;
 };
 
-/** `array.join(',')` of numbers. */
-std::string join_numbers(const std::vector<double>& values) {
-  std::string out;
-  for (std::size_t i = 0; i < values.size(); ++i) {
-    if (i > 0) {
-      out += ',';
-    }
-    out += js::to_string(values[i]);
-  }
-  return out;
-}
-
 /**
  * The identity of one window: its intervals and its rhythmic profile (`windowSignature`); nullopt
  * for a window with no usable rhythmic profile.
@@ -50,7 +38,7 @@ std::optional<std::string> window_signature(const std::vector<LineNote>& notes) 
     return std::nullopt;
   }
   return js::to_string(static_cast<double>(notes.size())) + "|" +
-         join_numbers(intervals_of(notes)) + "|" + join_numbers(*profile);
+         js::join(intervals_of(notes), ",") + "|" + js::join(*profile, ",");
 }
 
 /** Keep the statements that do not overlap, earliest first (`nonOverlapping`). */

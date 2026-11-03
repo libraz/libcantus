@@ -1,11 +1,11 @@
 import { BEAT_EPS } from '../../analyze/adjacency.js';
-import { isMultipleOf } from '../../analyze/rhythm/internal.js';
 import type { ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import type { NoteEventIndex } from '../../core/event-index/index.js';
 import { createNoteEventIndex } from '../../core/event-index/index.js';
 import type { MeterLike, TimeSignature } from '../../core/meter/index.js';
 import { DEFAULT_TS, isStrongBeat, meterAt, toMeterData } from '../../core/meter/index.js';
+import { isMultipleOf } from '../../core/meter/internal.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
   assertFiniteNumber,

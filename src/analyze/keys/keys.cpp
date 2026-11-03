@@ -427,10 +427,7 @@ struct KeySearchOptions {
 };
 
 KeySearchOptions resolve_key_search(const KeyTimelineOptions& opts, std::string_view meters_name) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters = resolve_meters(meter_options, meters_name);
+  MeterMap meters = resolve_meters({opts.ts, opts.meters}, meters_name);
   double bar = beats_per_bar_at(0, MeterArg(meters));
   double expected_key_beats =
       positive_beats(opts.expectedKeyBeats.value_or(bar * 4), "expectedKeyBeats");
@@ -939,16 +936,7 @@ KeyAtBeat key_at_beat(std::vector<KeyRegion> regions, ResolvedKey fallback) {
 
 const ResolvedKey& KeyLookup::operator()(double beat) const {
   const std::vector<KeyRegion>& regions = *regions_;
-  std::size_t low = 0;
-  std::size_t high = regions.size();
-  while (low < high) {
-    std::size_t middle = (low + high) / 2;
-    if (regions[middle].startBeat <= beat) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
+  std::size_t low = count_starting_at_or_before(regions, beat);
   if (low > 0 && beat < regions[low - 1].endBeat) {
     return regions[low - 1].key;
   }

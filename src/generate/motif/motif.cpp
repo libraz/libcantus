@@ -10,7 +10,7 @@
 #include <map>
 #include <string>
 
-#include "analyze/rhythm/internal.h"
+#include "analyze/grid.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/pitch.h"
@@ -18,6 +18,7 @@
 #include "cantus/theory/chord.h"
 #include "cantus/theory/scale.h"
 #include "core/event_index/order.h"
+#include "core/meter/internal.h"
 #include "core/validation/validation.h"
 #include "generate/context/context.h"
 #include "generate/drums/internal.h"
@@ -83,15 +84,6 @@ double developed_pitch(double pitch, const std::function<bool(double)>& allows, 
     }
   }
   return pitch;
-}
-
-/** Earliest onset in a cell; the time origin for timing transforms. */
-double cell_origin(const std::vector<NoteEvent>& notes) {
-  double origin = std::numeric_limits<double>::infinity();
-  for (const NoteEvent& note : notes) {
-    origin = js::min(origin, note.startBeat);
-  }
-  return std::isfinite(origin) ? origin : 0;
 }
 
 /** Latest offset in a cell. */
@@ -160,7 +152,7 @@ void assert_in_range(const std::vector<MotifResult>& notes) {
 /** Scale a cell's timing about its origin by `factor`. */
 std::vector<MotifResult> scale_time(const std::vector<NoteEvent>& notes,
                                     const std::vector<double>& pitches, double factor) {
-  double origin = cell_origin(notes);
+  double origin = first_sounding_beat(notes);
   std::vector<MotifResult> out;
   for (std::size_t i = 0; i < notes.size(); ++i) {
     out.push_back(MotifResult{pitches[i], origin + (notes[i].startBeat - origin) * factor,
@@ -206,7 +198,7 @@ std::vector<MotifResult> transform_unchecked(const std::vector<NoteEvent>& notes
       if (notes.empty()) {
         return out;
       }
-      double start = cell_origin(notes);
+      double start = first_sounding_beat(notes);
       double end = cell_end(notes);
       for (std::size_t i = 0; i < notes.size(); ++i) {
         out.push_back(MotifResult{pitches[i],
@@ -264,7 +256,7 @@ double cell_span(const std::vector<NoteEvent>& notes) {
   if (notes.empty()) {
     return 0;
   }
-  double start = cell_origin(notes);
+  double start = first_sounding_beat(notes);
   double end = cell_end(notes);
   return end - start;
 }
@@ -306,7 +298,7 @@ std::vector<MotifResult> develop_notes(const std::vector<NoteEvent>& notes,
   double span = cell_span(notes);
   double bar_beats = beats_per_bar(meter);
   double total_beats = bars * bar_beats;
-  double origin = cell_origin(notes);
+  double origin = first_sounding_beat(notes);
   std::vector<MotifResult> out;
 
   if (span <= 0) {

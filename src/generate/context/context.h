@@ -14,6 +14,7 @@
 
 #include "cantus/core/meter.h"
 #include "cantus/generate/context.h"
+#include "core/validation/validation.h"
 
 namespace cantus {
 
@@ -35,24 +36,6 @@ struct ContextSugar {
  */
 ResolvedContext resolve_context_with(const std::optional<GenerationContextInput>& input,
                                      const ContextSugar& sugar);
-
-/** The enumerator whose name in `names` (indexed by the enumerators) is `name`, if any. */
-template <class Enum, std::size_t N>
-std::optional<Enum> parse_named(const std::array<std::string_view, N>& names,
-                                std::string_view name) {
-  for (std::size_t i = 0; i < N; ++i) {
-    if (names[i] == name) {
-      return static_cast<Enum>(i);
-    }
-  }
-  return std::nullopt;
-}
-
-/** The names of a list, for assert_one_of(). */
-template <std::size_t N>
-std::vector<std::string_view> names_of(const std::array<std::string_view, N>& names) {
-  return {names.begin(), names.end()};
-}
 
 }  // namespace cantus
 

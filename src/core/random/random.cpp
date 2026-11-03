@@ -3,12 +3,9 @@
 #include "cantus/core/random.h"
 
 #include <cmath>
-#include <string>
 
-#include "cantus/core/errors.h"
 #include "cantus/core/validation.h"
 #include "core/random/internal.h"
-#include "js/number.h"
 
 namespace cantus {
 
@@ -27,24 +24,14 @@ bool Rng::prob(double p) {
 }
 
 std::int64_t Rng::range(std::int64_t lo, std::int64_t hi) {
-  double low = assert_integer(static_cast<double>(lo), "range lower bound");
-  double high = assert_integer(static_cast<double>(hi), "range upper bound");
-  if (low > high) {
-    throw InvalidInputError("range lower bound must not exceed upper bound; received " +
-                            js::to_string(low) + " > " + js::to_string(high));
-  }
-  assert_integer(high - low, "range span", 0);
+  auto low = static_cast<double>(lo);
+  auto high = static_cast<double>(hi);
+  assert_range_bounds(low, high);
   return static_cast<std::int64_t>(low + std::floor(next() * (high - low + 1)));
 }
 
 double Rng::float_(double lo, double hi) {
-  assert_finite_number(lo, "float lower bound");
-  assert_finite_number(hi, "float upper bound");
-  if (lo > hi) {
-    throw InvalidInputError("float lower bound must not exceed upper bound; received " +
-                            js::to_string(lo) + " > " + js::to_string(hi));
-  }
-  assert_finite_number(hi - lo, "float span");
+  assert_float_bounds(lo, hi);
   return scale_unit_draw(next(), lo, hi);
 }
 

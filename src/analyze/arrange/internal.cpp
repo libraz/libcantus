@@ -5,12 +5,14 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 #include "analyze/adjacency.h"
 #include "analyze/timeline/timeline.h"
 #include "cantus/analyze/timeline.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
+#include "cantus/core/meter.h"
 #include "core/event_index/order.h"
 #include "core/validation/validation.h"
 #include "js/math.h"
@@ -201,26 +203,11 @@ std::string_view to_string(TrackRole role) {
 }
 
 std::optional<TrackRole> parse_track_role(std::string_view name) {
-  for (std::size_t i = 0; i < std::size(kTrackRoleNames); ++i) {
-    if (kTrackRoleNames[i] == name) {
-      return static_cast<TrackRole>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<TrackRole>(kTrackRoleNames, name);
 }
 
 const PreparedNote* PreparedVoice::at(double beat) const {
-  // Index of the last span starting at or before a beat, or -1.
-  std::size_t low = 0;
-  std::size_t high = sounding.size();
-  while (low < high) {
-    std::size_t middle = (low + high) / 2;
-    if (sounding[middle].startBeat <= beat + BEAT_EPS) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
+  std::size_t low = count_starting_at_or_before(sounding, beat + BEAT_EPS);
   if (low == 0) {
     return nullptr;
   }
@@ -250,6 +237,24 @@ double assert_track_notes(const std::vector<ArrangementTrack>& tracks,
     note_count += static_cast<double>(tracks[index].notes.size());
   }
   return note_count;
+}
+
+ArrangementInput assert_arrangement_input(const std::vector<ArrangementTrack>& tracks,
+                                          const ArrangementOptions& opts) {
+  MeterMap meters = resolve_meters({opts.ts, opts.meters}, "arrangement meters");
+  std::optional<double> budget = opts.budget;
+  NoteEventAssertOptions note_options;
+  note_options.allowNonPositiveDuration = true;
+  note_options.budget = budget;
+  if (opts.pickupBeats) {
+    assert_range(*opts.pickupBeats, 0, kMaxSafeInteger, "arrangement pickupBeats");
+    note_options.minStartBeat = -*opts.pickupBeats;
+  }
+  assert_generation_budget(static_cast<double>(tracks.size()), "arrangement tracks", budget);
+  double note_count = assert_track_notes(tracks, note_options);
+  // The pooled total is what the work downstream is sized by.
+  assert_generation_budget(note_count, "arrangement notes", budget);
+  return ArrangementInput{std::move(meters), note_count, arrangement_profile(opts.profile)};
 }
 
 void assert_given_timeline(const std::optional<ChordTimeline>& timeline, std::string_view name) {

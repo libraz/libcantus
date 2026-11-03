@@ -37,6 +37,18 @@ export type MeterData = TimeSignature | MeterMap;
  */
 export const BEAT_EPS = 1e-9;
 
+/**
+ * Whether `value` is a whole multiple of `unit`, within {@link BEAT_EPS}; never
+ * for a unit that is not positive.
+ */
+export function isMultipleOf(value: number, unit: number): boolean {
+  if (unit <= 0) {
+    return false;
+  }
+  const ratio = value / unit;
+  return Math.abs(ratio - Math.round(ratio)) < BEAT_EPS;
+}
+
 /** Length of one denominator unit in quarter-note beats. */
 export function unitBeatsOf(ts: TimeSignature): number {
   return 4 / ts.denominator;

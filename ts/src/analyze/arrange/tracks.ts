@@ -6,16 +6,13 @@
  */
 
 import type { MeterLike, MeterMap } from '../../core/meter/index.js';
-import { beatsPerBarAt, isStrongBeat, resolveMeters } from '../../core/meter/index.js';
+import { beatsPerBarAt, isStrongBeat } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
-import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
-  assertArray,
   assertFunction,
   assertGenerationBudget,
   assertInteger,
   assertNoteEvents,
-  assertRange,
 } from '../../core/validation/index.js';
 import type { Chord } from '../../theory/chord/index.js';
 import {
@@ -26,7 +23,7 @@ import {
 } from '../../theory/safety/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
 import { type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
-import { BEAT_EPS, sameInstant } from '../adjacency.js';
+import { BEAT_EPS, countStartingAtOrBefore, sameInstant } from '../adjacency.js';
 import { gridForNotes, latestSoundingEnd } from '../grid.js';
 import {
   attachPivots,
@@ -54,10 +51,9 @@ import {
   type VoiceNote,
 } from '../voice/index.js';
 import {
-  arrangementProfile,
+  assertArrangementInput,
   assertGivenKeys,
   assertGivenTimeline,
-  assertTrackNotes,
   harmonyTrackSet,
   isPercussion,
   type PreparedNote,
@@ -513,21 +509,6 @@ export function analyzePolyphony(
   });
 }
 
-/** Index of the first segment starting strictly after a beat. */
-function firstSegmentAfter(timeline: ChordTimeline, beat: number): number {
-  let low = 0;
-  let high = timeline.segments.length;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((timeline.segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat + BEAT_EPS) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
 /**
  * The beats at which a note must be checked against the harmony: its onset,
  * plus the onset of every later chord segment the note sustains across. Each
@@ -540,7 +521,8 @@ function firstSegmentAfter(timeline: ChordTimeline, beat: number): number {
 function evaluationBeats(note: VoiceNote, timeline: ChordTimeline): number[] {
   const noteEnd = note.startBeat + note.durationBeat;
   const beats = [note.startBeat];
-  for (let i = firstSegmentAfter(timeline, note.startBeat); i < timeline.segments.length; i += 1) {
+  const first = countStartingAtOrBefore(timeline.segments, note.startBeat + BEAT_EPS);
+  for (let i = first; i < timeline.segments.length; i += 1) {
     const start = timeline.segments[i]?.startBeat;
     if (start === undefined || start >= noteEnd - BEAT_EPS) {
       break;
@@ -634,20 +616,8 @@ export function analyzeArrangementWith(
   previous?: TimelineEvidence,
   dirty?: DirtySlots,
 ): { analysis: ArrangementAnalysis; evidence?: TimelineEvidence } {
-  const meters = resolveMeters(opts, 'arrangement meters');
+  const { meters, noteCount, profile } = assertArrangementInput(tracks, opts);
   const budget = opts.budget;
-  const noteOptions: NoteEventAssertOptions = { allowNonPositiveDuration: true, budget };
-  if (opts.pickupBeats !== undefined) {
-    assertRange(opts.pickupBeats, 0, Number.MAX_SAFE_INTEGER, 'arrangement pickupBeats');
-    noteOptions.minStartBeat = -opts.pickupBeats;
-  }
-  assertArray(tracks, 'arrangement tracks');
-  assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
-  const noteCount = assertTrackNotes(tracks, noteOptions);
-  // The pooled total is what the downstream timeline analysis actually sizes
-  // its work by, so it is checked here, under this layer's own name.
-  assertGenerationBudget(noteCount, 'arrangement notes', budget);
-  const profile = arrangementProfile(opts.profile);
   // A severity outside the scale narrows the report to nothing, which reads
   // exactly like a clean arrangement; the class API refuses it, so the function
   // it delegates to has to refuse the same values.

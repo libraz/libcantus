@@ -7,6 +7,7 @@
 #include <string>
 
 #include "cantus/core/limits.h"
+#include "core/validation/validation.h"
 #include "js/math.h"
 #include "js/number.h"
 
@@ -65,20 +66,11 @@ std::string_view to_string(MelodicContourShape shape) {
 }
 
 std::optional<MelodicContourShape> parse_melodic_contour_shape(std::string_view name) {
-  for (std::size_t i = 0; i < kShapeNames.size(); ++i) {
-    if (kShapeNames[i] == name) {
-      return static_cast<MelodicContourShape>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<MelodicContourShape>(kShapeNames, name);
 }
 
 std::vector<MelodicContourShape> melodic_contour_shapes() {
-  std::vector<MelodicContourShape> shapes;
-  for (std::size_t i = 0; i < kShapeNames.size(); ++i) {
-    shapes.push_back(static_cast<MelodicContourShape>(i));
-  }
-  return shapes;
+  return enumerators_of<MelodicContourShape>(kShapeNames);
 }
 
 MelodicContour contour_of(const std::vector<NoteEvent>& ordered) {

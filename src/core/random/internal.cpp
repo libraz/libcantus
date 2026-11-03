@@ -9,8 +9,10 @@
 #include <string>
 #include <variant>
 
+#include "cantus/core/errors.h"
 #include "cantus/core/validation.h"
 #include "core/validation/validation.h"
+#include "js/number.h"
 #include "js/utf16.h"
 
 namespace cantus {
@@ -83,6 +85,27 @@ double scale_unit_draw(double unit, double lo, double hi) {
     return value;
   }
   return std::nextafter(hi, -std::numeric_limits<double>::infinity());
+}
+
+void assert_range_bounds(double lo, double hi) {
+  assert_integer(lo, "range lower bound");
+  assert_integer(hi, "range upper bound");
+  if (lo > hi) {
+    throw InvalidInputError("range lower bound must not exceed upper bound; received " +
+                            js::to_string(lo) + " > " + js::to_string(hi));
+  }
+  // A span that is not itself a safe integer would be sampled at reduced precision.
+  assert_integer(hi - lo, "range span", 0);
+}
+
+void assert_float_bounds(double lo, double hi) {
+  assert_finite_number(lo, "float lower bound");
+  assert_finite_number(hi, "float upper bound");
+  if (lo > hi) {
+    throw InvalidInputError("float lower bound must not exceed upper bound; received " +
+                            js::to_string(lo) + " > " + js::to_string(hi));
+  }
+  assert_finite_number(hi - lo, "float span");
 }
 
 }  // namespace cantus

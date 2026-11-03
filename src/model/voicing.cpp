@@ -223,15 +223,6 @@ Voicing Voicing::invert(int n) const {
 
 bool Voicing::equals(const Voicing& other) const { return pitches_ == other.pitches_; }
 
-std::string Voicing::to_string() const {
-  std::string out;
-  for (std::size_t index = 0; index < pitches_.size(); ++index) {
-    if (index > 0) {
-      out += ' ';
-    }
-    out += js::to_string(pitches_[index]);
-  }
-  return out;
-}
+std::string Voicing::to_string() const { return js::join(pitches_, " "); }
 
 }  // namespace cantus

@@ -17,6 +17,9 @@
 
 namespace cantus {
 
+/** Whether `value` is a whole multiple of a positive `unit`, within BEAT_EPS (`isMultipleOf`). */
+bool is_multiple_of(double value, double unit);
+
 /** Length of one denominator unit in quarter-note beats. */
 double unit_beats_of(const TimeSignature& ts);
 

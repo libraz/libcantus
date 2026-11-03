@@ -703,12 +703,7 @@ std::string_view to_string(PlayabilityIssueType type) {
 }
 
 std::optional<PlayabilityIssueType> parse_playability_issue_type(std::string_view name) {
-  for (std::size_t i = 0; i < kIssueTypeNames.size(); ++i) {
-    if (kIssueTypeNames[i] == name) {
-      return static_cast<PlayabilityIssueType>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<PlayabilityIssueType>(kIssueTypeNames, name);
 }
 
 PlayabilityReport playability(const std::vector<NoteEvent>& notes,

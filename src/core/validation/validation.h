@@ -5,8 +5,10 @@
 #ifndef CANTUS_SRC_CORE_VALIDATION_VALIDATION_H_
 #define CANTUS_SRC_CORE_VALIDATION_VALIDATION_H_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <string>
@@ -27,6 +29,44 @@ inline constexpr double kMinValue = std::numeric_limits<double>::denorm_min();
 
 /** `Number.isSafeInteger(value)`. */
 bool is_safe_integer(double value) noexcept;
+
+/** The enumerator whose name in `names` (indexed by the enumerators) is `name`, if any. */
+template <class Enum, class Names>
+std::optional<Enum> parse_named(const Names& names, std::string_view name) {
+  for (std::size_t i = 0; i < std::size(names); ++i) {
+    if (names[i] == name) {
+      return static_cast<Enum>(i);
+    }
+  }
+  return std::nullopt;
+}
+
+/** The enumerator whose row in `rows` (indexed by the enumerators) has `name` in `field`. */
+template <class Enum, class Rows, class Field>
+std::optional<Enum> parse_named(const Rows& rows, std::string_view name, Field field) {
+  for (std::size_t i = 0; i < std::size(rows); ++i) {
+    if (rows[i].*field == name) {
+      return static_cast<Enum>(i);
+    }
+  }
+  return std::nullopt;
+}
+
+/** Every enumerator of a list indexed by the enumerators, in order. */
+template <class Enum, class Names>
+std::vector<Enum> enumerators_of(const Names& names) {
+  std::vector<Enum> out;
+  for (std::size_t i = 0; i < std::size(names); ++i) {
+    out.push_back(static_cast<Enum>(i));
+  }
+  return out;
+}
+
+/** The names of a list, for assert_one_of(). */
+template <std::size_t N>
+std::vector<std::string_view> names_of(const std::array<std::string_view, N>& names) {
+  return {names.begin(), names.end()};
+}
 
 /** Require an integer pitch class in 0..11 (`assertPitchClass`). */
 double assert_pitch_class(double value, std::string_view name = "pitch class");

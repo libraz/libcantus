@@ -1,7 +1,6 @@
 #include "cantus/model/note.h"
 
 #include <cstdlib>
-#include <utility>
 
 #include "cantus/core/validation.h"
 #include "cantus/theory/scale.h"
@@ -72,11 +71,8 @@ Note Note::parse(std::string_view text, const NoteNameOptions& opts) {
 }
 
 ParseResult<Note> Note::try_parse(std::string_view name, const NoteNameOptions& opts) {
-  ParseResult<NoteData> parsed = try_parse_note(name, opts);
-  if (!parsed.ok()) {
-    return parse_failure_of<Note>(std::move(parsed));
-  }
-  return ParseResult<Note>::success(Note(parsed.value()));
+  return map_parse<Note>(try_parse_note(name, opts),
+                         [](const NoteData& data) { return Note(data); });
 }
 
 Note Note::from_midi(double midi, MidiSpelling spelling) {

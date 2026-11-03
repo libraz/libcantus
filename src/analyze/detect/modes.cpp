@@ -4,6 +4,8 @@
 
 #include <algorithm>
 
+#include "core/validation/validation.h"
+
 namespace cantus {
 
 namespace {
@@ -52,12 +54,7 @@ std::string_view to_string(ModalScaleName name) {
 }
 
 std::optional<ModalScaleName> parse_modal_scale_name(std::string_view name) {
-  for (std::size_t i = 0; i < kModalScaleNames.size(); ++i) {
-    if (kModalScaleNames[i] == name) {
-      return static_cast<ModalScaleName>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<ModalScaleName>(kModalScaleNames, name);
 }
 
 std::vector<ModalScaleName> modal_scale_names() {

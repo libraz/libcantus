@@ -99,26 +99,10 @@ double beat_of_slot(const SlotGrid& grid, double index) {
   return grid.origin + index * grid.slotBeats;
 }
 
-/** The index of the first segment beginning after `beat`, by binary search (`firstAfter`). */
-template <class Segment>
-std::size_t first_after(const std::vector<Segment>& segments, double beat) {
-  std::size_t low = 0;
-  std::size_t high = segments.size();
-  while (low < high) {
-    std::size_t middle = (low + high) / 2;
-    if (segments[middle].startBeat <= beat) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
 /** The segment before the insertion point of `beat`, then the one at it, that begins on it. */
 template <class Segment>
 const Segment* starting_at(const std::vector<Segment>& segments, double beat) {
-  std::size_t index = first_after(segments, beat);
+  std::size_t index = count_starting_at_or_before(segments, beat);
   for (std::size_t offset = 0; offset < 2; ++offset) {
     if (index + offset < 1 || index + offset - 1 >= segments.size()) {
       continue;
@@ -752,12 +736,7 @@ std::string_view to_string(ChordSegmentation segmentation) {
 }
 
 std::optional<ChordSegmentation> parse_chord_segmentation(std::string_view name) {
-  for (std::size_t i = 0; i < kSegmentationNames.size(); ++i) {
-    if (kSegmentationNames[i] == name) {
-      return static_cast<ChordSegmentation>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<ChordSegmentation>(kSegmentationNames, name);
 }
 
 std::size_t lexicon_size() { return lexicon().size; }
@@ -777,7 +756,7 @@ bool WindowKey::operator<(const WindowKey& other) const {
 
 Nullable<Chord> chord_at_beat(const std::vector<ChordSegment>& segments, double beat) {
   assert_finite_number(beat, "timeline query beat");
-  std::size_t after = first_after(segments, beat);
+  std::size_t after = count_starting_at_or_before(segments, beat);
   if (after == 0) {
     return std::nullopt;
   }
@@ -902,10 +881,7 @@ DirtySlots dirty_slots_for(const TimelineEvidence& evidence, double start_beat, 
 TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
                                   const ChordTimelineOptions& opts, TimelineEvidence* previous,
                                   const DirtySlots* dirty) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters_map = resolve_meters(meter_options, "timeline meters");
+  MeterMap meters_map = resolve_meters({opts.ts, opts.meters}, "timeline meters");
   const MeterArg meters(meters_map);
   double harmonic_rhythm = opts.harmonicRhythm.value_or(beats_per_bar_at(0, meters));
   assert_range(harmonic_rhythm, kMinValue, kMaxSafeInteger, "harmonic rhythm");

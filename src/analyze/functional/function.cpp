@@ -15,6 +15,7 @@
 #include "cantus/core/pitch.h"
 #include "cantus/core/validation.h"
 #include "core/pitch/pitch.h"
+#include "core/validation/validation.h"
 #include "theory/chord/chord.h"
 #include "theory/tendency/tendency.h"
 
@@ -138,20 +139,11 @@ std::string_view to_string(HarmonicFunction function) {
 }
 
 std::optional<HarmonicFunction> parse_harmonic_function(std::string_view name) {
-  for (std::size_t i = 0; i < kHarmonicFunctionNames.size(); ++i) {
-    if (kHarmonicFunctionNames[i] == name) {
-      return static_cast<HarmonicFunction>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<HarmonicFunction>(kHarmonicFunctionNames, name);
 }
 
 std::vector<HarmonicFunction> harmonic_functions() {
-  std::vector<HarmonicFunction> functions;
-  for (std::size_t i = 0; i < kHarmonicFunctionNames.size(); ++i) {
-    functions.push_back(static_cast<HarmonicFunction>(i));
-  }
-  return functions;
+  return enumerators_of<HarmonicFunction>(kHarmonicFunctionNames);
 }
 
 std::string_view to_string(BorrowedSource source) {
@@ -159,12 +151,7 @@ std::string_view to_string(BorrowedSource source) {
 }
 
 std::optional<BorrowedSource> parse_borrowed_source(std::string_view name) {
-  for (std::size_t i = 0; i < kBorrowedSourcePhrase.size(); ++i) {
-    if (kBorrowedSourcePhrase[i].name == name) {
-      return static_cast<BorrowedSource>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<BorrowedSource>(kBorrowedSourcePhrase, name, &NamedText::name);
 }
 
 ReasonedFunction function_with_reason(const Chord& chord, const ResolvedKey& resolved) {

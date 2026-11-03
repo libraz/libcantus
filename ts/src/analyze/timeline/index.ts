@@ -27,7 +27,7 @@ import type { Chord, ChordQuality, ChordSpan } from '../../theory/chord/index.js
 import { chordFromSpan, chordPitchClasses, makeChord } from '../../theory/chord/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
 import { isScaleTone, type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
-import { BEAT_EPS, sameInstant } from '../adjacency.js';
+import { BEAT_EPS, countStartingAtOrBefore, sameInstant } from '../adjacency.js';
 import type { ChordMatch } from '../detect/index.js';
 import { detectChord } from '../detect/index.js';
 import { clamp01, firstSoundingBeat } from '../form/internal.js';
@@ -241,25 +241,10 @@ export function chordTimelineFromChords(
  */
 export function chordAtBeat(segments: readonly ChordSegment[], beat: number): Chord | null {
   assertFiniteNumber(beat, 'timeline query beat');
-  const candidate = segments[firstAfter(segments, beat) - 1];
+  const candidate = segments[countStartingAtOrBefore(segments, beat) - 1];
   return candidate !== undefined && beat >= candidate.startBeat && beat < candidate.endBeat
     ? candidate.chord
     : null;
-}
-
-/** Index of the first segment beginning after `beat`, by binary search. */
-function firstAfter(segments: readonly ChordSegment[], beat: number): number {
-  let low = 0;
-  let high = segments.length;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((segments[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  return low;
 }
 
 /**
@@ -281,7 +266,7 @@ export function segmentStartingAt(
   segments: readonly ChordSegment[],
   beat: number,
 ): ChordSegment | undefined {
-  const index = firstAfter(segments, beat);
+  const index = countStartingAtOrBefore(segments, beat);
   for (const candidate of [segments[index - 1], segments[index]]) {
     if (candidate !== undefined && Math.abs(candidate.startBeat - beat) < BEAT_EPS) {
       return candidate;

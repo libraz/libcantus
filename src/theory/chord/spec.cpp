@@ -196,13 +196,9 @@ std::string spec_key(const ChordSpec& spec) {
            js::to_string(normalized.alterations[i].degree);
   }
   out += '|';
-  for (std::size_t i = 0; i < normalized.additions.size(); ++i) {
-    out += (i > 0 ? "." : "") + js::to_string(normalized.additions[i]);
-  }
+  out += js::join(normalized.additions, ".");
   out += '|';
-  for (std::size_t i = 0; i < normalized.omissions.size(); ++i) {
-    out += (i > 0 ? "." : "") + js::to_string(normalized.omissions[i]);
-  }
+  out += js::join(normalized.omissions, ".");
   return out;
 }
 

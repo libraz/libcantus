@@ -274,18 +274,6 @@ ParsedFigures parse_figures(const Text& text) {
   return parsed;
 }
 
-/** `numbers.join(',')`. */
-std::string join_numbers(const std::vector<int>& numbers) {
-  std::string out;
-  for (std::size_t i = 0; i < numbers.size(); ++i) {
-    if (i > 0) {
-      out += ",";
-    }
-    out += js::to_string(numbers[i]);
-  }
-  return out;
-}
-
 /** The qualities of the triads and seventh chords a figure can stack (`TERTIAN_QUALITIES`). */
 const std::vector<std::pair<std::vector<double>, ChordQuality>>& tertian_qualities() {
   static const std::vector<std::pair<std::vector<double>, ChordQuality>> index = [] {
@@ -377,7 +365,7 @@ std::pair<Chord, std::vector<NoteData>> realize_sonority(const NoteData& bass,
   }
   std::stable_sort(numbers.begin(), numbers.end());
   const FigureSetRow* found = nullptr;
-  std::string key = join_numbers(numbers);
+  std::string key = js::join(numbers, ",");
   for (const FigureSetRow& row : figure_sets()) {
     if (row.key == key) {
       found = &row;
@@ -538,7 +526,7 @@ std::string figured_bass_of(const ChordArg& chord, const KeyArg& key) {
   }
   std::stable_sort(keys.begin(), keys.end());
   const FigureAbbreviationRow* digits = nullptr;
-  std::string key_text = join_numbers(keys);
+  std::string key_text = js::join(keys, ",");
   for (const FigureAbbreviationRow& row : figure_abbreviations()) {
     if (row.key == key_text) {
       digits = &row;

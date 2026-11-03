@@ -7,6 +7,7 @@
 
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
+#include "core/validation/validation.h"
 #include "js/format.h"
 #include "js/math.h"
 #include "js/number.h"
@@ -84,12 +85,7 @@ std::string_view to_string(KeyProfileName name) {
 }
 
 std::optional<KeyProfileName> parse_key_profile_name(std::string_view name) {
-  for (std::size_t i = 0; i < kNamedProfiles.size(); ++i) {
-    if (kNamedProfiles[i].name == name) {
-      return static_cast<KeyProfileName>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<KeyProfileName>(kNamedProfiles, name, &NamedKeyProfile::name);
 }
 
 const KeyProfilePair& ResolvedProfile::get() const {

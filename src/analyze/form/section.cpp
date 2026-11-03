@@ -60,10 +60,7 @@ double unit_similarity(const Unit& a, const Unit& b) {
 
 std::vector<FormSection> sections_from_notes(const std::vector<NoteEvent>& notes,
                                              const FormSectionOptions& opts) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters_map = resolve_meters(meter_options, "section meters");
+  MeterMap meters_map = resolve_meters({opts.ts, opts.meters}, "section meters");
   const MeterArg meters(meters_map);
   NoteEventAssertOptions note_options;
   note_options.allowNonPositiveDuration = true;

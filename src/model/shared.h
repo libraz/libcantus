@@ -9,34 +9,18 @@
 #define CANTUS_SRC_MODEL_SHARED_H_
 
 #include <optional>
-#include <stdexcept>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 #include "cantus/core/errors.h"
 #include "cantus/core/meter.h"
 #include "cantus/core/pitch.h"
 #include "cantus/core/types.h"
+#include "core/errors/errors.h"
 #include "js/math.h"
 #include "model/limits.gen.h"
 
 namespace cantus {
-
-/** A failed parse of another type, as the failure of this one (`parsed.ok ? ... : parsed`). */
-template <class To, class From>
-ParseResult<To> parse_failure_of(ParseResult<From>&& parsed) {
-  try {
-    std::move(parsed).unwrap();
-  } catch (const InvalidInputError& e) {
-    return ParseResult<To>::failure(e);
-  } catch (const NoSolutionError& e) {
-    return ParseResult<To>::failure(e);
-  } catch (const BudgetExceededError& e) {
-    return ParseResult<To>::failure(e);
-  }
-  throw std::logic_error("parse_failure_of: the parse succeeded");
-}
 
 /** Zero with its sign dropped, so `-0` never reaches the plain data (`withoutNegativeZero`). */
 inline double without_negative_zero(double value) { return value == 0 ? 0 : value; }

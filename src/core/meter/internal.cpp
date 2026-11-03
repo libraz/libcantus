@@ -32,6 +32,14 @@ std::size_t last_at_or_before(const std::vector<double>& keys, double value) {
 
 }  // namespace
 
+bool is_multiple_of(double value, double unit) {
+  if (unit <= 0) {
+    return false;
+  }
+  double ratio = value / unit;
+  return std::fabs(ratio - js::round(ratio)) < BEAT_EPS;
+}
+
 MeterIndex build_meter_index(const MeterMap& map) {
   MeterIndex index;
   for (const MeterSegment& segment : meter_segments(map)) {

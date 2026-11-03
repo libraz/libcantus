@@ -11,16 +11,7 @@ import {
   metricWeight,
   pulseBeats,
 } from '../../core/meter/index.js';
-import { BEAT_EPS } from '../adjacency.js';
-
-/** Whether `value` is a whole multiple of `unit`, within float tolerance. */
-export function isMultipleOf(value: number, unit: number): boolean {
-  if (unit <= 0) {
-    return false;
-  }
-  const ratio = value / unit;
-  return Math.abs(ratio - Math.round(ratio)) < BEAT_EPS;
-}
+import { isMultipleOf } from '../../core/meter/internal.js';
 
 /**
  * A position's rhythmic level: 2–5 on a main pulse (`metricWeight` plus 2), 1

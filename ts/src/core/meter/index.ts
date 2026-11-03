@@ -37,6 +37,7 @@ import {
   isAdditiveReading,
   isCompoundNumerator,
   isMeterMap,
+  isMultipleOf,
   meterSegments,
   pulseBeatsOf,
   pulseCountOf,
@@ -250,15 +251,6 @@ export { DEFAULT_TS };
  * placed inside a bar from one placed a floating hair off a beat.
  */
 export const MAX_CHANGE_DIVISIONS = 16;
-
-/** Whether `value` is an integer multiple of `unit` (within a float tolerance). */
-function isMultiple(value: number, unit: number): boolean {
-  if (unit === 0) {
-    return false;
-  }
-  const ratio = value / unit;
-  return Math.abs(ratio - Math.round(ratio)) < BEAT_EPS;
-}
 
 /**
  * Parse a time signature such as `"4/4"` or `"6/8"`, or the additive `"2+2+3/8"`.
@@ -847,7 +839,7 @@ export function metricWeight(beatInQuarters: number, meter: MeterLike): number {
   const ts = meterAtChecked(beatInQuarters, resolved);
   const beat = beatInQuarters - barStartChecked(beatInQuarters, resolved);
   const pulse = pulseBeatsOf(ts);
-  if (!isMultiple(beat, pulse)) {
+  if (!isMultipleOf(beat, pulse)) {
     return 0;
   }
   const pulses = pulseCountOf(ts);

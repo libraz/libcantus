@@ -3,12 +3,10 @@
 #include "generate/drums/vocabulary.h"
 
 #include <any>
-#include <array>
 #include <string_view>
 #include <variant>
 
 #include "cantus/core/validation.h"
-#include "cantus/theory/chord.h"
 #include "core/validation/validation.h"
 #include "generate/context/context.h"
 #include "generate/vocabulary/limits.gen.h"
@@ -54,17 +52,7 @@ std::vector<DrumVocabulary> make_drum_patterns() {
   std::vector<DrumVocabulary> out;
   for (const PatternRecord& row : rows) {
     DrumVocabulary entry;
-    entry.id = std::string(row.id);
-    entry.genre = *parse_genre(row.genre);
-    entry.difficulty = row.difficulty;
-    for (std::string_view name : row.articulations) {
-      entry.articulations.push_back(*parse_articulation(name));
-    }
-    entry.ts = row.ts.value;
-    if (row.tempoRange.value) {
-      const std::vector<double>& band = *row.tempoRange.value;
-      entry.tempoRange = std::array<double, 2>{band[0], band[1]};
-    }
+    read_vocabulary_row(row, entry);
     entry.material.steps = row.material.steps;
     for (const StrokeRecord& record : row.material.strokes) {
       DrumStroke stroke;
@@ -79,20 +67,6 @@ std::vector<DrumVocabulary> make_drum_patterns() {
         stroke.limb = *parse_limb(*record.limb);
       }
       entry.material.strokes.push_back(stroke);
-    }
-    entry.provenance.basis = *parse_provenance_basis(row.provenance.basis);
-    entry.provenance.note = std::string(row.provenance.note);
-    if (row.sections.value) {
-      entry.sections.emplace();
-      for (std::string_view name : *row.sections.value) {
-        entry.sections->push_back(*parse_section(name));
-      }
-    }
-    if (row.fitsOver.value) {
-      entry.fitsOver.emplace();
-      for (std::string_view name : *row.fitsOver.value) {
-        entry.fitsOver->push_back(*parse_chord_quality(name));
-      }
     }
     out.push_back(std::move(entry));
   }

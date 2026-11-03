@@ -144,12 +144,9 @@ Key Key::parse(std::string_view text, const NoteNameOptions& opts) {
 }
 
 ParseResult<Key> Key::try_parse(std::string_view text, const NoteNameOptions& opts) {
-  ParseResult<ResolvedKey> parsed = try_resolve_key_name(text, opts);
-  if (!parsed.ok()) {
-    return parse_failure_of<Key>(std::move(parsed));
-  }
-  const ResolvedKey& key = parsed.value();
-  return ParseResult<Key>::success(Key(key.scale, Note(key.tonic), key.variant));
+  return map_parse<Key>(try_resolve_key_name(text, opts), [](const ResolvedKey& key) {
+    return Key(key.scale, Note(key.tonic), key.variant);
+  });
 }
 
 Key Key::from_fifths(double fifths, KeyMode mode) {

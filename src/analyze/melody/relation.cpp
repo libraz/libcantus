@@ -11,6 +11,7 @@
 #include "analyze/adjacency.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/pitch.h"
+#include "core/validation/validation.h"
 #include "js/format.h"
 #include "js/math.h"
 #include "js/number.h"
@@ -154,20 +155,11 @@ std::string_view to_string(MotifRelationKind kind) {
 }
 
 std::optional<MotifRelationKind> parse_motif_relation_kind(std::string_view name) {
-  for (std::size_t i = 0; i < kKindNames.size(); ++i) {
-    if (kKindNames[i] == name) {
-      return static_cast<MotifRelationKind>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<MotifRelationKind>(kKindNames, name);
 }
 
 std::vector<MotifRelationKind> motif_relation_kinds() {
-  std::vector<MotifRelationKind> kinds;
-  for (std::size_t i = 0; i < kKindNames.size(); ++i) {
-    kinds.push_back(static_cast<MotifRelationKind>(i));
-  }
-  return kinds;
+  return enumerators_of<MotifRelationKind>(kKindNames);
 }
 
 Nullable<MotifRelation> relate_lines(const std::vector<LineNote>& model,

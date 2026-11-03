@@ -229,12 +229,7 @@ std::string_view to_string(MidiSpelling spelling) {
 }
 
 std::optional<MidiSpelling> parse_midi_spelling(std::string_view name) {
-  for (std::size_t i = 0; i < kSpellings.size(); ++i) {
-    if (kSpellings[i].name == name) {
-      return static_cast<MidiSpelling>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<MidiSpelling>(kSpellings, name, &SpellingRow::name);
 }
 
 ParseResult<NoteData> try_parse_note(std::string_view text, const NoteNameOptions& opts) {

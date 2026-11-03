@@ -19,6 +19,7 @@ import {
   pulseBeats,
   resolveMeters,
 } from '../../core/meter/index.js';
+import { isMultipleOf } from '../../core/meter/internal.js';
 import type { NoteEvent } from '../../core/types.js';
 import {
   assertGenerationBudget,
@@ -34,7 +35,7 @@ import {
   resolveSpanEnd,
 } from '../form/internal.js';
 import { barGridStart, latestSoundingEnd } from '../grid.js';
-import { ioiBinIndex, isMultipleOf, rhythmLevel } from './internal.js';
+import { ioiBinIndex, rhythmLevel } from './internal.js';
 
 /**
  * Options for {@link analyzeRhythm}.

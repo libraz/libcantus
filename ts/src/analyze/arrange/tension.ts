@@ -6,11 +6,9 @@
  */
 
 import type { MeterMap } from '../../core/meter/index.js';
-import { isStrongBeat, resolveMeters } from '../../core/meter/index.js';
+import { isStrongBeat } from '../../core/meter/index.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
-import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
-  assertArray,
   assertGenerationBudget,
   assertInteger,
   assertRange,
@@ -31,10 +29,9 @@ import {
 } from '../keys/index.js';
 import { type ChordTimeline, chordTimelineFromNotes, statedKeyRegions } from '../timeline/index.js';
 import {
-  arrangementProfile,
+  assertArrangementInput,
   assertGivenKeys,
   assertGivenTimeline,
-  assertTrackNotes,
   harmonyTrackSet,
   isPercussion,
   type PreparedTrack,
@@ -104,20 +101,8 @@ export function tensionCurve(
   tracks: ArrangementTrack[],
   opts: ArrangementOptions & { step?: number } = {},
 ): TensionPoint[] {
-  const meters = resolveMeters(opts, 'arrangement meters');
+  const { meters, profile } = assertArrangementInput(tracks, opts);
   const budget = opts.budget;
-  const noteOptions: NoteEventAssertOptions = { allowNonPositiveDuration: true, budget };
-  if (opts.pickupBeats !== undefined) {
-    assertRange(opts.pickupBeats, 0, Number.MAX_SAFE_INTEGER, 'arrangement pickupBeats');
-    noteOptions.minStartBeat = -opts.pickupBeats;
-  }
-  assertArray(tracks, 'arrangement tracks');
-  assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
-  const noteCount = assertTrackNotes(tracks, noteOptions);
-  // The pooled total is what the sampling and the inferred timeline size their
-  // work by, so it is checked here, under this layer's own name.
-  assertGenerationBudget(noteCount, 'arrangement notes', budget);
-  const profile = arrangementProfile(opts.profile);
   const step = opts.step ?? 1;
   assertRange(step, Number.MIN_VALUE, Number.MAX_SAFE_INTEGER, 'tension sampling step');
   // Read by no sampling this call makes, and checked all the same: the option is

@@ -111,21 +111,6 @@ std::vector<OtherVoice> as_other_voices(const std::vector<SoundingVoice>& voices
   return out;
 }
 
-/** Index of the first segment starting strictly after a beat (`firstSegmentAfter`). */
-std::size_t first_segment_after(const std::vector<SegmentSpan>& segments, double beat) {
-  std::size_t low = 0;
-  std::size_t high = segments.size();
-  while (low < high) {
-    std::size_t middle = (low + high) / 2;
-    if (segments[middle].startBeat <= beat + BEAT_EPS) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  return low;
-}
-
 /**
  * The beats at which a note must be checked against the harmony (`evaluationBeats`): its onset,
  * plus the onset of every later chord segment the note sustains across.
@@ -134,7 +119,8 @@ std::vector<double> evaluation_beats(const VoiceNote& note,
                                      const std::vector<SegmentSpan>& segments) {
   double note_end = note.startBeat + note.durationBeat;
   std::vector<double> beats = {note.startBeat};
-  for (std::size_t i = first_segment_after(segments, note.startBeat); i < segments.size(); ++i) {
+  std::size_t first = count_starting_at_or_before(segments, note.startBeat + BEAT_EPS);
+  for (std::size_t i = first; i < segments.size(); ++i) {
     double start = segments[i].startBeat;
     if (start >= note_end - BEAT_EPS) {
       break;
@@ -325,23 +311,11 @@ CallerKeys caller_keys(const TimelineHost& timeline, const std::optional<KeyArg>
 ArrangementRun analyze_arrangement_with(const std::vector<ArrangementTrack>& tracks,
                                         const ArrangementOptions& opts, TimelineEvidence* previous,
                                         const DirtySlots* dirty) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters = resolve_meters(meter_options, "arrangement meters");
+  ArrangementInput input = assert_arrangement_input(tracks, opts);
+  const MeterMap& meters = input.meters;
   std::optional<double> budget = opts.budget;
-  NoteEventAssertOptions note_options;
-  note_options.allowNonPositiveDuration = true;
-  note_options.budget = budget;
-  if (opts.pickupBeats) {
-    assert_range(*opts.pickupBeats, 0, kMaxSafeInteger, "arrangement pickupBeats");
-    note_options.minStartBeat = -*opts.pickupBeats;
-  }
-  assert_generation_budget(static_cast<double>(tracks.size()), "arrangement tracks", budget);
-  double note_count = assert_track_notes(tracks, note_options);
-  // The pooled total is what the downstream timeline analysis actually sizes its work by.
-  assert_generation_budget(note_count, "arrangement notes", budget);
-  SafetyProfile profile = arrangement_profile(opts.profile);
+  double note_count = input.noteCount;
+  SafetyProfile profile = input.profile;
   // A severity outside the scale narrows the report to nothing, which reads exactly like a clean
   // arrangement.
   double min_severity = opts.minSeverity

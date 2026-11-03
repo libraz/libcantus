@@ -295,12 +295,7 @@ std::string_view to_string(PhraseSignal signal) {
 }
 
 std::optional<PhraseSignal> parse_phrase_signal(std::string_view name) {
-  for (std::size_t i = 0; i < kSignalNames.size(); ++i) {
-    if (kSignalNames[i] == name) {
-      return static_cast<PhraseSignal>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<PhraseSignal>(kSignalNames, name);
 }
 
 std::string describe_cadence_text(const std::string& type,
@@ -392,10 +387,7 @@ BoundaryCadences boundary_cadences(const ChordTimeline& timeline, const KeyConte
 
 PhraseReading phrases_over(const PhraseSource& source, const std::vector<NoteEvent>& notes,
                            const PhraseOptions& opts) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters_map = resolve_meters(meter_options, "phrase meters");
+  MeterMap meters_map = resolve_meters({opts.ts, opts.meters}, "phrase meters");
   const MeterArg meters(meters_map);
   NoteEventAssertOptions note_options;
   note_options.allowNonPositiveDuration = true;

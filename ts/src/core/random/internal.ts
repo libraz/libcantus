@@ -15,7 +15,7 @@
  */
 
 import { InvalidInputError } from '../errors/index.js';
-import { assertFiniteNumber } from '../validation/index.js';
+import { assertFiniteNumber, assertInteger } from '../validation/index.js';
 
 /** Number of distinct values a 32-bit word takes; the divisor for a unit float. */
 export const UINT32_RANGE = 4294967296;
@@ -162,4 +162,37 @@ export function scaleUnitDraw(unit: number, lo: number, hi: number): number {
   const bits = stepBytes.getBigUint64(0);
   stepBytes.setBigUint64(0, hi > 0 ? bits - 1n : bits + 1n);
   return stepBytes.getFloat64(0);
+}
+
+/**
+ * The checks an integer draw in `[lo, hi]` makes before it draws, so a
+ * rejected call consumes nothing.
+ */
+export function assertRangeBounds(lo: number, hi: number): void {
+  assertInteger(lo, 'range lower bound');
+  assertInteger(hi, 'range upper bound');
+  if (lo > hi) {
+    throw new InvalidInputError(
+      `range lower bound must not exceed upper bound; received ${lo} > ${hi}`,
+    );
+  }
+  // The span scales the draw, so one that is not an exact safe integer would be
+  // sampled at reduced precision and could land outside [lo, hi].
+  assertInteger(hi - lo, 'range span', 0);
+}
+
+/**
+ * The checks a float draw in `[lo, hi)` makes before it draws, so a rejected
+ * call consumes nothing.
+ */
+export function assertFloatBounds(lo: number, hi: number): void {
+  assertFiniteNumber(lo, 'float lower bound');
+  assertFiniteNumber(hi, 'float upper bound');
+  if (lo > hi) {
+    throw new InvalidInputError(
+      `float lower bound must not exceed upper bound; received ${lo} > ${hi}`,
+    );
+  }
+  // The span scales the draw, so one that is not finite would sample outside [lo, hi).
+  assertFiniteNumber(hi - lo, 'float span');
 }

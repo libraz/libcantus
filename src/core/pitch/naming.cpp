@@ -585,12 +585,7 @@ std::string_view to_string(NoteNameSystem system) {
 }
 
 std::optional<NoteNameSystem> parse_note_name_system(std::string_view name) {
-  for (std::size_t i = 0; i < kNoteNameSystemNames.size(); ++i) {
-    if (kNoteNameSystemNames[i] == name) {
-      return static_cast<NoteNameSystem>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<NoteNameSystem>(kNoteNameSystemNames, name);
 }
 
 std::string_view to_string(KeyNameMode mode) {

@@ -1,9 +1,10 @@
-import { isMultipleOf } from '../../analyze/rhythm/internal.js';
+import { firstSoundingBeat } from '../../analyze/form/internal.js';
 import { assertChordTimeline, type ChordTimeline } from '../../analyze/timeline/index.js';
 import { InvalidInputError } from '../../core/errors/index.js';
 import { inCanonicalOrder } from '../../core/event-index/order.js';
 import type { MeterLike } from '../../core/meter/index.js';
 import { beatsPerBar, DEFAULT_TS, meterAt, toMeterData } from '../../core/meter/index.js';
+import { isMultipleOf } from '../../core/meter/internal.js';
 import { pitchClassOf as pitchClass } from '../../core/pitch/index.js';
 import type { KeyScale, NoteEvent } from '../../core/types.js';
 import {
@@ -197,15 +198,6 @@ function developedPitch(
   return pitch;
 }
 
-/** Earliest onset in a cell; the time origin for timing transforms. */
-function cellOrigin(notes: MotifNote[]): number {
-  let origin = Number.POSITIVE_INFINITY;
-  for (const note of notes) {
-    origin = Math.min(origin, note.startBeat);
-  }
-  return Number.isFinite(origin) ? origin : 0;
-}
-
 /** Latest offset in a cell, without spreading an unbounded caller array. */
 function cellEnd(notes: MotifNote[]): number {
   let end = Number.NEGATIVE_INFINITY;
@@ -227,7 +219,7 @@ export function cellSpan(cell: MotifCell): number {
   if (cell.notes.length === 0) {
     return 0;
   }
-  const start = cellOrigin(cell.notes);
+  const start = firstSoundingBeat(cell.notes);
   const end = cellEnd(cell.notes);
   return end - start;
 }
@@ -524,7 +516,7 @@ function transformUnchecked(
       if (notes.length === 0) {
         return { notes: [] };
       }
-      const start = cellOrigin(notes);
+      const start = firstSoundingBeat(notes);
       const end = cellEnd(notes);
       return {
         notes: notes.map((n) => ({
@@ -552,7 +544,7 @@ function transformUnchecked(
 
 /** Scale a cell's timing about its origin by `factor`. */
 function scaleTime(cell: MotifCell, factor: number): MotifCell {
-  const origin = cellOrigin(cell.notes);
+  const origin = firstSoundingBeat(cell.notes);
   return {
     notes: cell.notes.map((n) => ({
       pitch: n.pitch,
@@ -611,7 +603,7 @@ export function developMotif(
   const span = cellSpan(cell);
   const barBeats = beatsPerBar(meter);
   const totalBeats = bars * barBeats;
-  const origin = cellOrigin(cellNotes);
+  const origin = firstSoundingBeat(cellNotes);
   const out: MotifNote[] = [];
 
   if (span <= 0) {

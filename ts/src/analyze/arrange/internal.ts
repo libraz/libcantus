@@ -5,22 +5,32 @@
  */
 
 import { InvalidInputError } from '../../core/errors/index.js';
+import { type MeterMap, resolveMeters } from '../../core/meter/index.js';
 import type { NoteEvent } from '../../core/types.js';
 import type { NoteEventAssertOptions } from '../../core/validation/index.js';
 import {
   assertArray,
   assertFiniteNumber,
+  assertGenerationBudget,
   assertNoteEvents,
   assertOneOf,
+  assertRange,
   describeRejected,
 } from '../../core/validation/index.js';
 import { PROFILE_WEIGHTS, type SafetyProfile } from '../../theory/safety/index.js';
 import { resolveKey } from '../../theory/scale/index.js';
-import { adjacent, BEAT_EPS, hasEnded, sameInstant, withinBeats } from '../adjacency.js';
+import {
+  adjacent,
+  BEAT_EPS,
+  countStartingAtOrBefore,
+  hasEnded,
+  sameInstant,
+  withinBeats,
+} from '../adjacency.js';
 import type { KeyRegion } from '../keys/index.js';
 import { assertChordTimeline, assertSpansInOrder, type ChordTimeline } from '../timeline/index.js';
 import type { IdentifiedVoiceNote } from '../voice/index.js';
-import type { ArrangementTrack, TrackRole } from './tracks.js';
+import type { ArrangementOptions, ArrangementTrack, TrackRole } from './tracks.js';
 
 /**
  * Largest interval, in semitones, a sub-voice will span between consecutive
@@ -170,6 +180,35 @@ export function assertTrackNotes(
     noteCount += notes.length;
   }
   return noteCount;
+}
+
+/**
+ * The checks every analysis over arrangement tracks opens with, in this order:
+ * the meters, the pickup, the tracks and their notes, the budget, the profile.
+ *
+ * @param tracks The tracks as the caller passed them.
+ * @param opts The arrangement options.
+ * @returns The resolved meters, the pooled note count and the safety profile.
+ * @throws If any of them is malformed or over the budget.
+ */
+export function assertArrangementInput(
+  tracks: ArrangementTrack[],
+  opts: ArrangementOptions,
+): { meters: MeterMap; noteCount: number; profile: SafetyProfile } {
+  const meters = resolveMeters(opts, 'arrangement meters');
+  const budget = opts.budget;
+  const noteOptions: NoteEventAssertOptions = { allowNonPositiveDuration: true, budget };
+  if (opts.pickupBeats !== undefined) {
+    assertRange(opts.pickupBeats, 0, Number.MAX_SAFE_INTEGER, 'arrangement pickupBeats');
+    noteOptions.minStartBeat = -opts.pickupBeats;
+  }
+  assertArray(tracks, 'arrangement tracks');
+  assertGenerationBudget(tracks.length, 'arrangement tracks', budget);
+  const noteCount = assertTrackNotes(tracks, noteOptions);
+  // The pooled total is what the work downstream is sized by, so it is checked
+  // here, under this layer's own name.
+  assertGenerationBudget(noteCount, 'arrangement notes', budget);
+  return { meters, noteCount, profile: arrangementProfile(opts.profile) };
 }
 
 /**
@@ -491,21 +530,6 @@ function pairWithFreeLanes(
   return assignment;
 }
 
-/** Index of the last span starting at or before a beat, or -1. */
-function lastStartingAtOrBefore(sounding: PreparedNote[], beat: number): number {
-  let low = 0;
-  let high = sounding.length;
-  while (low < high) {
-    const middle = Math.floor((low + high) / 2);
-    if ((sounding[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat + BEAT_EPS) {
-      low = middle + 1;
-    } else {
-      high = middle;
-    }
-  }
-  return low - 1;
-}
-
 /**
  * Resolve each track's metadata and derive its monophonic sub-voices.
  *
@@ -549,7 +573,7 @@ export function prepareTracks(tracks: ArrangementTrack[]): PreparedTrack[] {
         voice,
         sounding,
         at: (beat: number) => {
-          const candidate = sounding[lastStartingAtOrBefore(sounding, beat)];
+          const candidate = sounding[countStartingAtOrBefore(sounding, beat + BEAT_EPS) - 1];
           return candidate !== undefined && covers(candidate, beat) ? candidate : undefined;
         },
       };

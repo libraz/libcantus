@@ -20,12 +20,7 @@ std::string_view to_string(KeyVariant variant) {
 }
 
 std::optional<KeyVariant> parse_key_variant(std::string_view name) {
-  for (std::size_t i = 0; i < kKeyVariantNames.size(); ++i) {
-    if (kKeyVariantNames[i] == name) {
-      return static_cast<KeyVariant>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<KeyVariant>(kKeyVariantNames, name);
 }
 
 int mask_from_offsets(const std::vector<double>& offsets) {

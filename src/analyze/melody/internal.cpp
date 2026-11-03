@@ -102,15 +102,8 @@ std::optional<std::vector<double>> rhythm_profile(const std::vector<double>& gap
 }
 
 bool same_numbers(const std::vector<double>& a, const std::vector<double>& b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (std::fabs(a[i] - b[i]) > BEAT_EPS) {
-      return false;
-    }
-  }
-  return true;
+  return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+                    [](double x, double y) { return !(std::fabs(x - y) > BEAT_EPS); });
 }
 
 double round_to(double value, int digits) {

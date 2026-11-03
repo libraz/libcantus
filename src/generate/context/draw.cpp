@@ -60,25 +60,14 @@ bool Draw::prob(double p, const SeedPath& path) const {
 }
 
 std::int64_t Draw::range(std::int64_t lo, std::int64_t hi, const SeedPath& path) const {
-  double low = assert_integer(static_cast<double>(lo), "range lower bound");
-  double high = assert_integer(static_cast<double>(hi), "range upper bound");
-  if (low > high) {
-    throw InvalidInputError("range lower bound must not exceed upper bound; received " +
-                            js::to_string(low) + " > " + js::to_string(high));
-  }
-  // A span that is not itself a safe integer would be sampled at reduced precision.
-  assert_integer(high - low, "range span", 0);
+  auto low = static_cast<double>(lo);
+  auto high = static_cast<double>(hi);
+  assert_range_bounds(low, high);
   return static_cast<std::int64_t>(low + std::floor(at(path) * (high - low + 1)));
 }
 
 double Draw::float_(double lo, double hi, const SeedPath& path) const {
-  assert_finite_number(lo, "float lower bound");
-  assert_finite_number(hi, "float upper bound");
-  if (lo > hi) {
-    throw InvalidInputError("float lower bound must not exceed upper bound; received " +
-                            js::to_string(lo) + " > " + js::to_string(hi));
-  }
-  assert_finite_number(hi - lo, "float span");
+  assert_float_bounds(lo, hi);
   return scale_unit_draw(at(path), lo, hi);
 }
 

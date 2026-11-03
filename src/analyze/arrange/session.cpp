@@ -41,15 +41,9 @@ std::string note_id(const NoteEvent& note) {
 }  // namespace
 
 bool same_order(const std::vector<NoteEvent>& before, const std::vector<NoteEvent>& after) {
-  if (before.size() != after.size()) {
-    return false;
-  }
-  for (std::size_t index = 0; index < before.size(); ++index) {
-    if (note_id(before[index]) != note_id(after[index])) {
-      return false;
-    }
-  }
-  return true;
+  return std::equal(
+      before.begin(), before.end(), after.begin(), after.end(),
+      [](const NoteEvent& a, const NoteEvent& b) { return note_id(a) == note_id(b); });
 }
 
 std::optional<EditedSpan> edited_span(const std::vector<NoteEvent>& before,

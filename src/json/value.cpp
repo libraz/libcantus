@@ -95,8 +95,7 @@ const Value* Object::find(std::string_view key) const {
 }
 
 Value* Object::find(std::string_view key) {
-  std::ptrdiff_t i = index_of(key);
-  return i < 0 ? nullptr : &members_[static_cast<std::size_t>(i)].value;
+  return const_cast<Value*>(std::as_const(*this).find(key));
 }
 
 std::size_t Object::index_position(std::uint32_t n) const {

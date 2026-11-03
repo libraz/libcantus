@@ -27,27 +27,7 @@ const TimeSignature kDefaultTs =
 
 std::string num(double x) { return js::to_string(x); }
 
-std::string join(const std::vector<int>& values, std::string_view separator) {
-  std::string out;
-  for (std::size_t i = 0; i < values.size(); ++i) {
-    if (i > 0) {
-      out += separator;
-    }
-    out += num(values[i]);
-  }
-  return out;
-}
-
 bool is_meter_map(const MeterData& data) { return std::holds_alternative<MeterMap>(data); }
-
-/** Whether `value` is a whole multiple of `unit`, within BEAT_EPS. */
-bool is_multiple(double value, double unit) {
-  if (unit == 0) {
-    return false;
-  }
-  double ratio = value / unit;
-  return std::fabs(ratio - js::round(ratio)) < BEAT_EPS;
-}
 
 bool is_ascii_digit(char16_t c) { return c >= u'0' && c <= u'9'; }
 
@@ -289,14 +269,14 @@ std::string format_time_signature(const MeterArg& ts, const FormatTimeSignatureO
   if (opts.grouping.value_or(false) && signature.grouping) {
     const std::vector<int>& grouping = *signature.grouping;
     if (grouping_sum_of(signature) == signature.numerator) {
-      return join(grouping, "+") + "/" + num(signature.denominator);
+      return js::join(grouping, "+") + "/" + num(signature.denominator);
     }
     // A grouping counted in pulses on a compound numerator has no additive spelling; where its
     // groups differ, the plain form would name a bar weighted differently.
     std::optional<std::vector<double>> pulse_grouping = pulse_grouping_of(signature);
     if (pulse_grouping && !is_uniform_grouping(*pulse_grouping)) {
       throw InvalidInputError("ts carries a grouping no signature text can spell: " +
-                              join(grouping, "+") + " counted in the pulses of " +
+                              js::join(grouping, "+") + " counted in the pulses of " +
                               num(signature.numerator) + "/" + num(signature.denominator) +
                               ". Format it without the grouping to name the bar it is written in.");
     }
@@ -415,7 +395,7 @@ int metric_weight(double beat_in_quarters, const MeterArg& meter) {
   const TimeSignature& ts = meter_at_checked(beat_in_quarters, resolved, index);
   double beat = beat_in_quarters - bar_start_checked(beat_in_quarters, resolved, index);
   double pulse = pulse_beats_of(ts);
-  if (!is_multiple(beat, pulse)) {
+  if (!is_multiple_of(beat, pulse)) {
     return 0;
   }
   double pulses = pulse_count_of(ts);

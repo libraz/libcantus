@@ -7,6 +7,9 @@
 #ifndef CANTUS_SRC_ANALYZE_ADJACENCY_H_
 #define CANTUS_SRC_ANALYZE_ADJACENCY_H_
 
+#include <cstddef>
+#include <vector>
+
 #include "cantus/core/limits.h"
 
 namespace cantus {
@@ -26,6 +29,25 @@ bool within_beats(double beat, double from, double to);
 
 /** A key under which beats within BEAT_EPS of one another collide (`beatKey`). */
 double beat_key(double beat);
+
+/**
+ * How many leading spans start at or before `beat`, by binary search over spans in start order
+ * (`countStartingAtOrBefore`).
+ */
+template <class Span>
+std::size_t count_starting_at_or_before(const std::vector<Span>& spans, double beat) {
+  std::size_t low = 0;
+  std::size_t high = spans.size();
+  while (low < high) {
+    std::size_t middle = (low + high) / 2;
+    if (spans[middle].startBeat <= beat) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
+}
 
 }  // namespace cantus
 

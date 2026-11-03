@@ -17,6 +17,7 @@
 #include "cantus/core/errors.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/validation.h"
+#include "core/meter/internal.h"
 #include "core/validation/validation.h"
 #include "js/math.h"
 #include "js/number.h"
@@ -270,10 +271,7 @@ RhythmAnalysis analyze_rhythm(const std::vector<NoteEvent>& notes,
 
 RhythmAnalysis rhythm_over(const std::vector<NoteEvent>& notes, const RhythmAnalysisOptions& opts,
                            std::optional<double> window_start) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters_map = resolve_meters(meter_options, "rhythm meters");
+  MeterMap meters_map = resolve_meters({opts.ts, opts.meters}, "rhythm meters");
   const MeterArg meters(meters_map);
   NoteEventAssertOptions note_options;
   note_options.allowNonPositiveDuration = true;

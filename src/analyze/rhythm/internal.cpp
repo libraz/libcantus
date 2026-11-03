@@ -2,21 +2,11 @@
 
 #include "analyze/rhythm/internal.h"
 
-#include <cmath>
-
-#include "analyze/adjacency.h"
 #include "cantus/core/limits.h"
+#include "core/meter/internal.h"
 #include "js/math.h"
 
 namespace cantus {
-
-bool is_multiple_of(double value, double unit) {
-  if (unit <= 0) {
-    return false;
-  }
-  double ratio = value / unit;
-  return std::fabs(ratio - js::round(ratio)) < BEAT_EPS;
-}
 
 int rhythm_level(double beat_in_quarters, const MeterArg& meters) {
   TimeSignature ts = meter_at(beat_in_quarters, meters);

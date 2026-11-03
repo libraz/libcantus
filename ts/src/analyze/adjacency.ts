@@ -100,3 +100,28 @@ export function withinBeats(beat: number, from: number, to: number): boolean {
 export function beatKey(beat: number): number {
   return Math.round(beat / BEAT_EPS);
 }
+
+/**
+ * How many leading spans start at or before `beat`, by binary search over
+ * spans in start order.
+ *
+ * @param spans Spans in start order.
+ * @param beat The beat to place.
+ * @returns The insertion point of `beat` after every span starting on it.
+ */
+export function countStartingAtOrBefore(
+  spans: readonly { startBeat: number }[],
+  beat: number,
+): number {
+  let low = 0;
+  let high = spans.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if ((spans[middle]?.startBeat ?? Number.POSITIVE_INFINITY) <= beat) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
+}

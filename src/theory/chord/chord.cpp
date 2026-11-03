@@ -183,12 +183,7 @@ std::string_view to_string(ChordToneRole role) {
 }
 
 std::optional<ChordToneRole> parse_chord_tone_role(std::string_view name) {
-  for (std::size_t i = 0; i < kDegreeByRole.size(); ++i) {
-    if (kDegreeByRole[i].name == name) {
-      return static_cast<ChordToneRole>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<ChordToneRole>(kDegreeByRole, name, &NamedInt::name);
 }
 
 std::vector<ChordQuality> chord_qualities() { return quality_order(); }

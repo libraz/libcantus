@@ -56,12 +56,7 @@ std::string_view to_string(HiddenParallelReading reading) {
 }
 
 std::optional<HiddenParallelReading> parse_hidden_parallel_reading(std::string_view name) {
-  for (std::size_t i = 0; i < std::size(kHiddenParallelReadings); ++i) {
-    if (kHiddenParallelReadings[i] == name) {
-      return static_cast<HiddenParallelReading>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<HiddenParallelReading>(kHiddenParallelReadings, name);
 }
 
 bool creates_voice_crossing(const PitchArg& upper, const PitchArg& lower) {

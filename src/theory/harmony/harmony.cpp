@@ -52,12 +52,7 @@ std::optional<HarmonyRole> parse_harmony_role(std::string_view name) {
 std::string_view to_string(LockLevel lock) { return kLockNames[static_cast<std::size_t>(lock)]; }
 
 std::optional<LockLevel> parse_lock_level(std::string_view name) {
-  for (std::size_t i = 0; i < kLockNames.size(); ++i) {
-    if (kLockNames[i] == name) {
-      return static_cast<LockLevel>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<LockLevel>(kLockNames, name);
 }
 
 VoicedRole role_of(double pitch, const ChordArg& chord, double chord_id) {

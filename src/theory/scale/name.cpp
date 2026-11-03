@@ -2,11 +2,11 @@
 
 #include "theory/scale/name.h"
 
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "core/errors/errors.h"
 #include "js/utf16.h"
 #include "theory/scale/masks.h"
 #include "theory/scale/scales.h"
@@ -91,21 +91,6 @@ std::optional<ResolvedKey> try_named_scale_key(std::string_view text) {
   return ResolvedKey{scale, bare_tonic(tonic.value()), variant_of_mask(scale.modeMask12)};
 }
 
-/** A failed parse of another type, as a failed key resolution. */
-template <class T>
-ParseResult<ResolvedKey> failure_of(ParseResult<T>&& parsed) {
-  try {
-    std::move(parsed).unwrap();
-  } catch (const InvalidInputError& e) {
-    return ParseResult<ResolvedKey>::failure(e);
-  } catch (const NoSolutionError& e) {
-    return ParseResult<ResolvedKey>::failure(e);
-  } catch (const BudgetExceededError& e) {
-    return ParseResult<ResolvedKey>::failure(e);
-  }
-  throw std::logic_error("failure_of: the parse succeeded");
-}
-
 }  // namespace
 
 std::optional<std::string_view> scale_name_of_mask(int mask) {
@@ -130,7 +115,7 @@ ParseResult<ResolvedKey> try_resolve_key_name(std::string_view text, const NoteN
   }
   ParseResult<KeyName> parsed = try_parse_key_name(text, opts);
   if (!parsed.ok()) {
-    return failure_of(std::move(parsed));
+    return parse_failure_of<ResolvedKey>(std::move(parsed));
   }
   NoteData tonic = bare_tonic(parsed.value().tonic);
   int root_pc = note_to_pitch_class(tonic);

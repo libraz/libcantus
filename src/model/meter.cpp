@@ -15,11 +15,8 @@ Meter Meter::of(int numerator, int denominator, std::optional<std::vector<int>> 
 Meter Meter::parse(std::string_view text) { return Meter(parse_time_signature(text)); }
 
 ParseResult<Meter> Meter::try_parse(std::string_view text) {
-  ParseResult<TimeSignature> parsed = try_parse_time_signature(text);
-  if (!parsed.ok()) {
-    return parse_failure_of<Meter>(std::move(parsed));
-  }
-  return ParseResult<Meter>::success(Meter(parsed.value()));
+  return map_parse<Meter>(try_parse_time_signature(text),
+                          [](const TimeSignature& data) { return Meter(data); });
 }
 
 Meter Meter::from_data(const TimeSignature& data) { return Meter(data); }

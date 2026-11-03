@@ -3,7 +3,6 @@
 #include "generate/bass/licks_data.h"
 
 #include <any>
-#include <array>
 #include <string_view>
 
 #include "cantus/core/validation.h"
@@ -53,17 +52,7 @@ std::vector<BassLick> make_bass_licks() {
   std::vector<BassLick> out;
   for (const LickRecord& row : rows) {
     BassLick entry;
-    entry.id = std::string(row.id);
-    entry.genre = *parse_genre(row.genre);
-    entry.difficulty = row.difficulty;
-    for (std::string_view name : row.articulations) {
-      entry.articulations.push_back(*parse_articulation(name));
-    }
-    entry.ts = row.ts.value;
-    if (row.tempoRange.value) {
-      const std::vector<double>& band = *row.tempoRange.value;
-      entry.tempoRange = std::array<double, 2>{band[0], band[1]};
-    }
+    read_vocabulary_row(row, entry);
     entry.material.lengthSteps = row.material.lengthSteps;
     for (const LickNoteRecord& record : row.material.notes) {
       LickNote note;
@@ -76,20 +65,6 @@ std::vector<BassLick> make_bass_licks() {
         note.articulation = *parse_articulation(*record.articulation);
       }
       entry.material.notes.push_back(note);
-    }
-    entry.provenance.basis = *parse_provenance_basis(row.provenance.basis);
-    entry.provenance.note = std::string(row.provenance.note);
-    if (row.sections.value) {
-      entry.sections.emplace();
-      for (std::string_view name : *row.sections.value) {
-        entry.sections->push_back(*parse_section(name));
-      }
-    }
-    if (row.fitsOver.value) {
-      entry.fitsOver.emplace();
-      for (std::string_view name : *row.fitsOver.value) {
-        entry.fitsOver->push_back(*parse_chord_quality(name));
-      }
     }
     out.push_back(std::move(entry));
   }

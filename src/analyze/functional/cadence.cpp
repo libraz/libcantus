@@ -11,6 +11,7 @@
 #include "analyze/functional/internal.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/pitch.h"
+#include "core/validation/validation.h"
 #include "theory/tendency/tendency.h"
 
 namespace cantus {
@@ -313,21 +314,10 @@ std::string_view to_string(CadenceType type) {
 }
 
 std::optional<CadenceType> parse_cadence_type(std::string_view name) {
-  for (std::size_t i = 0; i < kCadenceTypeNames.size(); ++i) {
-    if (kCadenceTypeNames[i] == name) {
-      return static_cast<CadenceType>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<CadenceType>(kCadenceTypeNames, name);
 }
 
-std::vector<CadenceType> cadence_types() {
-  std::vector<CadenceType> types;
-  for (std::size_t i = 0; i < kCadenceTypeNames.size(); ++i) {
-    types.push_back(static_cast<CadenceType>(i));
-  }
-  return types;
-}
+std::vector<CadenceType> cadence_types() { return enumerators_of<CadenceType>(kCadenceTypeNames); }
 
 std::string_view to_string(CadenceStrength strength) {
   return kStrengthNames[static_cast<std::size_t>(strength)];

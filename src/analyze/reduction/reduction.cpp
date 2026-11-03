@@ -12,6 +12,7 @@
 #include "analyze/functional/tonicization.h"
 #include "analyze/voice/voice.h"
 #include "cantus/core/pitch.h"
+#include "core/validation/validation.h"
 #include "js/math.h"
 #include "theory/tendency/tendency.h"
 
@@ -255,20 +256,11 @@ std::string_view to_string(ReductionLevel level) {
 }
 
 std::optional<ReductionLevel> parse_reduction_level(std::string_view name) {
-  for (std::size_t i = 0; i < std::size(kReductionLevelNames); ++i) {
-    if (kReductionLevelNames[i] == name) {
-      return static_cast<ReductionLevel>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<ReductionLevel>(kReductionLevelNames, name);
 }
 
 std::vector<ReductionLevel> reduction_levels() {
-  std::vector<ReductionLevel> out;
-  for (std::size_t i = 0; i < std::size(kReductionLevelNames); ++i) {
-    out.push_back(static_cast<ReductionLevel>(i));
-  }
-  return out;
+  return enumerators_of<ReductionLevel>(kReductionLevelNames);
 }
 
 std::string_view to_string(ReductionBasis basis) {
@@ -276,12 +268,7 @@ std::string_view to_string(ReductionBasis basis) {
 }
 
 std::optional<ReductionBasis> parse_reduction_basis(std::string_view name) {
-  for (std::size_t i = 0; i < std::size(kReductionBasisNames); ++i) {
-    if (kReductionBasisNames[i] == name) {
-      return static_cast<ReductionBasis>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<ReductionBasis>(kReductionBasisNames, name);
 }
 
 std::vector<ReductionVerdict> reduce_progression_over(const std::vector<SegmentSpan>& segments,

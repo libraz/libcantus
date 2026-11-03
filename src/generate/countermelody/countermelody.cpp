@@ -11,13 +11,13 @@
 #include <string>
 #include <utility>
 
-#include "analyze/rhythm/internal.h"
 #include "cantus/analyze/timeline.h"
 #include "cantus/core/errors.h"
 #include "cantus/core/event_index.h"
 #include "cantus/core/limits.h"
 #include "cantus/core/validation.h"
 #include "cantus/theory/counterpoint.h"
+#include "core/meter/internal.h"
 #include "core/validation/validation.h"
 #include "generate/context/context.h"
 #include "generate/countermelody/limits.gen.h"

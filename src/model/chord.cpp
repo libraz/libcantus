@@ -192,11 +192,8 @@ ChordValue ChordValue::parse(std::string_view symbol, const NoteNameOptions& opt
 
 ParseResult<ChordValue> ChordValue::try_parse(std::string_view symbol,
                                               const NoteNameOptions& opts) {
-  ParseResult<Chord> parsed = try_parse_chord_symbol(symbol, opts);
-  if (!parsed.ok()) {
-    return parse_failure_of<ChordValue>(std::move(parsed));
-  }
-  return ParseResult<ChordValue>::success(ChordValue(parsed.value()));
+  return map_parse<ChordValue>(try_parse_chord_symbol(symbol, opts),
+                               [](const Chord& data) { return ChordValue(data); });
 }
 
 std::vector<ChordValue> ChordValue::detect(const std::vector<int>& pitches,

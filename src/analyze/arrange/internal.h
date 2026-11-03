@@ -72,6 +72,21 @@ SafetyProfile arrangement_profile(const std::optional<SafetyProfile>& profile);
 double assert_track_notes(const std::vector<ArrangementTrack>& tracks,
                           const NoteEventAssertOptions& options);
 
+/** What assert_arrangement_input() resolves. */
+struct ArrangementInput {
+  MeterMap meters;
+  /** How many notes the tracks hold in total. */
+  double noteCount = 0;
+  SafetyProfile profile{};
+};
+
+/**
+ * The checks every analysis over arrangement tracks opens with, in TS order
+ * (`assertArrangementInput`).
+ */
+ArrangementInput assert_arrangement_input(const std::vector<ArrangementTrack>& tracks,
+                                          const ArrangementOptions& opts);
+
 /** Reject a caller's chord timeline whose segments lack finite bounds (`assertGivenTimeline`). */
 void assert_given_timeline(const std::optional<ChordTimeline>& timeline, std::string_view name);
 

@@ -9,9 +9,8 @@
  * rather than by call order, and the algorithm version the output is pinned to.
  */
 
-import { InvalidInputError } from '../errors/index.js';
-import { assertFiniteNumber, assertInteger, assertRange } from '../validation/index.js';
-import { scaleUnitDraw } from './internal.js';
+import { assertInteger, assertRange } from '../validation/index.js';
+import { assertFloatBounds, assertRangeBounds, scaleUnitDraw } from './internal.js';
 
 export type { PositionalRng } from './positional.js';
 export { createPositionalRng, includeAt } from './positional.js';
@@ -71,25 +70,11 @@ export function createRng(seed: number): Rng {
       return next() < p;
     },
     range: (lo, hi) => {
-      assertInteger(lo, 'range lower bound');
-      assertInteger(hi, 'range upper bound');
-      if (lo > hi) {
-        throw new InvalidInputError(
-          `range lower bound must not exceed upper bound; received ${lo} > ${hi}`,
-        );
-      }
-      assertInteger(hi - lo, 'range span', 0);
+      assertRangeBounds(lo, hi);
       return lo + Math.floor(next() * (hi - lo + 1));
     },
     float: (lo, hi) => {
-      assertFiniteNumber(lo, 'float lower bound');
-      assertFiniteNumber(hi, 'float upper bound');
-      if (lo > hi) {
-        throw new InvalidInputError(
-          `float lower bound must not exceed upper bound; received ${lo} > ${hi}`,
-        );
-      }
-      assertFiniteNumber(hi - lo, 'float span');
+      assertFloatBounds(lo, hi);
       return scaleUnitDraw(next(), lo, hi);
     },
   };

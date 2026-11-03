@@ -5,6 +5,7 @@
 #include <cstddef>
 
 #include "cantus/core/validation.h"
+#include "core/validation/validation.h"
 #include "js/number.h"
 
 namespace cantus {
@@ -14,12 +15,7 @@ std::string_view to_string(DrumVoice voice) {
 }
 
 std::optional<DrumVoice> parse_drum_voice(std::string_view name) {
-  for (std::size_t i = 0; i < kDrumNotes.size(); ++i) {
-    if (kDrumNotes[i].voice == name) {
-      return static_cast<DrumVoice>(i);
-    }
-  }
-  return std::nullopt;
+  return parse_named<DrumVoice>(kDrumNotes, name, &DrumNoteRow::voice);
 }
 
 int drum_note(DrumVoice voice) { return kDrumNotes[static_cast<std::size_t>(voice)].note; }

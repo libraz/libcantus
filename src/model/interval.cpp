@@ -58,11 +58,7 @@ Interval Interval::from_json(const IntervalArg& data) { return from_data(data); 
 Interval Interval::parse(std::string_view name) { return try_parse(name).unwrap(); }
 
 ParseResult<Interval> Interval::try_parse(std::string_view name) {
-  ParseResult<SpelledInterval> parsed = try_parse_interval(name);
-  if (!parsed.ok()) {
-    return parse_failure_of<Interval>(std::move(parsed));
-  }
-  return ParseResult<Interval>::success(from_data(parsed.value()));
+  return map_parse<Interval>(try_parse_interval(name), &Interval::from_data);
 }
 
 std::string Interval::name() const {

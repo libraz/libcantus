@@ -186,23 +186,10 @@ std::vector<TensionPoint> sample_tension(const std::vector<PreparedTrack>& prepa
 
 std::vector<TensionPoint> tension_curve(const std::vector<ArrangementTrack>& tracks,
                                         const TensionOptions& opts) {
-  ResolveMetersOptions meter_options;
-  meter_options.ts = opts.ts;
-  meter_options.meters = opts.meters;
-  MeterMap meters = resolve_meters(meter_options, "arrangement meters");
+  ArrangementInput input = assert_arrangement_input(tracks, opts);
+  const MeterMap& meters = input.meters;
   std::optional<double> budget = opts.budget;
-  NoteEventAssertOptions note_options;
-  note_options.allowNonPositiveDuration = true;
-  note_options.budget = budget;
-  if (opts.pickupBeats) {
-    assert_range(*opts.pickupBeats, 0, kMaxSafeInteger, "arrangement pickupBeats");
-    note_options.minStartBeat = -*opts.pickupBeats;
-  }
-  assert_generation_budget(static_cast<double>(tracks.size()), "arrangement tracks", budget);
-  double note_count = assert_track_notes(tracks, note_options);
-  // The pooled total is what the sampling and the inferred timeline size their work by.
-  assert_generation_budget(note_count, "arrangement notes", budget);
-  SafetyProfile profile = arrangement_profile(opts.profile);
+  SafetyProfile profile = input.profile;
   double step = opts.step.value_or(1);
   assert_range(step, kMinValue, kMaxSafeInteger, "tension sampling step");
   // Read by no sampling this call makes, and checked all the same.

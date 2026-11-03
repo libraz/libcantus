@@ -1,11 +1,9 @@
 import { InvalidInputError } from '../../core/errors/index.js';
 import { includeAt, type PositionalRng, type SeedPath } from '../../core/random/index.js';
-import { scaleUnitDraw } from '../../core/random/internal.js';
+import { assertFloatBounds, assertRangeBounds, scaleUnitDraw } from '../../core/random/internal.js';
 import {
   assertArray,
-  assertFiniteNumber,
   assertFunction,
-  assertInteger,
   assertRecord,
   describeRejected,
 } from '../../core/validation/index.js';
@@ -130,34 +128,14 @@ export function drawsFrom(rng: PositionalRng, ...prefix: SeedPath): Draw {
   return {
     at,
     prob: (p, ...path) => includeAt(rng, p, ...prefix, ...path),
+    // The bounds are checked as `Rng` checks them: the two samplers promise the
+    // same ranges and so reject the same arguments.
     range: (lo, hi, ...path) => {
-      assertInteger(lo, 'range lower bound');
-      assertInteger(hi, 'range upper bound');
-      if (lo > hi) {
-        throw new InvalidInputError(
-          `range lower bound must not exceed upper bound; received ${lo} > ${hi}`,
-        );
-      }
-      // The span is what the draw is scaled by, so a pair whose difference is
-      // not itself an exact safe integer would be sampled at reduced precision
-      // and could land outside [lo, hi]. `Rng.range` rejects such a pair; the
-      // two samplers promise the same inclusive range and so reject the same
-      // arguments.
-      assertInteger(hi - lo, 'range span', 0);
+      assertRangeBounds(lo, hi);
       return lo + Math.floor(at(...path) * (hi - lo + 1));
     },
     float: (lo, hi, ...path) => {
-      assertFiniteNumber(lo, 'float lower bound');
-      assertFiniteNumber(hi, 'float upper bound');
-      if (lo > hi) {
-        throw new InvalidInputError(
-          `float lower bound must not exceed upper bound; received ${lo} > ${hi}`,
-        );
-      }
-      // The span scales the draw, so a pair whose difference is not finite
-      // would sample outside [lo, hi). `Rng.float` rejects such a pair, and the
-      // two samplers promise the same range.
-      assertFiniteNumber(hi - lo, 'float span');
+      assertFloatBounds(lo, hi);
       return scaleUnitDraw(at(...path), lo, hi);
     },
   };

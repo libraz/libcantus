@@ -11,10 +11,14 @@
 #include <cstdint>
 #include <initializer_list>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
+#include "cantus/core/instrument.h"
 #include "cantus/generate/drums.h"
+#include "cantus/generate/vocabulary.h"
+#include "cantus/theory/chord.h"
 #include "generate/drums/limits.gen.h"
 
 namespace cantus {
@@ -37,6 +41,39 @@ struct SignatureSlot {
       : value(TimeSignature{numerator, denominator, std::nullopt}) {}
   std::optional<TimeSignature> value;
 };
+
+/**
+ * Read the fields every generated vocabulary row shares into `entry`, leaving the material to the
+ * caller; the names in the row are known to parse.
+ */
+template <class Row, class Material>
+void read_vocabulary_row(const Row& row, Vocabulary<Material>& entry) {
+  entry.id = std::string(row.id);
+  entry.genre = *parse_genre(row.genre);
+  entry.difficulty = row.difficulty;
+  for (std::string_view name : row.articulations) {
+    entry.articulations.push_back(*parse_articulation(name));
+  }
+  entry.ts = row.ts.value;
+  if (row.tempoRange.value) {
+    const std::vector<double>& band = *row.tempoRange.value;
+    entry.tempoRange = std::array<double, 2>{band[0], band[1]};
+  }
+  entry.provenance.basis = *parse_provenance_basis(row.provenance.basis);
+  entry.provenance.note = std::string(row.provenance.note);
+  if (row.sections.value) {
+    entry.sections.emplace();
+    for (std::string_view name : *row.sections.value) {
+      entry.sections->push_back(*parse_section(name));
+    }
+  }
+  if (row.fitsOver.value) {
+    entry.fitsOver.emplace();
+    for (std::string_view name : *row.fitsOver.value) {
+      entry.fitsOver->push_back(*parse_chord_quality(name));
+    }
+  }
+}
 
 /** General MIDI percussion note numbers used across the drum engine (`GM`). */
 struct GeneralMidiNotes {

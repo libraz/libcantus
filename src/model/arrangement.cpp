@@ -222,15 +222,8 @@ template <class T>
 bool same(const std::optional<T>& a, const std::optional<T>& b);
 template <class T>
 bool same(const std::vector<T>& a, const std::vector<T>& b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (!same(a[i], b[i])) {
-      return false;
-    }
-  }
-  return true;
+  return std::equal(a.begin(), a.end(), b.begin(), b.end(),
+                    [](const T& x, const T& y) { return same(x, y); });
 }
 template <class T>
 bool same(const std::optional<T>& a, const std::optional<T>& b) {

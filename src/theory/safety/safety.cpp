@@ -432,12 +432,7 @@ std::string_view to_string(SafetyProfile profile) {
 }
 
 std::optional<SafetyProfile> parse_safety_profile(std::string_view name) {
-  for (std::size_t index = 0; index < PROFILE_WEIGHTS.size(); ++index) {
-    if (PROFILE_WEIGHTS[index].name == name) {
-      return static_cast<SafetyProfile>(index);
-    }
-  }
-  return std::nullopt;
+  return parse_named<SafetyProfile>(PROFILE_WEIGHTS, name, &NamedProfileWeights::name);
 }
 
 namespace {
