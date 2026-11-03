@@ -226,27 +226,14 @@ export function realiseKickEntries(
 }
 
 /**
- * Build a section- and style-aware kick pattern.
+ * Build a section- and style-aware kick figure for one bar, with the dial
+ * setting each sounding slot enters at.
  *
  * @param section Current section.
  * @param style Internal drum style.
  * @param bar Bar index (drives variation for a few styles).
  * @param draw Position-addressed draws for the kick.
  * @param rhythmic Rhythmic dial in [0, 1].
- */
-export function getKickPattern(
-  section: SectionType,
-  style: DrumStyle,
-  bar: number,
-  draw: Draw,
-  rhythmic: number,
-): KickPattern {
-  return getKickEntries(section, style, bar, draw, rhythmic).map((entry) => entry !== undefined);
-}
-
-/**
- * {@link getKickPattern}, with the dial setting each sounding slot enters at.
- *
  * @returns The bar's slots on the sixteenth grid; see {@link KickEntries}.
  */
 export function getKickEntries(

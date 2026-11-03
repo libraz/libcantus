@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { resolveContext } from '../src/generate/context/index.js';
 import { selectFillType } from '../src/generate/drums/fills.js';
-import { getKickPattern } from '../src/generate/drums/kick.js';
+import { getKickEntries } from '../src/generate/drums/kick.js';
 
 /** Digest of every fill selection across the transition contexts. */
 function fillDigest(): string {
@@ -53,11 +53,13 @@ describe('the sixteenth kick grid', () => {
   const draw = resolveContext(3).part('drums');
 
   it('is sixteen steps wide', () => {
-    expect(getKickPattern('chorus', 'rock', 0, draw, 0.5)).toHaveLength(16);
+    expect(getKickEntries('chorus', 'rock', 0, draw, 0.5)).toHaveLength(16);
   });
 
   it('puts the eighth-note patterns on the even steps', () => {
-    const pattern = getKickPattern('a', 'standard', 0, draw, 0.5);
+    const pattern = getKickEntries('a', 'standard', 0, draw, 0.5).map(
+      (entry) => entry !== undefined,
+    );
     expect(pattern[0]).toBe(true);
     expect(pattern[8]).toBe(true);
     // Nothing lands on an odd sixteenth: the inherited figures are eighth-note

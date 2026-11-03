@@ -102,19 +102,6 @@ bool is_in_pre_chorus_lift(SectionType section, double bar, double section_bars,
   return bar >= section_bars - 2;
 }
 
-namespace {
-
-/** Whether each slot of a realised bar sounds. */
-KickPattern pattern_of(const KickEntries& entries) {
-  KickPattern pattern;
-  for (const std::optional<double>& entry : entries) {
-    pattern.push_back(entry.has_value());
-  }
-  return pattern;
-}
-
-}  // namespace
-
 KickEntries realise_kick_entries(const KickFigure& figure, SectionType section, double bar,
                                  const Draw& draw, double rhythmic) {
   KickEntries entries(static_cast<std::size_t>(KICK_STEPS));
@@ -149,11 +136,6 @@ KickEntries realise_kick_entries(const KickFigure& figure, SectionType section, 
     }
   }
   return entries;
-}
-
-KickPattern get_kick_pattern(SectionType section, DrumStyle style, double bar, const Draw& draw,
-                             double rhythmic) {
-  return pattern_of(get_kick_entries(section, style, bar, draw, rhythmic));
 }
 
 KickEntries get_kick_entries(SectionType section, DrumStyle style, double bar, const Draw& draw,

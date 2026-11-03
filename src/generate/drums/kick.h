@@ -28,11 +28,10 @@ bool is_in_pre_chorus_lift(SectionType section, double bar, double section_bars,
 KickEntries realise_kick_entries(const KickFigure& figure, SectionType section, double bar,
                                  const Draw& draw, double rhythmic);
 
-/** A section- and style-aware kick pattern for one bar (`getKickPattern`). */
-KickPattern get_kick_pattern(SectionType section, DrumStyle style, double bar, const Draw& draw,
-                             double rhythmic);
-
-/** get_kick_pattern(), with the dial setting each sounding slot enters at (`getKickEntries`). */
+/**
+ * A section- and style-aware kick figure for one bar, with the dial setting each sounding slot
+ * enters at (`getKickEntries`).
+ */
 KickEntries get_kick_entries(SectionType section, DrumStyle style, double bar, const Draw& draw,
                              double rhythmic);
 
