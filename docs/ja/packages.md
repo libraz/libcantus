@@ -7,7 +7,7 @@ libcantus は 1 つの仕様を持つ 1 つのライブラリで、呼び出し�
 | 面 | パッケージ | 入手先 | 動作環境 |
 | --- | --- | --- | --- |
 | 純 TypeScript | `@libraz/libcantus` | npm | Node.js 22 以降、ブラウザ、ワーカー |
-| WebAssembly | `@libraz/libcantus-wasm` | npm | Node.js 22 以降、ブラウザ（ES2022） |
+| WebAssembly | `@libraz/libcantus-wasm` | npm | Node.js 22 以降、ES2022 と WebAssembly の例外処理に対応したブラウザ |
 | Node ネイティブ | `@libraz/libcantus-node` | ソースからビルド。公開はしていません | Node.js 22 以降 |
 | Python | `libcantus` | PyPI | Python 3.10 以降 |
 | コマンドライン | `cantus` | GitHub のリリース資産 | macOS、Linux |

@@ -7,7 +7,7 @@ libcantus is one library with one specification and several ways to call it. Pur
 | Surface | Package | Installed from | Runs on |
 | --- | --- | --- | --- |
 | Pure TypeScript | `@libraz/libcantus` | npm | Node.js 22 or later, browsers, workers |
-| WebAssembly | `@libraz/libcantus-wasm` | npm | Node.js 22 or later, browsers (ES2022) |
+| WebAssembly | `@libraz/libcantus-wasm` | npm | Node.js 22 or later, browsers with ES2022 and WebAssembly exception handling |
 | Node native | `@libraz/libcantus-node` | Built from source; not published | Node.js 22 or later |
 | Python | `libcantus` | PyPI | Python 3.10 or later |
 | Command line | `cantus` | A release asset on GitHub | macOS, Linux |

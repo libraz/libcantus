@@ -14,7 +14,7 @@ Recover the harmony from MIDI note events and write new parts against it, in Nod
 
 ## Install
 
-Node.js 22 or later, or a browser.
+Node.js 22 or later, or a browser with WebAssembly exception handling (Chrome 95, Firefox 100, Safari 15.2 or later).
 
 ```sh
 yarn add @libraz/libcantus-wasm
