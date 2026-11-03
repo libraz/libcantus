@@ -40,15 +40,6 @@ void write_fields(const ReferenceMelody& v, FieldWriter& w) {
 
 namespace {
 
-/** `assertString`. */
-std::string assert_string(const json::Value& value, std::string_view name) {
-  if (!value.is_string()) {
-    throw InvalidInputError(std::string(name) + " must be a string; received " +
-                            describe_rejected(value));
-  }
-  return value.as_string();
-}
-
 /** The beats of a span, ordered (`assertFiniteNumber` twice, then `assertSpanOrder`). */
 void read_span(const json::Value& read, std::string_view name, double& start_beat,
                double& end_beat) {

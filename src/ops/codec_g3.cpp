@@ -66,15 +66,6 @@ namespace {
 /** Number of the highest index an array of `count` entries admits; 0 for none. */
 double last_index(std::size_t count) { return js::max(static_cast<double>(count) - 1, 0.0); }
 
-/** `assertString`. */
-std::string assert_string(const json::Value& value, std::string_view name) {
-  if (!value.is_string()) {
-    throw InvalidInputError(std::string(name) + " must be a string; received " +
-                            describe_rejected(value));
-  }
-  return value.as_string();
-}
-
 /** The beats of a span, ordered. */
 void read_span(const json::Value& read, std::string_view name, double& start_beat,
                double& end_beat) {

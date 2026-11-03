@@ -19,6 +19,7 @@ import {
   assertPositiveInt,
   assertRange,
   assertRecord,
+  assertString,
   assertTimeSignature,
   describeRejected,
 } from '../../core/validation/index.js';
@@ -55,14 +56,6 @@ import {
 
 /** Tolerance a mass distribution's shares may sum away from 1 by. */
 export const MASS_TOLERANCE = 1e-9;
-
-/** Require a string, before it is read as one. */
-function assertString(value: unknown, name: string): string {
-  if (typeof value !== 'string') {
-    throw new InvalidInputError(`${name} must be a string; received ${describeRejected(value)}`);
-  }
-  return value;
-}
 
 /**
  * Require `endBeat` not to precede `startBeat`, once both are already known

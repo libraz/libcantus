@@ -29,8 +29,6 @@ namespace cantus::ops {
 
 namespace {
 
-/** `Number.MIN_VALUE`. */
-
 /** The host of a reader run outside any call: the readers call no host function. */
 const CallContext kNoHost;
 

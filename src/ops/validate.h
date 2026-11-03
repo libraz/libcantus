@@ -137,6 +137,9 @@ std::vector<std::string_view> names_of(const std::vector<E>& values) {
   return names;
 }
 
+/** `assertString`: a string, before it is read as one. */
+std::string assert_string(const json::Value& value, std::string_view name);
+
 /** `assertPositiveInt` with a cap the library supplies. */
 double assert_positive_int(const json::Value& value, std::string_view name,
                            double max = DEFAULT_GENERATION_BUDGET);

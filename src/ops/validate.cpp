@@ -131,6 +131,14 @@ const json::Value& property_of(const json::Value& v, std::string_view key) {
   return get(v, key);
 }
 
+std::string assert_string(const json::Value& value, std::string_view name) {
+  if (!value.is_string()) {
+    throw InvalidInputError(std::string(name) + " must be a string; received " +
+                            describe_rejected(value));
+  }
+  return value.as_string();
+}
+
 double assert_finite_number(const json::Value& value, std::string_view name) {
   return cantus::assert_finite_number(number_or_reject(value, name), name);
 }

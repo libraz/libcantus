@@ -206,6 +206,14 @@ export function assertArray<T>(value: unknown, name: string): readonly T[] {
   return value as readonly T[];
 }
 
+/** Require a string, before it is read as one. */
+export function assertString(value: unknown, name: string): string {
+  if (typeof value !== 'string') {
+    throw new InvalidInputError(`${name} must be a string; received ${describeRejected(value)}`);
+  }
+  return value;
+}
+
 /**
  * Require a value to be an object before any field is read off it.
  *
