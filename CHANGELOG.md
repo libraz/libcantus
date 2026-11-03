@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The WebAssembly module is a third smaller and about twice as fast.**
+  `@libraz/libcantus-wasm` now uses native WebAssembly exception handling, and
+  its argument-conversion layer is optimized for size while the music-theory
+  core keeps full speed optimization: `cantus.wasm` is 3.3 MB (1.18 MB gzip),
+  down from 4.8 MB (1.48 MB gzip). The module needs an engine with WebAssembly
+  exception handling: Node 17, Chrome 95, Firefox 100 or Safari 15.2 and later.
+  The package already required Node 22.
+
 ## [1.4.0] - 2026-11-01
 
 ### Added
