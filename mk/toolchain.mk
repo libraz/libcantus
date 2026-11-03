@@ -2,6 +2,10 @@
 
 # Emscripten SDK for the WebAssembly build.
 EMSDK_VERSION := 6.0.3
+# Recipe line refusing an emcc of another release, whose module differs from the shipped one even
+# when it builds: $(call EMSDK_CHECK,$(EMCC)).
+EMSDK_CHECK = @$(1) --version | head -1 | grep -qF ') $(EMSDK_VERSION) (' || \
+  { echo "$(1) is not emscripten $(EMSDK_VERSION): $$($(1) --version | head -1)" >&2; exit 1; }
 
 # LLVM release whose clang-tidy and clang-format the checks are written against. On macOS
 # clang-tidy reads that release's own libc++ headers: the SDK's can be newer than it parses.

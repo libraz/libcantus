@@ -5,6 +5,7 @@ CANTUS_TARGETS += wasm test-wasm
 
 WASM_BUILD_DIR ?= build-wasm
 EMCMAKE ?= emcmake
+EMCC ?= emcc
 VITEST ?= node_modules/.bin/vitest
 # emscripten's launcher takes the first python3 on PATH, which may be a shim or one too old;
 # hand it the interpreter python3 resolves to. emsdk sets this itself.
@@ -16,6 +17,7 @@ WASM_FIXTURES = $(sort $(wildcard tests/corpus/fixtures/*.jsonl))
 # The copied declarations are pure TS's build output. bindings/node/node.mk needs the same rule;
 # whichever fragment is read first defines it.
 wasm: $(PURE_DTS)
+	$(call EMSDK_CHECK,$(EMCC))
 	$(NICE) $(EMCMAKE) $(CMAKE) -S . -B $(WASM_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
 	  -DCANTUS_BUILD_TESTS=OFF -DCANTUS_BUILD_CLI=OFF
 	$(NICE) $(CMAKE) --build $(WASM_BUILD_DIR) --target cantus_wasm -j $(JOBS)
