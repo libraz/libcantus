@@ -138,7 +138,7 @@ make examples      # examples/ の例をビルドして実行する（ブラウ�
 ## 関連プロジェクト
 
 - **[libsonare](https://github.com/libraz/libsonare)** — libcantus の下にある音声の層です。音声解析、マスタリング、合成、Standard MIDI File の入出力を C++、Python、Node.js、WebAssembly から使えます（[libsonare.libraz.net](https://libsonare.libraz.net/ja/)）。両者はコードを共有せず、どちらも相手を必要としません。
-- **[sonare studio](https://sonare-studio.libraz.net)** — ブラウザで動く DAW で、音楽理論と作曲機能は `@libraz/libcantus`、音声処理は libsonare で動いています。ホスト済みのライブデモで、製品ではありません。
+- **[sonare studio](https://sonare-studio.libraz.net)** — ブラウザで動く DAW で、音楽理論と作曲機能は `@libraz/libcantus`、音声処理は libsonare で動いています。ホスト済みのライブデモで、製品ではありません。ソース: [libraz/sonare-studio](https://github.com/libraz/sonare-studio)。
 - **[midi-sketch](https://github.com/libraz/midi-sketch)** — `@libraz/libcantus` を使った、ルールベースのポップス向け MIDI ジェネレーターです。
 
 ## ドキュメント
