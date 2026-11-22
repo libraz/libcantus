@@ -1,3 +1,5 @@
 [tools]
+# node: held on 22. The C++ core ports Node 22's V8 Math.pow/exp/log2 (src/js/ieee754.cpp), and
+# the corpus and generated tables are recorded from TS on this major; Node 26 rounds ** differently.
 node = "22.23.5"
 yarn = "4.19.0"
