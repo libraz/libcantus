@@ -135,6 +135,12 @@ make examples      # build and run the examples in examples/ (not the browser on
 
 The toolchain pins and every check a change runs through are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Related projects
+
+- **[libsonare](https://github.com/libraz/libsonare)** — the audio layer below libcantus: analysis, mastering, synthesis and Standard MIDI File I/O for C++, Python, Node.js and WebAssembly ([libsonare.libraz.net](https://libsonare.libraz.net)). The two share no code and neither requires the other.
+- **[sonare studio](https://sonare-studio.libraz.net)** — a browser-based DAW whose music theory and composition features come from `@libraz/libcantus` and whose audio runs on libsonare. A hosted live demo, not a production product (source not public).
+- **[midi-sketch](https://github.com/libraz/midi-sketch)** — a rule-based pop MIDI generator built on `@libraz/libcantus`.
+
 ## Documentation
 
 The documentation is Markdown in [`docs/en/`](docs/en/introduction.md), with the same pages in Japanese under [`docs/ja/`](docs/ja/introduction.md); the symbol reference is generated at [libraz.github.io/libcantus](https://libraz.github.io/libcantus/).
