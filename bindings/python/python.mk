@@ -8,7 +8,7 @@ PY_DIR = bindings/python
 PY_VENV = $(PY_DIR)/.venv
 PY_BIN = $(CURDIR)/$(PY_VENV)/bin
 PY_STAMP = $(PY_VENV)/.synced
-RYE ?= rye
+UV ?= uv
 
 # libcantus.{so,dylib} (cantus_shared) in its own tree, which the binding finds without help.
 build-shared:
@@ -17,13 +17,15 @@ build-shared:
 	  -DCMAKE_OSX_DEPLOYMENT_TARGET=$(MACOS_DEPLOYMENT_TARGET)
 	$(NICE) $(CMAKE) --build $(SHARED_DIR) --target cantus_shared -j $(JOBS)
 
-# The environment with the dev dependencies of pyproject.toml: rye when installed, else venv + pip.
-$(PY_STAMP): $(PY_DIR)/pyproject.toml
-	if command -v $(RYE) >/dev/null 2>&1; then \
-	  (cd $(PY_DIR) && $(RYE) sync --quiet); \
+# The environment with the dev group of pyproject.toml: uv.lock through uv when installed, else
+# venv + pip resolving the same group unlocked.
+$(PY_STAMP): $(PY_DIR)/pyproject.toml $(PY_DIR)/uv.lock
+	if command -v $(UV) >/dev/null 2>&1; then \
+	  (cd $(PY_DIR) && $(UV) sync --locked --quiet); \
 	else \
 	  $(PYTHON) -m venv $(PY_VENV) && \
-	  $(PY_BIN)/python -m pip install --quiet -e $(PY_DIR) pytest ruff mypy hatchling; \
+	  $(PY_BIN)/python -m pip install --quiet --upgrade pip && \
+	  $(PY_BIN)/python -m pip install --quiet -e $(PY_DIR) --group $(PY_DIR)/pyproject.toml:dev; \
 	fi
 	touch $(PY_STAMP)
 

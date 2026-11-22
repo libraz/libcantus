@@ -8,6 +8,10 @@
     { "file": "bindings/node/package.json", "pattern": "^  \"version\": \"([^\"]+)\"" },
     { "file": "bindings/python/pyproject.toml", "pattern": "^version = \"([^\"]+)\"" },
     {
+      "file": "bindings/python/uv.lock",
+      "pattern": "^name = \"libcantus\"\\nversion = \"([^\"]+)\"$"
+    },
+    {
       "file": "include/cantus/version.h",
       "pattern": "^#define CANTUS_VERSION_STRING \"([^\"]+)\""
     },

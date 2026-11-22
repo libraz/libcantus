@@ -125,6 +125,10 @@ jobs:
         with:
           python-version-file: bindings/python/.python-version
 
+      # make test-python syncs the binding's environment from uv.lock when uv is on PATH.
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10
+
       # Pinned to the versions the local format and lint run, not whatever the image's apt carries.
       - name: Install the C++ format and lint tools
         if: matrix.gate

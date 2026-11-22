@@ -15,9 +15,8 @@ classifiers = [
   "Typing :: Typed",
 ]
 
-[tool.rye]
-managed = true
-dev-dependencies = [
+[dependency-groups]
+dev = [
   "pytest>=8",
   "ruff>=0.6",
   "mypy>=1.11",
