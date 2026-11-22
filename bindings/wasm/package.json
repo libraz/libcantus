@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus-wasm",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Detect chords, keys, Roman numerals and cadences in MIDI note events with the libcantus C++ core in WebAssembly. Same API and types as @libraz/libcantus; ESM only.",
   "type": "module",
   "license": "Apache-2.0",

@@ -1,6 +1,6 @@
 {
   "name": "@libraz/libcantus",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "Detect chords, keys, Roman numerals and cadences in MIDI note events, and generate parts against that harmony. Pure-TypeScript music theory, zero dependencies.",
   "type": "module",
   "license": "Apache-2.0",

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "libcantus"
-version = "1.4.2"
+version = "1.4.3"
 description = "Detect chords, keys, Roman numerals and cadences in MIDI note events from Python, and generate parts against that harmony. Binding of the libcantus C++ core."
 readme = "README.md"
 license = "Apache-2.0"
