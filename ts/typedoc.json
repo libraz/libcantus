@@ -28,6 +28,7 @@
   "plugin": ["@libraz/typedoc-theme", "typedoc-plugin-mdn-links", "typedoc-plugin-extras"],
   "theme": "libraz",
   "footerDate": true,
+  "customDescription": "TypeScript music theory library for MIDI note events: detect chords, keys, Roman numerals and cadences, then generate parts. API reference for each export.",
   "footerTypedocVersion": false,
   "validation": {
     "notExported": false,
