@@ -5,15 +5,40 @@ build-backend = "hatchling.build"
 [project]
 name = "libcantus"
 version = "1.4.2"
-description = "Music-theory analysis and generation: Python binding of the libcantus C++ core."
+description = "Detect chords, keys, Roman numerals and cadences in MIDI note events from Python, and generate parts against that harmony. Binding of the libcantus C++ core."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.10"
+keywords = [
+  "music-theory",
+  "music",
+  "midi",
+  "chords",
+  "chord-detection",
+  "key-detection",
+  "harmonic-analysis",
+  "roman-numeral-analysis",
+  "cadence",
+  "chord-progression",
+  "voice-leading",
+  "counterpoint",
+  "scales",
+  "reharmonization",
+  "generative-music",
+]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio :: MIDI",
   "Typing :: Typed",
 ]
+
+[project.urls]
+Homepage = "https://github.com/libraz/libcantus"
+Documentation = "https://github.com/libraz/libcantus/blob/main/docs/en/python.md"
+Repository = "https://github.com/libraz/libcantus"
+Changelog = "https://github.com/libraz/libcantus/blob/main/CHANGELOG.md"
+Issues = "https://github.com/libraz/libcantus/issues"
 
 [dependency-groups]
 dev = [

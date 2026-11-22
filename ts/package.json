@@ -1,7 +1,7 @@
 {
   "name": "@libraz/libcantus",
   "version": "1.4.2",
-  "description": "Pure-TypeScript music theory engine: harmonic analysis, chord and scale vocabulary, voicing, reharmonization, and seeded part generation over MIDI note events.",
+  "description": "Detect chords, keys, Roman numerals and cadences in MIDI note events, and generate parts against that harmony. Pure-TypeScript music theory, zero dependencies.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "libraz",
@@ -26,7 +26,15 @@
     "voicing",
     "reharmonization",
     "arrangement",
-    "generative-music"
+    "generative-music",
+    "harmonic-analysis",
+    "key-detection",
+    "roman-numeral-analysis",
+    "cadence",
+    "chord-progression",
+    "voice-leading",
+    "counterpoint",
+    "typescript"
   ],
   "engines": {
     "node": ">=22"
