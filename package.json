@@ -16,11 +16,11 @@
     "corpus": "CANTUS_IMPL=facade-ts CANTUS_RECORD=1 nice -n 10 vitest run -c tests/spec/vitest.config.ts --maxWorkers=2 && node tools/corpus/merge.mjs"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
+    "@biomejs/biome": "2.6.8",
     "cmake-js": "^8.0.0",
     "esbuild": "0.28.2",
     "node-addon-api": "^8.9.2",
-    "vite": "8.3.5",
-    "vitest": "5.1.0"
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
   }
 }
