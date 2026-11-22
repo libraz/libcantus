@@ -27,6 +27,7 @@
 #include "core/validation/validation.h"
 #include "js/math.h"
 #include "js/number.h"
+#include "theory/chord/chord.h"
 
 namespace cantus {
 
@@ -359,7 +360,19 @@ std::optional<WindowChord> analyze_window(const std::vector<NoteEvent>& all,
     }
   }
   if (best_match == nullptr) {
-    return std::nullopt;
+    // A lone pitch class names no chord of its own, but where the harmony arrives on it the key
+    // says which: a melody ending on its tonic after the dominant.
+    std::optional<Chord> triad =
+        ranked.size() == 1 ? triad_on_scale_tone(ranked[0].pc, scale) : std::nullopt;
+    if (!triad) {
+      return std::nullopt;
+    }
+    WindowChord lone;
+    lone.confidence = chord_confidence(*triad, weights, window.totalWeight, false);
+    lone.chord = std::move(*triad);
+    lone.object = std::make_shared<const char>('k');
+    lone.fromKey = true;
+    return lone;
   }
   std::optional<double> best_bass;
   if (best_match->bassPc) {
@@ -503,6 +516,23 @@ struct BoundarySpan {
   double startBeat;
   double endBeat;
 };
+
+/**
+ * Whether the key's reading of a lone pitch class at `index` stands (`arrivesFromChord`): the span
+ * right before it, with no rest between, holds a chord its own tones name, or the same reading
+ * already standing.
+ */
+bool arrives_from_chord(const std::vector<std::optional<WindowChord>>& readings,
+                        const std::vector<BoundarySpan>& bounds, std::size_t index) {
+  if (index == 0 || !readings[index - 1] || !readings[index]) {
+    return false;
+  }
+  if (!same_instant(bounds[index - 1].endBeat, bounds[index].startBeat)) {
+    return false;
+  }
+  const WindowChord& before = *readings[index - 1];
+  return !before.fromKey || same_chord(before.chord, readings[index]->chord);
+}
 
 /**
  * Choose chord boundaries over one run of slots by dynamic programming (`chooseBoundaries`). A
@@ -1008,6 +1038,14 @@ TimelineAnalysis analyze_timeline(const std::vector<NoteEvent>& notes,
     readings.push_back(std::move(inferred));
     reading_keys.push_back(span_key);
     reading_bounds.push_back(BoundarySpan{start, end});
+  }
+
+  // A lone pitch class keeps the key's reading only where the harmony arrives on it, first to last,
+  // so a held arrival continues across spans.
+  for (std::size_t i = 0; i < readings.size(); ++i) {
+    if (readings[i] && readings[i]->fromKey && !arrives_from_chord(readings, reading_bounds, i)) {
+      readings[i].reset();
+    }
   }
 
   // Root the diminished sevenths by where they resolve, last first, so each is read against the

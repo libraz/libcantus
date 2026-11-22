@@ -4,6 +4,7 @@ import {
   noteToPitchClass,
   pitchClassOf as pitchClass,
 } from '../../core/pitch/index.js';
+import type { KeyScale } from '../../core/types.js';
 import {
   assertArray,
   assertDegree,
@@ -1015,6 +1016,26 @@ function stackThirds(degree: number, resolved: ResolvedKey, size: 3 | 4): Chord 
     );
   }
   return makeSpelledChord(rootPc, quality, { rootSpelling: keySpelling(rootPc, resolved) });
+}
+
+/**
+ * The triad a key stacks in its own thirds on one of its tones, unspelled.
+ *
+ * @returns The triad, or null when the key is not heptatonic, the pitch class is
+ *   not one of its tones, or the stacked thirds name no triad.
+ */
+export function triadOnScaleTone(pc: number, key: KeyScale): Chord | null {
+  const tones = scaleTonesInDegreeOrder(key);
+  const index = tones.indexOf(pitchClass(pc));
+  if (tones.length !== DIATONIC_LETTER_COUNT || index < 0) {
+    return null;
+  }
+  const rootPc = tones[index] ?? pitchClass(pc);
+  const offsets = [0, 2, 4].map((step) =>
+    pitchClass((tones[(index + step) % tones.length] ?? rootPc) - rootPc),
+  );
+  const quality = classifyTriad(offsets[1] ?? 4, offsets[2] ?? 7);
+  return matchesQualityIntervals(quality, offsets) ? makeChord(rootPc, quality) : null;
 }
 
 /**

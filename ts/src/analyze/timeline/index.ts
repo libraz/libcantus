@@ -24,7 +24,12 @@ import {
   dropSilentNotes,
 } from '../../core/validation/index.js';
 import type { Chord, ChordQuality, ChordSpan } from '../../theory/chord/index.js';
-import { chordFromSpan, chordPitchClasses, makeChord } from '../../theory/chord/index.js';
+import {
+  chordFromSpan,
+  chordPitchClasses,
+  makeChord,
+  triadOnScaleTone,
+} from '../../theory/chord/index.js';
 import type { KeyLike } from '../../theory/scale/index.js';
 import { isScaleTone, type ResolvedKey, resolveKey, scaleOf } from '../../theory/scale/index.js';
 import { BEAT_EPS, countStartingAtOrBefore, sameInstant } from '../adjacency.js';
@@ -500,6 +505,12 @@ type WindowChord = {
    * {@link settledDiminishedRoot} chooses by what follows and by the key.
    */
   rootings?: { chord: Chord; confidence: number }[];
+  /**
+   * Set when the window sounds one pitch class and the chord is the triad the
+   * key builds on it. Such a reading stands only where the harmony arrives
+   * there; {@link arrivesFromChord} decides that from the span before it.
+   */
+  fromKey?: true;
 };
 
 /**
@@ -818,7 +829,41 @@ function analyzeWindow(
     return reading;
   }
 
-  return null;
+  // A lone pitch class names no chord of its own, but where the harmony arrives
+  // on it the key says which: a melody ending on its tonic after the dominant.
+  const lone = ranked.length === 1 ? ranked[0] : undefined;
+  const triad = lone === undefined ? null : triadOnScaleTone(lone.pc, scaleOf(key));
+  if (triad === null) {
+    return null;
+  }
+  return {
+    chord: shared(triad),
+    confidence: chordConfidence(triad, weights, totalWeight, false),
+    fromKey: true,
+  };
+}
+
+/**
+ * Whether the key's reading of a lone pitch class at `index` stands: the span
+ * right before it, with no rest between, holds a chord its own tones name, or
+ * the same reading already standing — one tonic held on over two spans.
+ */
+function arrivesFromChord(
+  readings: readonly (WindowChord | null)[],
+  bounds: readonly { start: number; end: number }[],
+  index: number,
+): boolean {
+  const before = readings[index - 1];
+  const current = readings[index];
+  const previousBounds = bounds[index - 1];
+  const currentBounds = bounds[index];
+  if (!before || !current || previousBounds === undefined || currentBounds === undefined) {
+    return false;
+  }
+  if (!sameInstant(previousBounds.end, currentBounds.start)) {
+    return false;
+  }
+  return before.fromKey !== true || sameChord(before.chord, current.chord);
 }
 
 /** What chord detection makes of one choice of a window's pitch classes. */
@@ -1387,7 +1432,10 @@ function notesOfSpan(
  * for two beats, two beats of rest and a G triad read C over beats 0-4. Under `'grid'` any
  * window with nothing sounding produces no segment. A window whose notes give
  * fewer than two tones of any chord produces none either: a lone pitch class
- * names no chord. Each segment carries a confidence in [0, 1]
+ * names no chord — except where the harmony arrives on it. Straight after a
+ * chord its own tones name, a lone pitch class of a heptatonic key reads as the
+ * triad the key builds on it, so a melody ending on its tonic after the
+ * dominant closes on the tonic chord. Each segment carries a confidence in [0, 1]
  * — the fraction of its weight explained by chord tones, reduced when the match
  * is inexact, and duration-weighted across anything merged into it.
  *
@@ -1761,6 +1809,14 @@ export function analyzeTimeline(
     readings.push(inferred);
     readingKeys.push(spanKey);
     readingBounds.push({ start, end });
+  }
+
+  // A lone pitch class keeps the key's reading only where the harmony arrives
+  // on it, first to last, so a held arrival continues across spans.
+  for (let i = 0; i < readings.length; i += 1) {
+    if (readings[i]?.fromKey === true && !arrivesFromChord(readings, readingBounds, i)) {
+      readings[i] = null;
+    }
   }
 
   // Root the diminished sevenths by where they resolve, last first, so each is

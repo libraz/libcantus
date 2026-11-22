@@ -157,6 +157,34 @@ TEST_CASE("a lone pitch class reads as no chord", "[timeline]") {
   CHECK(chord_timeline_from_notes({note(60, 0, 4)}).timeline.segments.empty());
 }
 
+TEST_CASE("a lone pitch class the harmony arrives on reads as the key's triad", "[timeline]") {
+  std::vector<NoteEvent> notes = {note(60, 0, 4), note(64, 0, 4), note(67, 0, 4), note(55, 4, 4),
+                                  note(59, 4, 4), note(62, 4, 4), note(48, 8, 8), note(60, 8, 8)};
+  ChordTimelineOptions options;
+  options.key = KeyArg("C major");
+  ChordTimelineResult result = chord_timeline_from_notes(notes, options);
+  REQUIRE(result.timeline.segments.size() == 3);
+  const ChordSegment& arrival = result.timeline.segments[2];
+  CHECK(arrival.startBeat == 8);
+  CHECK(arrival.endBeat == 16);
+  CHECK(arrival.chord.rootPc == 0);
+  CHECK(arrival.chord.quality == ChordQuality::kMaj);
+  CHECK(result.segmentConfidence[2] < 1);
+  std::vector<CadenceHit> hits = detect_cadences(result.timeline, KeyContext(KeyArg("C major")));
+  REQUIRE(hits.size() == 2);
+  CHECK(hits[1].atBeat == 8);
+  CHECK(hits[1].cadence.type == CadenceType::kAuthentic);
+}
+
+TEST_CASE("a lone pitch class after a rest reads as no chord", "[timeline]") {
+  ChordTimelineOptions options;
+  options.key = KeyArg("C major");
+  ChordTimelineResult result = chord_timeline_from_notes(
+      {note(55, 0, 4), note(59, 0, 4), note(62, 0, 4), note(60, 8, 4)}, options);
+  REQUIRE(result.timeline.segments.size() == 1);
+  CHECK(result.timeline.segments[0].startBeat == 0);
+}
+
 TEST_CASE("a diminished seventh is rooted by its resolution, not its bass", "[timeline]") {
   for (int bass : {47, 50, 53, 56}) {
     std::vector<NoteEvent> notes = {note(bass, 0, 4), note(62, 0, 4), note(65, 0, 4),

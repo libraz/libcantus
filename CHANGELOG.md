@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A melody that arrives on a lone held note closes its cadence there.**
+  `chordTimelineFromNotes` reads a single pitch class that sounds straight
+  after a chord, with no rest between, as the triad the key builds on it, at a
+  confidence discounted as an inexact match. A tune ending on a held tonic after
+  the dominant keeps its final authentic cadence in `detectCadences`,
+  `structuralCadences` and the score's phrases, a held dominant after the
+  subdominant reads as a half cadence, and a bare octave arrives the same way.
+  A lone pitch class with no chord before it, after a rest, or outside the key
+  still produces no segment, and `detectChord` still names no chord for one.
+
 ## [1.4.2] - 2026-11-22
 
 ### Changed

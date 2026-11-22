@@ -178,6 +178,25 @@ Chord stack_thirds(double degree, const ResolvedKey& resolved, std::size_t size)
 
 }  // namespace
 
+std::optional<Chord> triad_on_scale_tone(int pc, const KeyScale& key) {
+  std::vector<int> tones = scale_tones_in_degree_order(key);
+  auto found = std::find(tones.begin(), tones.end(), pitch_class_of(pc));
+  if (static_cast<int>(tones.size()) != DIATONIC_LETTER_COUNT || found == tones.end()) {
+    return std::nullopt;
+  }
+  auto index = static_cast<std::size_t>(found - tones.begin());
+  int root_pc = *found;
+  std::vector<double> offsets;
+  for (std::size_t step : {0, 2, 4}) {
+    offsets.push_back(pitch_class_of(tones[(index + step) % tones.size()] - root_pc));
+  }
+  ChordQuality quality = classify_triad(static_cast<int>(offsets[1]), static_cast<int>(offsets[2]));
+  if (!matches_quality_intervals(quality, offsets)) {
+    return std::nullopt;
+  }
+  return make_chord(root_pc, quality);
+}
+
 std::string_view to_string(ChordToneRole role) {
   return kDegreeByRole[static_cast<std::size_t>(role)].name;
 }

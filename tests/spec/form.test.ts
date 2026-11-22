@@ -1,6 +1,7 @@
 import {
   chordTimelineFromChords,
   chordTimelineFromNotes,
+  detectCadences,
   hypermeter,
   phrasesFromTimeline,
   sectionsFromNotes,
@@ -1234,6 +1235,33 @@ describe('a diatonic tune read with no key given', () => {
       .phrases()
       .map((phrase) => phrase.cadence?.cadence.type);
     expect(types).not.toContain('modal');
+  });
+});
+
+describe('a melody-only tune ending on a held tonic', () => {
+  /** Four units of I, IV and V arpeggios in quarter notes, each closing on a tonic held a bar. */
+  const notes: NoteEvent[] = [0, 16, 32, 48].flatMap((at) => [
+    ...quarters([60, 64, 67, 72, 65, 69, 72, 69, 67, 71, 74, 71], at),
+    { pitch: 60, startBeat: at + 12, durationBeat: 4 },
+  ]);
+  const { timeline, prevailingKey } = chordTimelineFromNotes(notes);
+  const atBeats = (hits: { atBeat: number; cadence: { type: string | null } }[]) =>
+    hits.map((hit) => [hit.atBeat, hit.cadence.type]).sort((x, y) => Number(x[0]) - Number(y[0]));
+
+  it('reads the closing tonic as the arrival of the last cadence', () => {
+    const last = timeline.segments[timeline.segments.length - 1];
+    expect([last?.startBeat, last?.endBeat, last?.chord.rootPc, last?.chord.quality]).toEqual([
+      60,
+      64,
+      0,
+      'maj',
+    ]);
+    const expected = [8, 12, 24, 28, 40, 44, 56, 60].map((beat, index) => [
+      beat,
+      index % 2 === 0 ? 'half' : 'authentic',
+    ]);
+    expect(atBeats(detectCadences(timeline, prevailingKey))).toEqual(expected);
+    expect(atBeats(structuralCadences(phrasesFromTimeline(timeline, notes)))).toEqual(expected);
   });
 });
 

@@ -45,6 +45,13 @@ std::optional<std::vector<int>> chord_tone_letter_offsets(const Chord& chord);
 /** Which chord degree one of a chord's intervals spells (`degreeOfInterval`). */
 std::optional<int> degree_of_interval(double interval, const Chord& chord);
 
+/**
+ * The triad a key stacks in its own thirds on one of its tones, unspelled (`triadOnScaleTone`):
+ * nothing when the key is not heptatonic, the pitch class is not one of its tones, or the stacked
+ * thirds name no triad.
+ */
+std::optional<Chord> triad_on_scale_tone(int pc, const KeyScale& key);
+
 /** What occupies a chord's third slot (`ThirdSlot`). */
 struct ThirdSlot {
   enum class Kind { kThird, kSuspension, kNone };

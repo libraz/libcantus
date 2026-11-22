@@ -472,6 +472,98 @@ describe('chordTimelineFromNotes reads a chord only where two of its tones sound
   });
 });
 
+describe('chordTimelineFromNotes reads a lone pitch class the harmony arrives on', () => {
+  type Row = [
+    mode: 'major' | 'minor',
+    arrival: 'tonic' | 'dominant',
+    voicing: 'single' | 'octave',
+    segmentation: 'dynamic' | 'grid',
+    after: 'end' | 'rest',
+  ];
+  // Pairwise over the five factors.
+  const rows: Row[] = [
+    ['major', 'tonic', 'single', 'grid', 'rest'],
+    ['major', 'dominant', 'octave', 'dynamic', 'end'],
+    ['minor', 'tonic', 'octave', 'dynamic', 'rest'],
+    ['minor', 'tonic', 'octave', 'grid', 'end'],
+    ['major', 'dominant', 'single', 'dynamic', 'rest'],
+    ['minor', 'dominant', 'single', 'dynamic', 'rest'],
+    ['major', 'dominant', 'octave', 'grid', 'rest'],
+    ['minor', 'dominant', 'single', 'grid', 'end'],
+  ];
+
+  it.each(rows)(
+    '%s key, %s, %s, %s segmentation, at the %s',
+    (mode, arrival, voicing, segmentation, after) => {
+      const tonic = mode === 'major' ? 60 : 57;
+      const third = mode === 'major' ? 4 : 3;
+      // V before a tonic arrival, IV (iv in minor) before a dominant one.
+      const approach =
+        arrival === 'tonic'
+          ? [tonic - 5, tonic - 1, tonic + 2]
+          : [tonic + 5, tonic + 5 + third, tonic + 12];
+      const lone = arrival === 'tonic' ? tonic : tonic + 7;
+      const notes = [
+        ...blockChord([tonic, tonic + third, tonic + 7], 0),
+        ...blockChord(approach, 4),
+        ...blockChord(voicing === 'octave' ? [lone - 12, lone] : [lone], 8),
+        ...(after === 'rest' ? blockChord([tonic, tonic + third, tonic + 7], 16) : []),
+      ];
+      const key = `${mode === 'major' ? 'C' : 'A'} ${mode}`;
+      const result = chordTimelineFromNotes(notes, { key, segmentation });
+      const index = result.timeline.segments.findIndex((segment) => segment.startBeat === 8);
+      const arrived = result.timeline.segments[index];
+      expect(arrived?.endBeat).toBe(12);
+      // The triad the key builds on the note: the minor v of a minor key.
+      const quality = mode === 'major' ? 'maj' : 'min';
+      expect([arrived?.chord.rootPc, arrived?.chord.quality]).toEqual([lone % 12, quality]);
+      expect(result.segmentConfidence[index]).toBeLessThan(1);
+      const cadence = detectCadences(result.timeline, result.prevailingKey).find(
+        (hit) => hit.atBeat === 8,
+      );
+      // A minor v does not rest as a dominant, played or read from the key.
+      const expected = arrival === 'tonic' ? 'authentic' : mode === 'major' ? 'half' : undefined;
+      expect(cadence?.cadence.type).toBe(expected);
+    },
+  );
+
+  it('holds one arrival across the grid windows it lasts', () => {
+    const notes = [
+      ...blockChord([60, 64, 67], 0),
+      ...blockChord([55, 59, 62], 4),
+      ...blockChord([60], 8, 8),
+    ];
+    const result = chordTimelineFromNotes(notes, { key: 'C major', segmentation: 'grid' });
+    expect(result.timeline.segments.map((segment) => [segment.startBeat, segment.endBeat])).toEqual(
+      [
+        [0, 4],
+        [4, 8],
+        [8, 16],
+      ],
+    );
+  });
+
+  it('reads none after a rest, or for a note outside the key', () => {
+    const afterRest = [...blockChord([55, 59, 62], 0), ...blockChord([60], 8)];
+    expect(
+      chordTimelineFromNotes(afterRest, { key: 'C major' }).timeline.segments.map(
+        (s) => s.startBeat,
+      ),
+    ).toEqual([0]);
+    const chromatic = [...blockChord([55, 59, 62], 0), ...blockChord([61], 4)];
+    expect(
+      chordTimelineFromNotes(chromatic, { key: 'C major' }).timeline.segments.map(
+        (s) => s.startBeat,
+      ),
+    ).toEqual([0]);
+  });
+
+  it('still names no chord for a lone pitch class or a bare octave on its own', () => {
+    expect(detectChordBest([60])).toBeNull();
+    expect(detectChordBest([48, 60])).toBeNull();
+  });
+});
+
 describe('chordTimelineFromNotes roots a diminished seventh by its resolution', () => {
   /** The diminished seventh on B over `bass`, then V and i of C minor. */
   function toDominant(bass: number): NoteEvent[] {

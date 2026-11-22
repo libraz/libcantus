@@ -107,6 +107,8 @@ struct WindowChord : WindowReading {
   std::optional<WindowReading> augmented;
   /** A diminished seventh read on each of its tones, in pitch-class order (`rootings`). */
   std::vector<WindowReading> rootings;
+  /** The window sounds one pitch class and the chord is the key's triad on it (`fromKey`). */
+  bool fromKey = false;
 };
 
 /** A half-open run of slots whose contents an edit may have changed (`DirtySlots`). */
