@@ -7,8 +7,6 @@ CTEST ?= ctest
 PYTHON ?= python3
 NODE ?= node
 YARN ?= yarn
-CLANG_FORMAT ?= clang-format
-CLANG_TIDY ?= clang-tidy
 
 # The machine is shared: two compile jobs, at lower priority, unless asked otherwise.
 JOBS ?= 2

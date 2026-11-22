@@ -60,8 +60,8 @@ CANTUS_JSON_FIELDS(ReferenceComparison, form, harmony, melody, rhythm, rationale
 
 /** `assertNullable`: a field that has to be present but may be null. */
 template <class F>
-auto read_nullable(const json::Value& value, std::string_view name,
-                   F&& read) -> Nullable<std::decay_t<decltype(read(value, name))>> {
+auto read_nullable(const json::Value& value, std::string_view name, F&& read)
+    -> Nullable<std::decay_t<decltype(read(value, name))>> {
   if (is_undefined(value)) {
     throw InvalidInputError(std::string(name) + " must be present; received undefined");
   }

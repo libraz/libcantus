@@ -36,7 +36,7 @@ json::Value profile_weights_object() {
 /** The weight fields a wire override may name, with the member each one replaces. */
 struct WeightField {
   std::string_view name;
-  std::optional<double> ProfileWeightOverrides::*member;
+  std::optional<double> ProfileWeightOverrides::* member;
 };
 
 constexpr WeightField kWeightFields[] = {

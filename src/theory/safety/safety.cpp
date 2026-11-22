@@ -440,8 +440,8 @@ namespace {
 /** A weight field: its name, the override member that sets it and the weight it sets. */
 struct WeightField {
   std::string_view name;
-  std::optional<double> ProfileWeightOverrides::*override_member;
-  double ProfileWeights::*weight;
+  std::optional<double> ProfileWeightOverrides::* override_member;
+  double ProfileWeights::* weight;
 };
 
 /** The weight fields, in the order of the weight table. */
@@ -476,7 +476,7 @@ ProfileWeights profile_weights(SafetyProfile profile, const ProfileWeightOverrid
   return weights;
 }
 
-std::optional<double> ProfileWeightOverrides::*weight_override_member(std::string_view field) {
+std::optional<double> ProfileWeightOverrides::* weight_override_member(std::string_view field) {
   for (const WeightField& entry : kWeightFields) {
     if (entry.name == field) {
       return entry.override_member;

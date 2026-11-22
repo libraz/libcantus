@@ -67,7 +67,7 @@ bool spells_better(const TonicCost& a, const TonicCost& b, bool signature_key) {
                                                       &TonicCost::accidentals}
                     : std::array<int TonicCost::*, 3>{&TonicCost::doubles, &TonicCost::accidentals,
                                                       &TonicCost::fifths};
-  for (int TonicCost::*term : order) {
+  for (int TonicCost::* term : order) {
     if (a.*term != b.*term) {
       return a.*term < b.*term;
     }

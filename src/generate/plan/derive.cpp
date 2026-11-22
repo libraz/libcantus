@@ -35,8 +35,8 @@ constexpr std::string_view kPreserveAspects[] =
 /** Where an aspect's weight lives in the caller's options and in the resolved weights. */
 struct PreserveMembers {
   std::string_view aspect;
-  std::optional<double> PreserveWeights::*given;
-  double ResolvedWeights::*resolved;
+  std::optional<double> PreserveWeights::* given;
+  double ResolvedWeights::* resolved;
 };
 
 constexpr PreserveMembers kPreserveMembers[] = {

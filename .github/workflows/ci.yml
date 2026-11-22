@@ -133,7 +133,7 @@ jobs:
       - name: Install the C++ format and lint tools
         if: matrix.gate
         run: |
-          python3 -m pip install clang-format==18.1.8 clang-tidy==18.1.8
+          python3 -m pip install clang-format==23.1.5 clang-tidy==23.1.4
           clang-format --version
           clang-tidy --version
 

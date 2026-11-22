@@ -169,7 +169,7 @@ double fingering_cost(const StringFingering& candidate, const Origin& origin) {
   // With no fret stopped yet, the low frets are the resting position; an open string asks
   // nothing of the fretting hand.
   double stopped = candidate.fret == 0 ? 0
-                   : !origin.fret      ? static_cast<double>(candidate.fret)
+                   : !origin.fret ? static_cast<double>(candidate.fret)
                                   : std::fabs(static_cast<double>(candidate.fret - *origin.fret));
   double string = static_cast<double>(candidate.string);
   double crossing = !origin.string ? 0

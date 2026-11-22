@@ -2,6 +2,7 @@
 
 #include "generate/melody/pitch_dp.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>

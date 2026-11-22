@@ -12,7 +12,7 @@ libcantus has two implementations of one library: the pure TypeScript package in
 | `make test-install` | Install into a scratch prefix and build outside projects against it, through `find_package(cantus)` and through `add_subdirectory()` |
 | `make conformance-fast` | Public-header, banned-API, generated-table and install checks |
 | `make format` | Apply every formatter of the repository, then `make lint` |
-| `make format-check` / `make lint` | The same checks without modifying anything; the C++ tools must be LLVM 18 (`LLVM_VERSION` in `mk/toolchain.mk`) |
+| `make format-check` / `make lint` | The same checks without modifying anything; the C++ tools must be LLVM 23 (`LLVM_VERSION` in `mk/toolchain.mk`) |
 | `make test-wasm` / `make test-node` / `make test-python` / `make test-cli` | Build one surface and run its boundary tests and the fixed corpus through it |
 | `make corpus` / `make corpus-check UNIT=<id>\|all` | Record the call corpus from pure TS; replay a unit's recorded calls through the C ABI |
 | `make spec-ready IMPL=node\|wasm` | Run the spec files whose ops are all registered against that surface |

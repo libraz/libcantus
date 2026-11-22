@@ -17,7 +17,7 @@ namespace cantus {
 
 /** The member of ProfileWeightOverrides a weight field name selects, or nullptr for no such field.
  */
-std::optional<double> ProfileWeightOverrides::*weight_override_member(std::string_view field);
+std::optional<double> ProfileWeightOverrides::* weight_override_member(std::string_view field);
 
 /** The overrides a caller named, as (field, value) in the order of the weight table. */
 std::vector<std::pair<std::string_view, double>> named_weight_overrides(

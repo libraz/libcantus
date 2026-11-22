@@ -29,7 +29,7 @@ perc_table() {
                           static_cast<std::size_t>(PercMoodCategory::kRockDark) + 1>
       rows = {
 #include "generate/drums/perc_table.gen.inc"
-      };
+  };
   return rows;
 }
 
