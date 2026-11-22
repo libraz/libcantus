@@ -1,4 +1,4 @@
-# Reharmonization
+# Reharmonize a melody or a chord progression
 
 Reharmonization replaces the chords under a melody or a progression while keeping something fixed — the melody, the harmonic function, or just the length. The library offers the substitutions as proposals with their reasons attached, so a host can present them and let a user choose.
 

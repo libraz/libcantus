@@ -1,4 +1,4 @@
-# Harmony
+# Chords, Roman numerals and functional harmony
 
 The musical vocabulary this page assumes — chord, degree, function, cadence — is taught in [the primer's harmony page](primer/harmony.md).
 

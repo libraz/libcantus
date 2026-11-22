@@ -1,4 +1,4 @@
-# Voicing
+# Chord voicing and voice leading
 
 The musical vocabulary this page assumes — voice, register, spacing, doubling — is taught in [the primer's page on voices](primer/voices.md).
 

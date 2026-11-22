@@ -1,4 +1,4 @@
-# Analysis
+# Detect chords, keys and cadences in MIDI notes
 
 Analysis returns structured reports. They keep the answer, the evidence used to choose it, and — in APIs that support it — the alternatives that were rejected.
 

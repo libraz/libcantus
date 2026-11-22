@@ -1,4 +1,4 @@
-# Python
+# Python で音楽理論を扱う: libcantus パッケージ
 
 `libcantus` パッケージは、`ctypes` で C++ コアを呼び出します。TypeScript パッケージと同じ関数、クラス、定数を Python の綴りで公開し、結果はプレーンな dict と list で返します。挙動とエラーメッセージは TypeScript のリファレンス実装と一致します。異なる点は[C++ コアと面ごとの差](cpp.md)に挙げています。
 

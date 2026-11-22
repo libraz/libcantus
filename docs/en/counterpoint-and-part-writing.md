@@ -1,4 +1,4 @@
-# Counterpoint and part-writing
+# Check part-writing and species counterpoint rules
 
 The musical vocabulary this page assumes — voice, motion, dissonance, cadence — is taught in [the primer's page on voices](primer/voices.md).
 

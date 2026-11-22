@@ -68,6 +68,11 @@ Functional harmony — reading each chord as a tonic, subdominant or dominant ro
 
 The engine keeps spelling information — the letter and accidental a pitch is written with — where it matters. A diminished fifth and an augmented fourth share a pitch-class distance but are not the same written interval. Part-writing, counterpoint, and line spelling therefore accept spelled notes or a key context instead of reducing everything to numbers.
 
+## Related projects
+
+- [libsonare](https://github.com/libraz/libsonare) — the layer below: audio analysis, mastering, synthesis and Standard MIDI File I/O, for C++, Python, Node.js and WebAssembly. It shares no code with libcantus and neither requires the other.
+- [midi-sketch](https://github.com/libraz/midi-sketch) — a rule-based pop MIDI generator that uses `@libraz/libcantus` for its music theory.
+
 ## Where to go next
 
 - [Primer](primer/index.md) — the musical ideas the library models, each one tied to the API that implements it: [pitch and intervals](primer/pitch-and-intervals.md), [scales and keys](primer/scales-and-keys.md), [chords](primer/chords.md), [harmony](primer/harmony.md), [voices](primer/voices.md), [rhythm and meter](primer/rhythm-and-meter.md).

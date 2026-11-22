@@ -1,4 +1,4 @@
-# Tuning and frequency
+# Convert MIDI notes to frequencies, cents and tunings
 
 If the musical vocabulary here is unfamiliar, [Pitch and intervals](primer/pitch-and-intervals.md) in the primer teaches the terms this page uses.
 

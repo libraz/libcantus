@@ -1,4 +1,4 @@
-# Generation
+# Generate chord progressions, bass lines and parts
 
 Generation creates note events from a key, a timeline, a motif, or a rhythm. Results are deterministic for a given seed and option set, and nothing modifies its input — each call returns new material for the host to place.
 

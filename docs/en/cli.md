@@ -1,4 +1,4 @@
-# Command line
+# Music theory from the command line: cantus
 
 `cantus` runs one op of the library and prints the result as JSON. It is the C++ core behind the same entry point every binding uses, so any op that takes plain data can be called from a shell or a script.
 

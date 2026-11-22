@@ -1,6 +1,6 @@
 # @libraz/libcantus
 
-MIDI ノートイベントのための、TypeScript 製の音楽理論ライブラリです。ノートから和声を読み取り、その読み取り結果に沿って新しいパートを書けます。実行時依存はありません。
+MIDI ノートイベントからコード、調、ローマ数字、終止形を検出し、その和声の読みに沿って新しいパートを書く、純 TypeScript の音楽理論ライブラリです。実行時依存はありません。
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libcantus/ci.yml?branch=main&label=CI)](https://github.com/libraz/libcantus/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libcantus)](https://www.npmjs.com/package/@libraz/libcantus)

@@ -1,4 +1,4 @@
-# Use case: importing a chord chart
+# Use case: parse a chord chart into timed chords
 
 A chord chart is text: symbols with a bar each, or several to a bar. Parsing them into chords, placing them in time, and realizing them as sound are three separate steps, and each one can fail differently.
 

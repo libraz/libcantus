@@ -1,4 +1,4 @@
-# Use case: a harmony exercise checker
+# Use case: grade a four-part harmony exercise
 
 Each moment of a four-part exercise is a `Voicing`: the sounding pitches, lowest voice first. Grading is the motion from one to the next, read against the chord each realizes and the key the exercise is written in.
 

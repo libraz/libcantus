@@ -68,6 +68,11 @@ const note: NoteEvent = {
 
 綴りが意味を持つ場面では、エンジンは綴りの情報、つまりその音をどの音名と変化記号で書くかを保ちます。減5度と増4度はピッチクラス上の距離が同じですが、書かれた音程としては別物です。そのため和声課題、対位法、旋律の綴りは、すべてを数値に還元せず、綴られた音または調の文脈を受け取ります。
 
+## 関連プロジェクト
+
+- [libsonare](https://github.com/libraz/libsonare) — その下の層を担当します。音声解析、マスタリング、合成、Standard MIDI File の入出力を、C++、Python、Node.js、WebAssembly から使えます。libcantus とコードを共有せず、どちらも相手を必要としません。
+- [midi-sketch](https://github.com/libraz/midi-sketch) — ルールベースのポップス向け MIDI ジェネレーターで、音楽理論の部分に `@libraz/libcantus` を使っています。
+
 ## 次に読むページ
 
 - [入門](primer/index.md) — このライブラリが扱う音楽の考え方と、それを実装する API の対応: [音高と音程](primer/pitch-and-intervals.md)、[音階と調](primer/scales-and-keys.md)、[和音](primer/chords.md)、[和声](primer/harmony.md)、[声部](primer/voices.md)、[リズムと拍子](primer/rhythm-and-meter.md)。

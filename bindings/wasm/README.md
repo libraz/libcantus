@@ -8,7 +8,7 @@
 
 **The libcantus music-theory engine as WebAssembly: the same API and types as `@libraz/libcantus`, running the C++ core.**
 
-Recover the harmony from MIDI note events and write new parts against it, in Node.js or the browser. Every call is synchronous once the module has loaded.
+Detect chords, keys, Roman numerals and cadences in MIDI note events and write new parts against that harmony, in Node.js or the browser. Every call is synchronous once the module has loaded.
 
 **[Documentation](https://github.com/libraz/libcantus/blob/main/docs/en/getting-started.md)** · **[Differences from pure TypeScript](https://github.com/libraz/libcantus/blob/main/docs/en/cpp.md)** · **[Repository](https://github.com/libraz/libcantus)**
 

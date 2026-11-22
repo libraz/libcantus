@@ -1,6 +1,6 @@
 # @libraz/libcantus
 
-Pure-TypeScript music theory for MIDI note events. Recover the harmony from notes, and write new parts against that same reading. No runtime dependencies.
+Detect chords, keys, Roman numerals and cadences in MIDI note events with pure TypeScript, and write new parts against that same harmonic reading. No runtime dependencies.
 
 [![CI](https://img.shields.io/github/actions/workflow/status/libraz/libcantus/ci.yml?branch=main&label=CI)](https://github.com/libraz/libcantus/actions)
 [![npm](https://img.shields.io/npm/v/@libraz/libcantus)](https://www.npmjs.com/package/@libraz/libcantus)

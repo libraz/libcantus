@@ -1,4 +1,4 @@
-# Python
+# Music theory in Python: the libcantus package
 
 The `libcantus` package is the C++ core called through `ctypes`. It exposes the same functions, classes and constants as the TypeScript package, with Python spelling, and returns plain dicts and lists. Behaviour and error messages match the TypeScript reference; the few differences are listed in [C++ core and surface differences](cpp.md).
 

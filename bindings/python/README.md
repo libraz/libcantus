@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](https://github.com/libraz/libcantus/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 
-**Music-theory analysis and generation for MIDI note events, from Python: recover the harmony from notes and write new parts against it.**
+**Detect chords, keys, Roman numerals and cadences in MIDI note events from Python, and write new parts against that same harmonic reading.**
 
 The package calls the libcantus C++ core through `ctypes`. It exposes the same functions, classes and constants as the TypeScript package `@libraz/libcantus`, with Python spelling, and returns plain dicts and lists.
 

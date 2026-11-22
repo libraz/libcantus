@@ -1,4 +1,4 @@
-# Key relations and modulation
+# Find modulations, pivot chords and related keys
 
 The musical vocabulary this page assumes — scale, degree, key signature, tonic — is taught in [the primer's page on scales and keys](primer/scales-and-keys.md).
 

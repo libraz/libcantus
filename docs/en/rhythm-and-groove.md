@@ -1,4 +1,4 @@
-# Rhythm and groove
+# Generate rhythms, drum patterns, swing and groove
 
 Rhythm is handled as three separable steps: choose where the onsets go, turn those onsets into note events, and then deviate from the grid. Keeping them apart is what lets a host regenerate the feel without regenerating the part.
 
