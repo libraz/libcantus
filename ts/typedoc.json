@@ -5,6 +5,7 @@
   "readme": "README.md",
   "name": "@libraz/libcantus",
   "includeVersion": true,
+  "hostedBaseUrl": "https://libraz.github.io/libcantus/",
   "excludeInternal": true,
   "excludePrivate": true,
   "sort": ["source-order"],
@@ -25,7 +26,12 @@
     "Utilities",
     "*"
   ],
-  "plugin": ["@libraz/typedoc-theme", "typedoc-plugin-mdn-links", "typedoc-plugin-extras"],
+  "plugin": [
+    "@libraz/typedoc-theme",
+    "typedoc-plugin-mdn-links",
+    "typedoc-plugin-extras",
+    "../tools/docs/typedoc-canonical.mjs"
+  ],
   "theme": "libraz",
   "footerDate": true,
   "customDescription": "TypeScript music theory library for MIDI note events: detect chords, keys, Roman numerals and cadences, then generate parts. API reference for each export.",
