@@ -157,8 +157,15 @@ double exp(double x) {
       else
         return (xsb == 0) ? x : 0.0; /* exp(+-inf)={inf,0} */
     }
-    if (x > o_threshold) return huge * huge;         /* overflow */
-    if (x < u_threshold) return twom1000 * twom1000; /* underflow */
+    // One read of each volatile: two reads in one expression are unsequenced.
+    if (x > o_threshold) {
+      const double big = huge;
+      return big * big; /* overflow */
+    }
+    if (x < u_threshold) {
+      const double small = twom1000;
+      return small * small; /* underflow */
+    }
   }
 
   /* argument reduction */
