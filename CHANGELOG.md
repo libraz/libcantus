@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `@libraz/libcantus-wasm` is built with Emscripten 7.0.1. `cantus.wasm` is
-  3.3 MB (1.19 MB gzip), and every function returns the same results as in
+  3.4 MB (1.20 MB gzip), and every function returns the same results as in
   1.4.1.
 - The Python wheels are built with CPython 3.15. They still install on
   Python 3.10 and later.
