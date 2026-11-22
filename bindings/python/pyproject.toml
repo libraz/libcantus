@@ -17,10 +17,10 @@ classifiers = [
 
 [dependency-groups]
 dev = [
-  "pytest>=8",
-  "ruff>=0.6",
-  "mypy>=1.11",
-  "hatchling>=1.25",
+  "pytest>=9.2",
+  "ruff>=0.17.6",
+  "mypy>=2.4",
+  "hatchling>=1.33",
 ]
 
 [tool.hatch.build.targets.wheel]

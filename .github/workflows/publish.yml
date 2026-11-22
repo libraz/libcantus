@@ -28,7 +28,7 @@ jobs:
       - name: Enable Corepack and pin Yarn
         run: |
           corepack enable
-          corepack prepare yarn@4.18.1 --activate
+          corepack prepare yarn@4.19.0 --activate
           yarn --version
 
       - name: Restore Yarn cache
@@ -102,7 +102,7 @@ jobs:
       - name: Enable Corepack and pin Yarn
         run: |
           corepack enable
-          corepack prepare yarn@4.18.1 --activate
+          corepack prepare yarn@4.19.0 --activate
           yarn --version
 
       - name: Install dependencies
@@ -166,7 +166,7 @@ jobs:
         if: startsWith(matrix.plat, 'manylinux')
         run: |
           docker run --rm -e JOBS -v "$PWD:/src" -w /src "quay.io/pypa/${{ matrix.plat }}" bash -ec '
-            PY=/opt/python/cp312-cp312/bin
+            PY=/opt/python/cp315-cp315/bin
             $PY/pip install --quiet cmake hatchling build auditwheel
             export PATH="$PY:$PATH"
             make build-shared NICE=

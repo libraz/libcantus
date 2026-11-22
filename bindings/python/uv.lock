@@ -134,10 +134,10 @@ dev = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "hatchling", specifier = ">=1.25" },
-    { name = "mypy", specifier = ">=1.11" },
-    { name = "pytest", specifier = ">=8" },
-    { name = "ruff", specifier = ">=0.6" },
+    { name = "hatchling", specifier = ">=1.33" },
+    { name = "mypy", specifier = ">=2.4" },
+    { name = "pytest", specifier = ">=9.2" },
+    { name = "ruff", specifier = ">=0.17.6" },
 ]
 
 [[package]]
