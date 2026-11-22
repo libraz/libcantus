@@ -7,8 +7,8 @@
 
 #define CANTUS_VERSION_MAJOR 1
 #define CANTUS_VERSION_MINOR 4
-#define CANTUS_VERSION_PATCH 1
-#define CANTUS_VERSION_STRING "1.4.1"
+#define CANTUS_VERSION_PATCH 2
+#define CANTUS_VERSION_STRING "1.4.2"
 
 namespace cantus {
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-22
+
+### Changed
+
+- `@libraz/libcantus-wasm` is built with Emscripten 7.0.1. `cantus.wasm` is
+  3.3 MB (1.19 MB gzip), and every function returns the same results as in
+  1.4.1.
+- The Python wheels are built with CPython 3.15. They still install on
+  Python 3.10 and later.
+
 ## [1.4.1] - 2026-11-04
 
 ### Changed
@@ -2667,7 +2677,8 @@ Initial public release.
 - Fluent immutable class API (`Note`, `Chord`, `Key`, ...) layered over the tree-shakeable functional core.
 - Dual ESM/CJS builds with bundled type declarations.
 
-[Unreleased]: https://github.com/libraz/libcantus/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/libraz/libcantus/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/libraz/libcantus/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/libraz/libcantus/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/libraz/libcantus/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/libraz/libcantus/compare/v1.2.0...v1.3.0
